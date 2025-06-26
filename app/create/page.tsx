@@ -15,13 +15,69 @@ export default function CreateTokenPage() {
     dex: 'GTE',
   })
 
+  const [error, setError] = useState<string | null>(null)
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm({ ...form, [e.target.name]: e.target.value })
+    setError(null)
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function isValidUrl(url: string) {
+    try {
+      new URL(url)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function validate() {
+    if (form.name.length < 3 || form.name.length > 32) {
+      return 'Token name must be between 3 and 32 characters.'
+    }
+    if (!/^[a-zA-Z0-9\- ]+$/.test(form.name)) {
+      return 'Token name can only include letters, numbers, spaces, and dashes.'
+    }
+    if (!form.description || form.description.length > 256) {
+      return 'Description is required and must be under 256 characters.'
+    }
+    if (form.image && !isValidUrl(form.image)) {
+      return 'Image URL must be a valid link.'
+    }
+    if (form.twitter && (!form.twitter.startsWith('https://') || !form.twitter.includes('twitter.com'))) {
+      return 'Twitter link must start with https:// and contain twitter.com'
+    }
+    if (form.telegram && (!form.telegram.startsWith('https://') || !form.telegram.includes('t.me'))) {
+      return 'Telegram link must start with https:// and contain t.me'
+    }
+    if (proMode && Number(form.supply) < 1000) {
+      return 'Total supply must be at least 1,000.'
+    }
+    return null
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    console.log('Token config:', form)
+    const validationError = validate()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    const res = await fetch('/api/create-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(form),
+    })
+
+    const data = await res.json()
+    if (data.success) {
+    alert('✅ Token saved!')
+    } else {
+    alert('❌ Error: ' + data.error) 
+    }
+
+    //console.log('✅ Token config:', form)
   }
 
   return (
@@ -30,6 +86,8 @@ export default function CreateTokenPage() {
         <h1 className="text-2xl font-bold mb-4 text-center">Create Your Token</h1>
 
         <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+          {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+
           <div>
             <label className="block text-gray-400 mb-1">Token Name</label>
             <input name="name" value={form.name} onChange={handleChange} placeholder="Token Name" className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded" />
@@ -94,4 +152,5 @@ export default function CreateTokenPage() {
     </div>
   )
 }
+
 
