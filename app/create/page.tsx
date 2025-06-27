@@ -13,6 +13,7 @@ export default function CreateTokenPage() {
     supply: 1_000_000_000,
     raiseTarget: 12,
     dex: 'GTE',
+    curveType: 'linear', // ✅ Added curveType to avoid TS error
   })
 
   const [error, setError] = useState<string | null>(null)
@@ -65,19 +66,17 @@ export default function CreateTokenPage() {
     }
 
     const res = await fetch('/api/create-token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(form),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
     })
 
     const data = await res.json()
     if (data.success) {
-    alert('✅ Token saved!')
+      alert('✅ Token saved!')
     } else {
-    alert('❌ Error: ' + data.error) 
+      alert('❌ Error: ' + data.error)
     }
-
-    //console.log('✅ Token config:', form)
   }
 
   return (
@@ -122,12 +121,24 @@ export default function CreateTokenPage() {
             <>
               <div>
                 <label className="block text-gray-400 mb-1">Total Supply</label>
-                <input name="supply" type="number" value={form.supply} onChange={handleChange} placeholder="Total Supply" className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded" />
+                <input
+                  name="supply"
+                  type="number"
+                  value={form.supply}
+                  onChange={handleChange}
+                  placeholder="Total Supply"
+                  className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded"
+                />
               </div>
 
               <div>
                 <label className="block text-gray-400 mb-1">Raise Target</label>
-                <select name="raiseTarget" value={form.raiseTarget} onChange={handleChange} className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded">
+                <select
+                  name="raiseTarget"
+                  value={form.raiseTarget}
+                  onChange={handleChange}
+                  className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded"
+                >
                   <option value={5}>5 ETH</option>
                   <option value={12}>12 ETH</option>
                   <option value={25}>25 ETH</option>
@@ -136,10 +147,33 @@ export default function CreateTokenPage() {
 
               <div>
                 <label className="block text-gray-400 mb-1">Target DEX</label>
-                <select name="dex" value={form.dex} onChange={handleChange} className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded">
+                <select
+                  name="dex"
+                  value={form.dex}
+                  onChange={handleChange}
+                  className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded"
+                >
                   <option value="GTE">GTE</option>
                   <option value="Bronto">Bronto</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-400 mb-1">Bonding Curve Model</label>
+                <select
+                  name="curveType"
+                  value={form.curveType}
+                  onChange={handleChange}
+                  className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded"
+                >
+                  <option value="linear">Linear – Steady growth</option>
+                  <option value="exponential">Exponential – Rapid growth</option>
+                  <option value="sigmoid">Sigmoid – Balanced growth</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Controls how the price increases as users buy. Most creators choose linear.
+                  ⚠️ For MVP, all tokens use linear pricing under the hood. Curve type is for visual and future customization only.
+                </p>
               </div>
             </>
           )}
@@ -152,5 +186,6 @@ export default function CreateTokenPage() {
     </div>
   )
 }
+
 
 

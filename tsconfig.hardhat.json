@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",         // ✅ required for Node.js compatibility
+    "target": "es2020",
+    "outDir": "dist",
+    "types": ["hardhat"]          // ✅ needed for Hardhat plugin types
+  },
+  "include": [
+    "hardhat.config.ts",
+    "scripts",
+    "contracts"
+  ]
+}
+
+
