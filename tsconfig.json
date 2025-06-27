@@ -8,8 +8,38 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "types": ["node", "hardhat"]
+    "types": [
+      "node",
+      "hardhat"
+    ],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+     "baseUrl": ".",   
+     "paths": {
+      "@/*": ["./*"]                      
+    }, 
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["hardhat.config.ts", "scripts", "contracts"]
+  "include": [
+    "contracts",
+    "hardhat.config.ts",
+    "scripts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
-
