@@ -1,6 +1,15 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import Image from "next/image"
+import { useAccount } from "wagmi"
+import { useHasMounted } from "@/lib/useHasMounted"
+
+export default function CreateTokenPage() {
+  const { isConnected } = useAccount()
+  const hasMounted = useHasMounted()
+
+  if (!hasMounted) return null
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
@@ -16,7 +25,7 @@ export default function Home() {
           <li className="mb-2 tracking-[-.01em]">
             Get started by editing{" "}
             <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
+              app/create/page.tsx
             </code>
             .
           </li>
@@ -24,6 +33,14 @@ export default function Home() {
             Save and see your changes instantly.
           </li>
         </ol>
+
+        <button
+          type="button"
+          disabled={!isConnected}
+          className="w-full bg-green-600 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold"
+        >
+          Create Token (Connected Only)
+        </button>
 
         <div className="flex gap-4 items-center flex-col sm:flex-row">
           <a
@@ -99,5 +116,6 @@ export default function Home() {
         </a>
       </footer>
     </div>
-  );
+  )
 }
+

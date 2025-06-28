@@ -12,11 +12,15 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.3.0",
+    "@rainbow-me/rainbowkit": "^2.2.8",
+    "@tanstack/react-query": "^5.81.5",
     "dotenv": "^16.5.0",
     "next": "15.3.4",
     "pg": "^8.16.2",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "viem": "^2.31.4",
+    "wagmi": "^2.15.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -41,6 +45,7 @@
     "ethers": "^6.4.0",
     "hardhat": "^2.25.0",
     "hardhat-gas-reporter": "^2.3.0",
+    "pino-pretty": "^13.0.0",
     "solidity-coverage": "^0.8.0",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",

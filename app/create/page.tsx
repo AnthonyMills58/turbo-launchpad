@@ -1,8 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useAccount } from 'wagmi'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 export default function CreateTokenPage() {
+  const { isConnected } = useAccount()
+
   const [proMode, setProMode] = useState(false)
   const [form, setForm] = useState({
     name: '',
@@ -13,7 +17,7 @@ export default function CreateTokenPage() {
     supply: 1_000_000_000,
     raiseTarget: 12,
     dex: 'GTE',
-    curveType: 'linear', // ✅ Added curveType to avoid TS error
+    curveType: 'linear',
   })
 
   const [error, setError] = useState<string | null>(null)
@@ -82,6 +86,12 @@ export default function CreateTokenPage() {
   return (
     <div className="min-h-screen bg-[#0d0f1a] text-white flex justify-center items-start pt-8 px-2">
       <div className="w-full max-w-xl bg-[#151827] p-4 rounded-lg shadow-lg">
+
+        {/* Wallet Connect Button */}
+        <div className="flex justify-end mb-4">
+          <ConnectButton />
+        </div>
+
         <h1 className="text-2xl font-bold mb-4 text-center">Create Your Token</h1>
 
         <form onSubmit={handleSubmit} className="space-y-3 text-sm">
@@ -178,14 +188,19 @@ export default function CreateTokenPage() {
             </>
           )}
 
-          <button type="submit" className="w-full bg-green-600 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold">
-            Create Token
+          <button
+            type="submit"
+            disabled={!isConnected}
+            className="w-full bg-green-600 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isConnected ? 'Create Token' : 'Connect Wallet to Create'}
           </button>
         </form>
       </div>
     </div>
   )
 }
+
 
 
 
