@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",                      // ✅ changed from "CommonJS"
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -31,6 +31,7 @@
     "components",             // ✅ added for shared React components
     "contracts",              // ✅ your Hardhat contracts
     "scripts",                // ✅ your deployment/testing scripts
+    "types",
     ".next/types/**/*.ts",
     "hardhat.config.ts"
   ],

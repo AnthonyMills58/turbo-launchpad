@@ -1,11 +1,34 @@
 'use client'
 
-import { useState } from 'react'
-import { useAccount } from 'wagmi'
+import { useEffect, useState } from 'react'
+import { useAccount, useChainId } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 export default function CreateTokenPage() {
   const { isConnected } = useAccount()
+  const chainId = useChainId()
+  const [hasAlerted, setHasAlerted] = useState(false)
+
+  useEffect(() => {
+    if (isConnected && !hasAlerted) {
+      const networkName = getNetworkName(chainId)
+      alert(`✅ Connected to ${networkName}`)
+      setHasAlerted(true)
+    }
+  }, [isConnected, chainId, hasAlerted])
+
+  function getNetworkName(chainId: number) {
+    switch (chainId) {
+      case 11155111:
+        return 'Sepolia'
+      case 1337:
+        return 'MegaETH (Localhost)'
+      case 6342:
+        return 'MegaETH (Testnet)'
+      default:
+        return `Unknown Network (Chain ID ${chainId})`
+    }
+  }
 
   const [proMode, setProMode] = useState(false)
   const [form, setForm] = useState({
@@ -61,6 +84,8 @@ export default function CreateTokenPage() {
     return null
   }
 
+  const { address } = useAccount()
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const validationError = validate()
@@ -69,10 +94,16 @@ export default function CreateTokenPage() {
       return
     }
 
+      // 🛠️ Include missing fields
+    const payload = {
+      ...form,
+      creatorAddress: address // ✅ REQUIRED
+    }
+
     const res = await fetch('/api/create-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     })
 
     const data = await res.json()
@@ -82,6 +113,7 @@ export default function CreateTokenPage() {
       alert('❌ Error: ' + data.error)
     }
   }
+
 
   return (
     <div className="min-h-screen bg-[#0d0f1a] text-white flex justify-center items-start pt-8 px-2">
