@@ -10,12 +10,12 @@ export function useNetworkAlert() {
 
   useEffect(() => {
     if (isConnected && !hasAlerted) {
-      const networkName = getNetworkName(chainId)
-      alert(`✅ Connected to ${networkName}`)
+      //const networkName = getNetworkName(chainId)
+      //alert(`✅ Connected to ${networkName}`)
       setHasAlerted(true)
     }
   }, [isConnected, chainId, hasAlerted])
-
+/*
   function getNetworkName(chainId: number) {
     switch (chainId) {
       case 11155111: return 'Sepolia'
@@ -24,4 +24,5 @@ export function useNetworkAlert() {
       default: return `Unknown Network (Chain ID ${chainId})`
     }
   }
+    */
 }
