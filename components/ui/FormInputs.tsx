@@ -1,4 +1,3 @@
-// components/FormInputs.tsx
 import React from 'react'
 
 export type InputProps = {
@@ -42,12 +41,17 @@ export function TextArea({ label, ...props }: TextAreaProps) {
   )
 }
 
+export type SelectOption = {
+  label: string
+  value: string
+}
+
 export type SelectProps = {
   label: string
   name: string
   value: string | number
   onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
-  options: string[]
+  options: SelectOption[]
   suffix?: string
 }
 
@@ -62,12 +66,13 @@ export function Select({ label, name, value, onChange, options, suffix = '' }: S
         className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded"
       >
         {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt} {suffix}
+          <option key={opt.value} value={opt.value}>
+            {opt.label} {suffix}
           </option>
         ))}
       </select>
     </div>
   )
 }
+
 

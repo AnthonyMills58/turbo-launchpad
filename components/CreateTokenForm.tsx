@@ -27,7 +27,8 @@ export default function CreateTokenForm() {
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) {
-    setForm({ ...form, [e.target.name]: e.target.value })
+    const value = e.target.type === 'number' ? Number(e.target.value) : e.target.value
+    setForm({ ...form, [e.target.name]: value })
     setError(null)
   }
 
@@ -45,7 +46,7 @@ export default function CreateTokenForm() {
     }
 
     try {
-      // 1. Deploy token contract from connected wallet
+      // 1. Deploy token contract
       const ethersProvider = new ethers.BrowserProvider(walletClient)
       const signer = await ethersProvider.getSigner()
 
@@ -55,18 +56,26 @@ export default function CreateTokenForm() {
         signer
       )
 
+      const tokenName = form.name
+      const tokenSymbol = form.name.slice(0, 4).toUpperCase()
+
+      const raiseTarget = ethers.parseEther(form.raiseTarget.toString())
+      const totalSupply = ethers.parseUnits(form.supply.toString(), 18) // assume 18 decimals
+
+      // ✅ Poprawna kolejność argumentów!
       const contract = await factory.deploy(
-        form.name,
-        form.name.slice(0, 4).toUpperCase(),
-        ethers.parseEther(form.supply.toString()),
-        address
+        tokenName,       // name_
+        tokenSymbol,     // symbol_
+        raiseTarget,     // raiseTarget_
+        address,         // creator_
+        totalSupply      // maxSupply_
       )
 
       await contract.waitForDeployment()
       const contractAddress = await contract.getAddress()
-      console.log('✅ Deployed at:', contractAddress)
+      console.log('✅ Token deployed at:', contractAddress)
 
-      // 2. Send token data + contractAddress to backend
+      // 2. Send metadata to backend
       const payload = {
         ...form,
         creatorAddress: address,
@@ -113,10 +122,46 @@ export default function CreateTokenForm() {
 
       {proMode && (
         <>
-          <Input type="number" label="Total Supply" name="supply" value={form.supply} onChange={handleChange} />
-          <Select label="Raise Target" name="raiseTarget" value={form.raiseTarget} onChange={handleChange} options={['5', '12', '25']} suffix="ETH" />
-          <Select label="Target DEX" name="dex" value={form.dex} onChange={handleChange} options={['GTE', 'Bronto']} />
-          <Select label="Bonding Curve Model" name="curveType" value={form.curveType} onChange={handleChange} options={['linear', 'exponential', 'sigmoid']} />
+          <Input
+            type="number"
+            label="Total Supply"
+            name="supply"
+            value={form.supply}
+            onChange={handleChange}
+          />
+          <Select
+            label="Raise Target"
+            name="raiseTarget"
+            value={form.raiseTarget}
+            onChange={handleChange}
+            options={[
+              { label: '5', value: '5' },
+              { label: '12', value: '12' },
+              { label: '25', value: '25' },
+            ]}
+            suffix="ETH"
+          />
+          <Select
+            label="Target DEX"
+            name="dex"
+            value={form.dex}
+            onChange={handleChange}
+            options={[
+              { label: 'GTE', value: 'GTE' },
+              { label: 'Bronto', value: 'Bronto' },
+            ]}
+          />
+          <Select
+            label="Bonding Curve Model"
+            name="curveType"
+            value={form.curveType}
+            onChange={handleChange}
+            options={[
+              { label: 'linear', value: 'linear' },
+              { label: 'exponential', value: 'exponential' },
+              { label: 'sigmoid', value: 'sigmoid' },
+            ]}
+          />
           <p className="text-xs text-gray-500 mt-1">
             Controls how the price increases as users buy. Most creators choose linear.
             ⚠️ For MVP, all tokens use linear pricing under the hood.
@@ -134,6 +179,8 @@ export default function CreateTokenForm() {
     </form>
   )
 }
+
+
 
 
 
