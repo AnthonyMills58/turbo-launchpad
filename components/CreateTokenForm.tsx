@@ -1,12 +1,15 @@
 'use client'
 
-import { useAccount } from 'wagmi'
+import { useAccount, useWalletClient } from 'wagmi'
 import { useState } from 'react'
 import { Input, TextArea, Select } from '@/components/ui/FormInputs'
 import { validateTokenForm, TokenForm } from '@/lib/validateTokenForm'
+import TurboToken from '@/lib/abi/TurboToken.json'
+import { ethers } from 'ethers'
 
 export default function CreateTokenForm() {
   const { address, isConnected } = useAccount()
+  const { data: walletClient } = useWalletClient()
   const [proMode, setProMode] = useState(false)
   const [form, setForm] = useState<TokenForm>({
     name: '',
@@ -30,25 +33,61 @@ export default function CreateTokenForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!walletClient || !isConnected || !address) {
+      alert('Wallet not connected')
+      return
+    }
+
     const validationError = validateTokenForm(form, proMode)
     if (validationError) {
       setError(validationError)
       return
     }
 
-    const payload = { ...form, creatorAddress: address }
+    try {
+      // 1. Deploy token contract from connected wallet
+      const ethersProvider = new ethers.BrowserProvider(walletClient)
+      const signer = await ethersProvider.getSigner()
 
-    const res = await fetch('/api/create-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+      const factory = new ethers.ContractFactory(
+        TurboToken.abi,
+        TurboToken.bytecode,
+        signer
+      )
 
-    const data = await res.json()
-    if (data.success) {
-      alert('✅ Token saved!')
-    } else {
-      alert('❌ Error: ' + data.error)
+      const contract = await factory.deploy(
+        form.name,
+        form.name.slice(0, 4).toUpperCase(),
+        ethers.parseEther(form.supply.toString()),
+        address
+      )
+
+      await contract.waitForDeployment()
+      const contractAddress = await contract.getAddress()
+      console.log('✅ Deployed at:', contractAddress)
+
+      // 2. Send token data + contractAddress to backend
+      const payload = {
+        ...form,
+        creatorAddress: address,
+        contractAddress,
+      }
+
+      const res = await fetch('/api/create-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        alert('✅ Token saved to DB!')
+      } else {
+        alert('❌ Backend error: ' + data.error)
+      }
+    } catch (err) {
+      console.error(err)
+      alert('❌ Failed to deploy token contract.')
     }
   }
 
@@ -95,5 +134,7 @@ export default function CreateTokenForm() {
     </form>
   )
 }
+
+
 
 

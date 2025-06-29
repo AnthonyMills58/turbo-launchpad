@@ -15,23 +15,21 @@ export async function POST(req: NextRequest) {
       raiseTarget,
       dex,
       curveType,
-      creatorAddress, // ✅ new field expected from frontend
+      creatorAddress,
+      contractAddress, // ✅ comes from frontend
     } = body
 
-    console.log('Incoming body:', body)
-
-
-    // basic server-side validation
-    if (!name || !description || !raiseTarget || !dex || !curveType || !creatorAddress) {
+    if (!name || !description || !raiseTarget || !dex || !curveType || !creatorAddress || !contractAddress) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     const result = await pool.query(
       `INSERT INTO tokens (
         name, description, image, twitter, telegram,
-        supply, raise_target, dex, curve_type, creator_wallet
+        supply, raise_target, dex, curve_type,
+        creator_wallet, contract_address
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id`,
       [
         name,
@@ -43,7 +41,8 @@ export async function POST(req: NextRequest) {
         raiseTarget,
         dex,
         curveType,
-        creatorAddress.toLowerCase(), // ✅ normalize for consistency
+        creatorAddress.toLowerCase(),
+        contractAddress,
       ]
     )
 
@@ -53,5 +52,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+
+
+
 
 
