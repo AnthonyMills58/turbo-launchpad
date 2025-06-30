@@ -1,6 +1,7 @@
 // validateTokenForm.ts
 export interface TokenForm {
   name: string
+  symbol: string   // 🆕 Add this line
   description: string
   image: string
   twitter: string
@@ -10,6 +11,7 @@ export interface TokenForm {
   dex: string
   curveType: string
 }
+
 
 export function validateTokenForm(form: TokenForm, proMode: boolean): string | null {
   if (form.name.length < 3 || form.name.length > 32) return 'Token name must be between 3 and 32 characters.'

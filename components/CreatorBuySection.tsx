@@ -9,7 +9,7 @@ import { Input, Select } from '@/components/ui/FormInputs'
 interface Token {
   id: number
   name: string
-  symbol?: string
+  symbol: string
   contract_address: string
   raise_target: string
   lockedAmount?: string
@@ -42,8 +42,6 @@ export default function CreatorBuySection() {
               const locked = await contract.lockedBalances(address)
               return {
                 ...t,
-                //lockedAmount: ethers.formatUnits(locked.toString(), 18), // ✅ poprawione
-                //lockedAmount: ethers.formatEther(locked.toString()),
                 lockedAmount: locked.toString()
               }
             } catch (err) {
@@ -63,45 +61,50 @@ export default function CreatorBuySection() {
     fetchTokens()
   }, [address])
 
-  const fetchPrice = async () => {
-    if (!selectedToken || !amount) return
-    setLoadingPrice(true)
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-      const contract = new ethers.Contract(
-        selectedToken.contract_address,
-        TurboTokenABI.abi,
-        signer
-      )
+ const fetchPrice = async () => {
+  if (!selectedToken || !amount || amount <= 0) return
+  setLoadingPrice(true)
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum)
+    const signer = await provider.getSigner()
+    const contract = new ethers.Contract(
+      selectedToken.contract_address,
+      TurboTokenABI.abi,
+      signer
+    )
 
-      // UWAGA: amount to liczba tokenów (np. 1, 10), NIE w wei
-      const amountInt = BigInt(amount) // lub: BigInt(parseInt(amount))
-      const priceBigInt = await contract.getPrice(amountInt)
+    const amountInt = BigInt(amount) // BigInt("1000000000000000000") // scale by 1e18
+    console.log("✅ amountInt (passed to getPrice):", amountInt.toString());
+    const priceBigInt = await contract.getPrice(amountInt)
+    console.log("🧾 priceBigInt (returned from contract):", priceBigInt.toString());
 
-      setPrice(ethers.formatEther(priceBigInt))
-    } catch (err) {
-      console.error('Failed to fetch price:', err)
-      setPrice('0')
-    }
-    setLoadingPrice(false)
+    const formatted = ethers.formatEther(priceBigInt) // from Wei to ETH
+    console.log("💰 formatted (ETH):", formatted);
+
+    setPrice(formatted)
+  } catch (err) {
+    console.error('Failed to fetch price:', err)
+    setPrice('0')
   }
+  setLoadingPrice(false)
+}
 
 
   const { writeContract, isPending, isSuccess } = useContractWrite()
 
   const handleBuy = () => {
-  if (!selectedToken || !amount || price === '0') return
-  const amountInt = BigInt(amount) // np. 1000n – liczba tokenów
-  writeContract({
-    address: selectedToken.contract_address as `0x${string}`,
-    abi: TurboTokenABI.abi,
-    functionName: 'creatorBuy',
-    args: [amountInt],
-    value: ethers.parseEther(price), // cena już w ether, np. 0.58 ETH
-  })
-}
+    if (!selectedToken || !amount || price === '0') return
+    const amountInt = BigInt(amount)
+    writeContract({
+      address: selectedToken.contract_address as `0x${string}`,
+      abi: TurboTokenABI.abi,
+      functionName: 'creatorBuy',
+      args: [amountInt],
+      value: ethers.parseEther(price),
+    })
+  }
 
+  const displayPrice = parseFloat(price).toFixed(8)
 
   return (
     <div className="w-full max-w-xl bg-[#151827] p-4 rounded-lg shadow-lg mx-auto mt-8">
@@ -117,7 +120,7 @@ export default function CreatorBuySection() {
           }}
           options={tokens.map((t) => ({
             value: t.contract_address,
-            label: `${t.name}${t.symbol ? ` (${t.symbol})` : ''} — ${t.lockedAmount ?? '0'} locked`,
+            label: `${t.name} (${t.symbol}) — ${t.lockedAmount ?? '0'} locked`,
           }))}
         />
 
@@ -144,7 +147,7 @@ export default function CreatorBuySection() {
 
         {price !== '0' && (
           <div className="mt-2 text-sm text-gray-300 text-center">
-            Total cost: <strong>{price} ETH</strong>
+            Total cost: <strong>{displayPrice} ETH</strong>
           </div>
         )}
 
@@ -167,6 +170,8 @@ export default function CreatorBuySection() {
     </div>
   )
 }
+
+
 
 
 

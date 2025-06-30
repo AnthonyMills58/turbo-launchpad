@@ -6,13 +6,16 @@ import { Input, TextArea, Select } from '@/components/ui/FormInputs'
 import { validateTokenForm, TokenForm } from '@/lib/validateTokenForm'
 import TurboToken from '@/lib/abi/TurboToken.json'
 import { ethers } from 'ethers'
+import { useRouter } from 'next/navigation'
 
 export default function CreateTokenForm() {
+  const router = useRouter()
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const [proMode, setProMode] = useState(false)
   const [form, setForm] = useState<TokenForm>({
     name: '',
+    symbol: '',
     description: '',
     image: '',
     twitter: '',
@@ -46,7 +49,6 @@ export default function CreateTokenForm() {
     }
 
     try {
-      // 1. Deploy token contract
       const ethersProvider = new ethers.BrowserProvider(walletClient)
       const signer = await ethersProvider.getSigner()
 
@@ -57,27 +59,35 @@ export default function CreateTokenForm() {
       )
 
       const tokenName = form.name
-      const tokenSymbol = form.name.slice(0, 4).toUpperCase()
-
+      const tokenSymbol = form.symbol.toUpperCase()
       const raiseTarget = ethers.parseEther(form.raiseTarget.toString())
-      const totalSupply = ethers.parseUnits(form.supply.toString(), 18) // assume 18 decimals
+      const totalSupply = ethers.parseUnits(form.supply.toString(), 18)
+      const platformFeeRecipient = process.env.NEXT_PUBLIC_PLATFORM_FEE_RECIPIENT as string
 
-      // ✅ Poprawna kolejność argumentów!
+      // 💡 Display values before deployment
+      // ✅ Log to console instead of alert
+      console.log("Deploying TurboToken with params:")
+      console.log("Token Name:", tokenName)
+      console.log("Token Symbol:", tokenSymbol)
+      console.log("Raise Target (wei):", raiseTarget.toString())
+      console.log("Total Supply (token units):", totalSupply.toString())
+
       const contract = await factory.deploy(
-        tokenName,       // name_
-        tokenSymbol,     // symbol_
-        raiseTarget,     // raiseTarget_
-        address,         // creator_
-        totalSupply      // maxSupply_
+        tokenName,
+        tokenSymbol,
+        raiseTarget,
+        address,
+        totalSupply,
+        platformFeeRecipient
       )
 
       await contract.waitForDeployment()
       const contractAddress = await contract.getAddress()
       console.log('✅ Token deployed at:', contractAddress)
 
-      // 2. Send metadata to backend
       const payload = {
         ...form,
+        symbol: tokenSymbol,
         creatorAddress: address,
         contractAddress,
       }
@@ -90,7 +100,7 @@ export default function CreateTokenForm() {
 
       const data = await res.json()
       if (data.success) {
-        alert('✅ Token saved to DB!')
+        router.push('/')
       } else {
         alert('❌ Backend error: ' + data.error)
       }
@@ -104,7 +114,15 @@ export default function CreateTokenForm() {
     <form onSubmit={handleSubmit} className="space-y-3 text-sm">
       {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
 
-      <Input label="Token Name" name="name" value={form.name} onChange={handleChange} />
+      <div className="flex space-x-2">
+        <div className="flex-1">
+          <Input label="Token Name" name="name" value={form.name} onChange={handleChange} />
+        </div>
+        <div className="w-[120px]">
+          <Input label="Symbol" name="symbol" value={form.symbol} onChange={handleChange} />
+        </div>
+      </div>
+
       <TextArea label="Description" name="description" value={form.description} onChange={handleChange} />
       <Input label="Image URL" name="image" value={form.image} onChange={handleChange} />
       <Input label="Twitter" name="twitter" value={form.twitter} onChange={handleChange} />
@@ -179,6 +197,8 @@ export default function CreateTokenForm() {
     </form>
   )
 }
+
+
 
 
 
