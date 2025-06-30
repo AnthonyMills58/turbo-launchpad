@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 
 import { Web3Providers } from '@/components/providers'
+import NavBar from '@/components/ui/NavBar' // ✅ Make sure this path matches your project
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -25,17 +26,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}
-      >
-        <Web3Providers>
-          {children}
-        </Web3Providers>
-      </body>
-    </html>
+  <html lang="en">
+  <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <Web3Providers>
+      <NavBar />
+      <main className="a">{children}</main>
+    </Web3Providers>
+  </body>
+</html>
+
   )
 }
+
 
 
 
