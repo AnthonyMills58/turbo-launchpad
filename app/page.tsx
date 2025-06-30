@@ -23,7 +23,8 @@ type Token = {
 export default function HomePage() {
   const { address } = useAccount()
   const [tokens, setTokens] = useState<Token[]>([])
-  const [_tokensByAddress, setTokensByAddress] = useState<Record<string, Token>>({})
+  const [tokensByAddress, setTokensByAddress] = useState<Record<string, Token>>({})
+  console.log(tokensByAddress)
 
   useEffect(() => {
     const fetchTokens = async () => {
