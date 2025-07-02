@@ -5,8 +5,11 @@ export type InputProps = {
   name: string
   value: string | number
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void
   type?: string
   placeholder?: string
+  min?: number   // <-- dodane
+  max?: number   // <-- dodane
 }
 
 export function Input({ label, ...props }: InputProps) {
@@ -20,6 +23,7 @@ export function Input({ label, ...props }: InputProps) {
     </div>
   )
 }
+
 
 export type TextAreaProps = {
   label: string

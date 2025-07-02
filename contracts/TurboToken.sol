@@ -15,7 +15,6 @@ contract TurboToken is ERC20, Ownable {
     // ==== State ====
     uint256 public totalRaised;
     bool public graduated;
-    bool public creatorBought;
     uint256 public creatorLockAmount;
 
     mapping(address => uint256) public lockedBalances;
@@ -64,14 +63,13 @@ contract TurboToken is ERC20, Ownable {
     function getPrice(uint256 amount) public view returns (uint256) {
         uint256 currentSupply = totalSupply();
 
-        uint256 part1 = (amount * basePrice); // Fix scaling
+        uint256 part1 = (amount * basePrice);
         uint256 part2 = amount * currentSupply;
         uint256 part3 = (amount * (amount - 1)) / 2;
-        uint256 part4 = slope * (part2 + part3); // 
-        uint256 total = part1 + part4; // result in wei
+        uint256 part4 = slope * (part2 + part3);
+        uint256 total = part1 + part4;
         return total;
     }
-
 
     function getCurrentPrice() public view returns (uint256) {
         return basePrice + (slope * totalSupply()) / 1e18;
@@ -90,27 +88,26 @@ contract TurboToken is ERC20, Ownable {
         payable(platformFeeRecipient).transfer(platformFee);
 
         if (msg.value > cost) {
-            payable(msg.sender).transfer(msg.value - cost); // refund excess
+            payable(msg.sender).transfer(msg.value - cost);
         }
     }
 
     function creatorBuy(uint256 amount) external payable onlyCreator onlyBeforeGraduate {
-        require(!creatorBought, "Creator already bought");
         uint256 cost = getPrice(amount);
         require(msg.value >= cost, "Insufficient ETH sent");
         require(totalSupply() + amount <= maxSupplyForSale(), "Exceeds available supply");
+        require(lockedBalances[creator] + amount <= reservedForAirdrop(), "Exceeds lock allocation");
 
         uint256 platformFee = (cost * 100) / 10000; // 1%
         totalRaised += (cost - platformFee);
 
         _mint(address(this), amount);
-        lockedBalances[creator] = amount;
-        creatorLockAmount = amount;
-        creatorBought = true;
+        lockedBalances[creator] += amount;
+        creatorLockAmount += amount;
 
         payable(platformFeeRecipient).transfer(platformFee);
         if (msg.value > cost) {
-            payable(msg.sender).transfer(msg.value - cost); // refund excess
+            payable(msg.sender).transfer(msg.value - cost);
         }
     }
 
@@ -175,7 +172,6 @@ contract TurboToken is ERC20, Ownable {
         uint256 _slope,
         uint256 _totalRaised,
         bool _graduated,
-        bool _creatorBought,
         uint256 _creatorLockAmount
     ) {
         return (
@@ -187,7 +183,6 @@ contract TurboToken is ERC20, Ownable {
             slope,
             totalRaised,
             graduated,
-            creatorBought,
             creatorLockAmount
         );
     }
@@ -207,6 +202,7 @@ contract TurboToken is ERC20, Ownable {
     // ==== Fallback ====
     receive() external payable {}
 }
+
 
 
 

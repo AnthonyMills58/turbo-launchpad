@@ -21,16 +21,26 @@ export default function NavBar() {
     <nav className="w-full bg-[#151827] text-white shadow-md p-4 flex flex-wrap items-center justify-between sticky top-0 z-50">
       {/* Left Nav */}
       <div className="flex items-center space-x-4">
-        <button onClick={() => router.push('/')} className="font-bold text-lg hover:text-purple-400">
+        {/* Changed from router.push('/') to reset selected token by navigating to root */}
+        <button
+          onClick={() => router.push('/')}
+          className="font-bold text-lg hover:text-purple-400"
+        >
           Turbo Launchpad
         </button>
-        <button onClick={() => router.push('/create')} className="hover:text-purple-300">Create Token</button>
-        <button onClick={() => router.push('/creator')} className="hover:text-purple-300">Creator Buy/Lock</button>
-        <button onClick={() => router.push('/buy')} className="hover:text-purple-300">Public Buy</button>
+        <button
+          onClick={() => router.push('/create')}
+          className="hover:text-purple-300"
+        >
+          Create Token
+        </button>
       </div>
 
       {/* Search */}
-      <form onSubmit={handleSearch} className="flex items-center space-x-2 mt-2 sm:mt-0">
+      <form
+        onSubmit={handleSearch}
+        className="flex items-center space-x-2 mt-2 sm:mt-0"
+      >
         <input
           type="text"
           placeholder="Search tokens or address"
@@ -58,3 +68,5 @@ export default function NavBar() {
     </nav>
   )
 }
+
+

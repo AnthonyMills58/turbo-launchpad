@@ -26,6 +26,7 @@ export default function CreateTokenForm() {
     curveType: 'linear',
   })
   const [error, setError] = useState<string | null>(null)
+  const [imageValid, setImageValid] = useState<boolean | null>(null) // null = not validated yet
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -33,12 +34,37 @@ export default function CreateTokenForm() {
     const value = e.target.type === 'number' ? Number(e.target.value) : e.target.value
     setForm({ ...form, [e.target.name]: value })
     setError(null)
+    if (e.target.name === 'image') {
+      setImageValid(null) // reset validation when user edits the URL
+    }
+  }
+
+  // Validate image URL by trying to load it
+  const validateImageURL = (url: string) => {
+    return new Promise<boolean>((resolve) => {
+      if (!url) return resolve(false)
+      const img = new Image()
+      img.onload = () => resolve(true)
+      img.onerror = () => resolve(false)
+      img.src = url
+    })
+  }
+
+  // Validate on blur
+  const onImageBlur = async () => {
+    const valid = await validateImageURL(form.image)
+    setImageValid(valid)
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!walletClient || !isConnected || !address) {
       alert('Wallet not connected')
+      return
+    }
+
+    if (!imageValid) {
+      alert('Please enter a valid image URL before submitting.')
       return
     }
 
@@ -64,8 +90,6 @@ export default function CreateTokenForm() {
       const totalSupply = ethers.parseUnits(form.supply.toString(), 18)
       const platformFeeRecipient = process.env.NEXT_PUBLIC_PLATFORM_FEE_RECIPIENT as string
 
-      // 💡 Display values before deployment
-      // ✅ Log to console instead of alert
       console.log("Deploying TurboToken with params:")
       console.log("Token Name:", tokenName)
       console.log("Token Symbol:", tokenSymbol)
@@ -111,7 +135,7 @@ export default function CreateTokenForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+    <form onSubmit={handleSubmit} className="space-y-3 text-sm max-w-3xl mx-auto">
       {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
 
       <div className="flex space-x-2">
@@ -124,7 +148,38 @@ export default function CreateTokenForm() {
       </div>
 
       <TextArea label="Description" name="description" value={form.description} onChange={handleChange} />
-      <Input label="Image URL" name="image" value={form.image} onChange={handleChange} />
+
+      <div className="flex space-x-4 items-center">
+        <div className="flex-grow">
+          <Input
+            label="Image URL"
+            name="image"
+            value={form.image}
+            onChange={handleChange}
+            onBlur={onImageBlur}
+          />
+          {imageValid === false && (
+            <p className="text-red-500 text-xs mt-1">Invalid image URL or unable to load image.</p>
+          )}
+          {imageValid === true && (
+            <p className="text-green-400 text-xs mt-1">Image URL is valid!</p>
+          )}
+        </div>
+
+        {/* Preview box - only show if image is valid */}
+        {form.image && imageValid && (
+          <div className="w-20 h-20 rounded-md border border-gray-600 bg-[#1b1e2b] flex items-center justify-center overflow-hidden">
+            <img
+              src={form.image}
+              alt="Token Image Preview"
+              className="max-w-full max-h-full object-contain"
+              onError={() => setImageValid(false)}
+              onLoad={() => setImageValid(true)}
+            />
+          </div>
+        )}
+      </div>
+
       <Input label="Twitter" name="twitter" value={form.twitter} onChange={handleChange} />
       <Input label="Telegram" name="telegram" value={form.telegram} onChange={handleChange} />
 
@@ -134,8 +189,9 @@ export default function CreateTokenForm() {
           checked={proMode}
           onChange={() => setProMode(!proMode)}
           className="accent-green-500"
+          id="proMode"
         />
-        <span className="text-gray-300">Enable Pro Mode</span>
+        <label htmlFor="proMode" className="text-gray-300 cursor-pointer">Enable Pro Mode</label>
       </div>
 
       {proMode && (
@@ -189,7 +245,7 @@ export default function CreateTokenForm() {
 
       <button
         type="submit"
-        disabled={!isConnected}
+        disabled={!isConnected || !imageValid}
         className="w-full bg-green-600 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isConnected ? 'Create Token' : 'Connect Wallet to Create'}
@@ -197,6 +253,8 @@ export default function CreateTokenForm() {
     </form>
   )
 }
+
+
 
 
 
