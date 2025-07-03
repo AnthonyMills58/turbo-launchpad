@@ -95,6 +95,7 @@ export default function CreateTokenForm() {
       console.log("Token Symbol:", tokenSymbol)
       console.log("Raise Target (wei):", raiseTarget.toString())
       console.log("Total Supply (token units):", totalSupply.toString())
+      console.log("Fee address: ",platformFeeRecipient)
 
       const contract = await factory.deploy(
         tokenName,
@@ -106,8 +107,25 @@ export default function CreateTokenForm() {
       )
 
       await contract.waitForDeployment()
+
+      
+
       const contractAddress = await contract.getAddress()
       console.log('✅ Token deployed at:', contractAddress)
+
+      const typedContract = new ethers.Contract(
+        contract.target as string,
+        TurboToken.abi,
+        signer
+      );
+
+      // 🔍 NEW: Read tokenInfo() to verify contract state
+      try {
+        const tokenInfo = await typedContract.tokenInfo();
+        console.log("📦 tokenInfo() result:", tokenInfo)
+      } catch (err) {
+        console.error("❌ Failed to call tokenInfo():", err)
+      }
 
       const payload = {
         ...form,

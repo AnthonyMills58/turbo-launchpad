@@ -6,11 +6,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract TurboToken is ERC20, Ownable {
     // ==== Configuration ====
-    uint256 public immutable maxSupply;            // Already in token units (1e18 = 1 token)
-    uint256 public raiseTarget;                    // Already in wei (1 ETH = 1e18 wei)
+    uint256 public immutable maxSupply;
+    uint256 public raiseTarget;
     address public platformFeeRecipient;
     address public creator;
-    uint256 public constant LP_AND_AIRDROP_PERCENT = 20; // 20% reserved for LP and airdrops
+    uint256 public constant LP_AND_AIRDROP_PERCENT = 20;
 
     // ==== State ====
     uint256 public totalRaised;
@@ -27,13 +27,16 @@ contract TurboToken is ERC20, Ownable {
     uint256 public basePrice;
     uint256 public slope;
 
+    // ==== Events ====
+    event FeeAttempt(address recipient, uint256 amount);
+
     // ==== Constructor ====
     constructor(
         string memory name_,
         string memory symbol_,
-        uint256 raiseTarget_,         // Already in wei (frontend must scale from ETH)
+        uint256 raiseTarget_,
         address creator_,
-        uint256 maxSupply_,           // Already in token units (frontend must scale from token count)
+        uint256 maxSupply_,
         address platformFeeRecipient_
     ) ERC20(name_, symbol_) Ownable(creator_) {
         raiseTarget = raiseTarget_;
@@ -41,11 +44,10 @@ contract TurboToken is ERC20, Ownable {
         maxSupply = maxSupply_;
         platformFeeRecipient = platformFeeRecipient_;
 
-        uint256 graduateSupply = maxSupply_ / 100; // 1% of total supply
+        uint256 graduateSupply = maxSupply_ / 100;
 
-        // Improved precision bonding curve setup
-        basePrice = (raiseTarget_ * 1e18) / (graduateSupply * 2); // scale first, then divide
-        slope = (basePrice * 1e18) / graduateSupply;              // scaled by 1e18
+        basePrice = (raiseTarget_ * 1e18) / (graduateSupply * 2);
+        slope = (basePrice * 1e18) / graduateSupply;
     }
 
     // ==== Modifiers ====
@@ -62,7 +64,6 @@ contract TurboToken is ERC20, Ownable {
     // ==== Bonding Curve Pricing ====
     function getPrice(uint256 amount) public view returns (uint256) {
         uint256 currentSupply = totalSupply();
-
         uint256 part1 = (amount * basePrice);
         uint256 part2 = amount * currentSupply;
         uint256 part3 = (amount * (amount - 1)) / 2;
@@ -81,11 +82,15 @@ contract TurboToken is ERC20, Ownable {
         require(msg.value >= cost, "Insufficient ETH sent");
         require(totalSupply() + amount <= maxSupplyForSale(), "Exceeds available supply");
 
-        uint256 platformFee = (cost * 100) / 10000; // 1%
+        uint256 platformFee = (cost * 100) / 10000;
         totalRaised += (cost - platformFee);
 
         _mint(msg.sender, amount);
-        payable(platformFeeRecipient).transfer(platformFee);
+
+        emit FeeAttempt(platformFeeRecipient, platformFee); // ✅ Added here
+
+        (bool sent, ) = payable(platformFeeRecipient).call{value: platformFee}("");
+        require(sent, "Platform fee transfer failed");
 
         if (msg.value > cost) {
             payable(msg.sender).transfer(msg.value - cost);
@@ -98,14 +103,18 @@ contract TurboToken is ERC20, Ownable {
         require(totalSupply() + amount <= maxSupplyForSale(), "Exceeds available supply");
         require(lockedBalances[creator] + amount <= reservedForAirdrop(), "Exceeds lock allocation");
 
-        uint256 platformFee = (cost * 100) / 10000; // 1%
+        uint256 platformFee = (cost * 100) / 10000;
         totalRaised += (cost - platformFee);
 
         _mint(address(this), amount);
         lockedBalances[creator] += amount;
         creatorLockAmount += amount;
 
-        payable(platformFeeRecipient).transfer(platformFee);
+        emit FeeAttempt(platformFeeRecipient, platformFee); // ✅ Added here
+
+        bool success = payable(platformFeeRecipient).send(platformFee);
+        require(success, "Platform fee send failed");
+
         if (msg.value > cost) {
             payable(msg.sender).transfer(msg.value - cost);
         }
@@ -116,7 +125,6 @@ contract TurboToken is ERC20, Ownable {
         require(!graduated, "Already graduated");
         require(totalRaised >= raiseTarget, "Raise target not met");
         require(totalSupply() <= maxSupplyForSale(), "Must reserve LP/airdrop");
-
         graduated = true;
     }
 
@@ -192,16 +200,20 @@ contract TurboToken is ERC20, Ownable {
         require(address(this).balance > 0, "Nothing to withdraw");
         require(graduated, "Not graduated yet");
 
-        uint256 platformCut = (address(this).balance * 200) / 10000; // 2%
+        uint256 platformCut = (address(this).balance * 200) / 10000;
         uint256 creatorCut = address(this).balance - platformCut;
 
-        payable(platformFeeRecipient).transfer(platformCut);
+        (bool sent, ) = payable(platformFeeRecipient).call{value: platformCut}("");
+        require(sent, "Platform withdrawal failed");
+
         payable(creator).transfer(creatorCut);
     }
 
     // ==== Fallback ====
     receive() external payable {}
 }
+
+
 
 
 
