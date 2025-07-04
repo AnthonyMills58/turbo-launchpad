@@ -45,8 +45,8 @@ export async function switchToMegaTestnet(): Promise<boolean> {
                 chainName: 'Mega Testnet',
                 rpcUrls: ['https://carrot.megaeth.com/rpc'],
                 nativeCurrency: {
-                  name: 'MegaETH',
-                  symbol: 'MegaETH',
+                  name: 'ETH',
+                  symbol: 'ETH',
                   decimals: 18,
                 },
                 blockExplorerUrls: ['https://megaexplorer.xyz'],

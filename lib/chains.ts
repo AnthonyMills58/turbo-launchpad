@@ -4,8 +4,8 @@ export const megaethTestnet: Chain = {
   id: 6342,
   name: 'MegaETH Testnet',
   nativeCurrency: {
-    name: 'MegaETH',
-    symbol: 'MegaETH',
+    name: 'ETH',
+    symbol: 'ETH',
     decimals: 18,
   },
   rpcUrls: {
@@ -28,8 +28,8 @@ export const megaethMainnet = {
   id: 9999, // Replace with real ID when known
   name: 'MegaETH Mainnet (Coming Soon)',
   nativeCurrency: {
-    name: 'MegaETH',
-    symbol: 'MegaETH',
+    name: 'ETH',
+    symbol: 'ETH',
     decimals: 18,
   },
   rpcUrls: {
