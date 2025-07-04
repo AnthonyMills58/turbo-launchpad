@@ -6,6 +6,8 @@ import { useState } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
 import WithdrawForm from './WithdrawForm'
+import PublicBuySection from './PublicBuySection'
+
 import { Copy } from 'lucide-react'
 
 export default function TokenDetailsView({
@@ -224,6 +226,11 @@ export default function TokenDetailsView({
               )}
             </div>
           )}
+           {!isCreator && !isGraduated && (
+                <div className="mt-6">
+                  <PublicBuySection token={token} onSuccess={onRefresh} />
+                </div>
+              )}
         </div>
       </div>
     </div>
