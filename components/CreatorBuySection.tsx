@@ -76,23 +76,44 @@ export default function CreatorBuySection({
     }
   }
 
-  // Wait for transaction confirmation
-  useEffect(() => {
-    if (!txHash || !publicClient) return
-    const waitForTx = async () => {
+ // Wait for transaction confirmation
+useEffect(() => {
+  if (!txHash || !publicClient) return
+
+  const waitForTx = async () => {
+    try {
+      // 1. Wait for on-chain confirmation
+      await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      // 2. Mark local success
+      setIsSuccess(true)
+
+      // 3. Refresh wallet balances
+      if (refreshWallet) refreshWallet()
+
+      // 4. Update token stats in DB
       try {
-        await publicClient.waitForTransactionReceipt({ hash: txHash })
-        setIsSuccess(true)
-        if (refreshWallet) refreshWallet()
-        if (onSuccess) onSuccess()
+        await fetch('/api/update-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contractAddress: token.contract_address }),
+        })
       } catch (err) {
-        console.error('Tx failed or dropped:', err)
-      } finally {
-        setIsPending(false)
+        console.error('Failed to update token stats:', err)
       }
+
+      // 5. Trigger external success callback if provided
+      if (onSuccess) onSuccess()
+    } catch (err) {
+      console.error('Tx failed or dropped:', err)
+    } finally {
+      setIsPending(false)
     }
-    waitForTx()
-  }, [txHash, publicClient, refreshWallet, onSuccess])
+  }
+
+  waitForTx()
+}, [txHash, publicClient, refreshWallet, onSuccess, token.contract_address])
+
 
   const displayPrice = parseFloat(price).toFixed(8)
 

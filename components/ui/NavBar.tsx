@@ -17,6 +17,8 @@ export default function NavBar() {
       refetchInterval: 10_000, // optional: refresh balance every 10s
     },
   })
+  
+  console.log(balance)
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,7 +71,7 @@ export default function NavBar() {
           <span className="text-sm text-gray-300 hidden sm:inline">
             {isLoading
               ? 'Loading balance...'
-              : `${parseFloat(balance?.formatted || '0').toFixed(4)} ${balance?.symbol}`}
+              : ``}
           </span>
         ) : (
           <span className="text-sm text-gray-400 hidden sm:inline">
