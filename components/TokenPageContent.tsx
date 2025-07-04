@@ -152,7 +152,10 @@ export default function TokenPageContent() {
             <p className="text-sm text-gray-300 mb-2 line-clamp-3">{token.description}</p>
 
             <div className="text-sm text-gray-400 mb-1">
-              Raised: <span className="text-white">{token.eth_raised} ETH</span> / {token.raise_target} ETH
+              Raised: <span className="text-white">
+                        {Number(token.eth_raised).toFixed(6).replace(/\.?0+$/, '')} ETH
+                      </span> / {token.raise_target} ETH
+
             </div>
 
             <div className="text-sm text-gray-400 mb-1">
@@ -166,11 +169,7 @@ export default function TokenPageContent() {
               <span>
                 Max Supply: <span className="text-white">{token.supply}</span>
               </span>
-              {token.lockedAmount !== undefined && (
-                <span className="text-red-500">
-                  Locked: {parseFloat(token.lockedAmount).toFixed(0)}
-                </span>
-              )}
+            
             </div>
 
             <div

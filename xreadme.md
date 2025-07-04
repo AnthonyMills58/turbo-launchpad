@@ -16,3 +16,8 @@ use send and take https from HTML thumbnail linked
 
 https://cryptologos.cc/
 this is a site with a list and images of crypto tokens logos
+
+
+<a href="https://ibb.co/HTmY75WJ"><img src="https://i.ibb.co/HTmY75WJ/eos-eos-logo.png" alt="eos-eos-logo" border="0"></a> 
+<a href="https://ibb.co/Mx5v9ddF"><img src="https://i.ibb.co/Mx5v9ddF/sats-ordinals-sats-logo.png" alt="sats-ordinals-sats-logo" border="0"></a> 
+<a href="https://ibb.co/BHThZH25"><img src="https://i.ibb.co/BHThZH25/pancakeswap-cake-logo.png" alt="pancakeswap-cake-logo" border="0"></a>

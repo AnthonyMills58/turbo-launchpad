@@ -227,12 +227,14 @@ export default function CreateTokenForm() {
             value={form.raiseTarget}
             onChange={handleChange}
             options={[
+              { label: '0.001 (test)', value: '0.001' }, // 🧪 Just for testing
               { label: '5', value: '5' },
               { label: '12', value: '12' },
               { label: '25', value: '25' },
             ]}
             suffix="ETH"
           />
+
           <Select
             label="Target DEX"
             name="dex"
