@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 
 import { Web3Providers } from '@/components/providers'
-import NavBar from '@/components/ui/NavBar' // ✅ Make sure this path matches your project
+import NavBarWrapper from '@/components/ui/NavBarWrapper'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -31,13 +31,16 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0d0f1a] text-white min-h-screen`}
       >
         <Web3Providers>
-          <NavBar />
+          <NavBarWrapper />
           <main className="a">{children}</main>
         </Web3Providers>
       </body>
     </html>
   )
 }
+
+
+
 
 
 

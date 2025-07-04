@@ -2,13 +2,21 @@
 
 import { useRouter } from 'next/navigation'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useAccount } from 'wagmi'
+import { useAccount, useBalance } from 'wagmi'
 import { useState } from 'react'
 
 export default function NavBar() {
   const router = useRouter()
   const { address, isConnected } = useAccount()
   const [search, setSearch] = useState('')
+
+  const { data: balance, isLoading } = useBalance({
+    address,
+    query: {
+      enabled: !!address,
+      refetchInterval: 10_000, // optional: refresh balance every 10s
+    },
+  })
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,7 +29,6 @@ export default function NavBar() {
     <nav className="w-full bg-[#151827] text-white shadow-md p-4 flex flex-wrap items-center justify-between sticky top-0 z-50">
       {/* Left Nav */}
       <div className="flex items-center space-x-4">
-        {/* Changed from router.push('/') to reset selected token by navigating to root */}
         <button
           onClick={() => router.push('/')}
           className="font-bold text-lg hover:text-purple-400"
@@ -58,15 +65,23 @@ export default function NavBar() {
 
       {/* Wallet Info */}
       <div className="flex items-center space-x-3 mt-2 sm:mt-0">
-        <span className="text-sm text-gray-400 hidden sm:inline">
-          {isConnected && address
-            ? ``
-            : 'Not Connected'}
-        </span>
+        {isConnected && address ? (
+          <span className="text-sm text-gray-300 hidden sm:inline">
+            {isLoading
+              ? 'Loading balance...'
+              : `${parseFloat(balance?.formatted || '0').toFixed(4)} ${balance?.symbol}`}
+          </span>
+        ) : (
+          <span className="text-sm text-gray-400 hidden sm:inline">
+            Not Connected
+          </span>
+        )}
         <ConnectButton />
       </div>
     </nav>
   )
 }
+
+
 
 

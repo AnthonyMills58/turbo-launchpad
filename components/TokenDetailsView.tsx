@@ -5,6 +5,7 @@ import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { useState } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
+import WithdrawForm from './WithdrawForm'
 import { Copy } from 'lucide-react'
 
 export default function TokenDetailsView({
@@ -216,6 +217,10 @@ export default function TokenDetailsView({
                 >
                   {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
                 </button>
+              )}
+
+              {isGraduated && Number(raised) > 0 && (
+                <WithdrawForm contractAddress={token.contract_address} onSuccess={onRefresh} />
               )}
             </div>
           )}
