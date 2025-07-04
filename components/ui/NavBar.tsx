@@ -60,7 +60,7 @@ export default function NavBar() {
       <div className="flex items-center space-x-3 mt-2 sm:mt-0">
         <span className="text-sm text-gray-400 hidden sm:inline">
           {isConnected && address
-            ? `${address.slice(0, 6)}...${address.slice(-4)}`
+            ? ``
             : 'Not Connected'}
         </span>
         <ConnectButton />
