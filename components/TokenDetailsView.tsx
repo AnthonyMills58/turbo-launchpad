@@ -189,26 +189,32 @@ export default function TokenDetailsView({
           {/* Creator Buy + Graduate or Unlock */}
           {isCreator && (
             <div className="inline-flex flex-col items-stretch space-y-4">
+              {/* 🛒 Creator can buy only before graduation */}
               {!isGraduated && (
                 <>
                   <CreatorBuySection token={token} onSuccess={onRefresh} />
-                   <AirdropForm token={token} />
-                  {canGraduate && (
-                    <button
-                      onClick={handleGraduate}
-                      disabled={isGraduating}
-                      className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                        isGraduating
-                          ? 'bg-neutral-700 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
-                      }`}
-                    >
-                      {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
-                    </button>
-                  )}
                 </>
               )}
 
+              {/* 🪂 Show AirdropForm always — it handles its own visibility */}
+              <AirdropForm token={token} />
+
+              {/* 🎓 Show graduate button only if creator & cap reached & not yet graduated */}
+              {canGraduate && (
+                <button
+                  onClick={handleGraduate}
+                  disabled={isGraduating}
+                  className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+                    isGraduating
+                      ? 'bg-neutral-700 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
+                  }`}
+                >
+                  {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
+                </button>
+              )}
+
+              {/* 🔓 Unlock only after graduation */}
               {isGraduated && Number(token.lockedAmount ?? 0) > 0 && (
                 <button
                   onClick={handleUnlock}
@@ -223,11 +229,13 @@ export default function TokenDetailsView({
                 </button>
               )}
 
+              {/* 💸 Show withdraw button only after graduation & if there are raised funds */}
               {isGraduated && Number(raised) > 0 && (
                 <WithdrawForm contractAddress={token.contract_address} onSuccess={onRefresh} />
               )}
             </div>
           )}
+
            {!isCreator && !isGraduated && (
                 <div className="mt-6">
                   <PublicBuySection token={token} onSuccess={onRefresh} />

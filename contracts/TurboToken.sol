@@ -19,12 +19,12 @@ contract TurboToken is ERC20, Ownable {
 
     mapping(address => uint256) public lockedBalances;
 
-    // Airdrop allocations
+    // ==== Airdrop allocations ====
     mapping(address => uint256) public airdropAllocations;
     mapping(address => bool) public airdropClaimed;
-    address[] public airdropRecipients; // NEW: Keep track of all airdrop addresses
+    address[] public airdropRecipients;
 
-    // Bonding curve pricing parameters (scaled by 1e18)
+    // ==== Bonding curve parameters ====
     uint256 public basePrice;
     uint256 public slope;
 
@@ -45,7 +45,7 @@ contract TurboToken is ERC20, Ownable {
         maxSupply = maxSupply_;
         platformFeeRecipient = platformFeeRecipient_;
 
-        // Calculate base price and slope for bonding curve (scaled by 1e18)
+        // Calculate bonding curve
         uint256 graduateSupply = maxSupply_ / 100;
         basePrice = (raiseTarget_ * 1e18) / (graduateSupply * 2);
         slope = (basePrice * 1e18) / graduateSupply;
@@ -89,7 +89,6 @@ contract TurboToken is ERC20, Ownable {
         _mint(msg.sender, amount);
 
         emit FeeAttempt(platformFeeRecipient, platformFee);
-
         (bool sent, ) = payable(platformFeeRecipient).call{value: platformFee}("");
         require(sent, "Platform fee transfer failed");
 
@@ -112,7 +111,6 @@ contract TurboToken is ERC20, Ownable {
         creatorLockAmount += amount;
 
         emit FeeAttempt(platformFeeRecipient, platformFee);
-
         bool success = payable(platformFeeRecipient).send(platformFee);
         require(success, "Platform fee send failed");
 
@@ -148,7 +146,6 @@ contract TurboToken is ERC20, Ownable {
             address addr = recipients[i];
             uint256 amt = amounts[i];
 
-            // Add recipient to the list only if new
             if (airdropAllocations[addr] == 0 && amt > 0) {
                 airdropRecipients.push(addr);
             }
@@ -183,6 +180,10 @@ contract TurboToken is ERC20, Ownable {
         }
 
         return (recipients, amounts);
+    }
+
+    function airdropFinalized() external view returns (bool) {
+        return airdropRecipients.length > 0;
     }
 
     // ==== View Helpers ====
@@ -237,6 +238,7 @@ contract TurboToken is ERC20, Ownable {
     // ==== Fallback ====
     receive() external payable {}
 }
+
 
 
 
