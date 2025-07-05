@@ -20,5 +20,6 @@ export type Token = {
     currentPrice: number
     graduated: boolean
     creatorLockAmount: number
+    airdropFinalized: boolean;
   }
 }

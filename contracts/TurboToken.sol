@@ -22,6 +22,7 @@ contract TurboToken is ERC20, Ownable {
     // Airdrop allocations
     mapping(address => uint256) public airdropAllocations;
     mapping(address => bool) public airdropClaimed;
+    address[] public airdropRecipients; // NEW: Keep track of all airdrop addresses
 
     // Bonding curve pricing parameters (scaled by 1e18)
     uint256 public basePrice;
@@ -44,8 +45,8 @@ contract TurboToken is ERC20, Ownable {
         maxSupply = maxSupply_;
         platformFeeRecipient = platformFeeRecipient_;
 
+        // Calculate base price and slope for bonding curve (scaled by 1e18)
         uint256 graduateSupply = maxSupply_ / 100;
-
         basePrice = (raiseTarget_ * 1e18) / (graduateSupply * 2);
         slope = (basePrice * 1e18) / graduateSupply;
     }
@@ -64,7 +65,7 @@ contract TurboToken is ERC20, Ownable {
     // ==== Bonding Curve Pricing ====
     function getPrice(uint256 amount) public view returns (uint256) {
         uint256 currentSupply = totalSupply();
-        uint256 part1 = (amount * basePrice);
+        uint256 part1 = amount * basePrice;
         uint256 part2 = amount * currentSupply;
         uint256 part3 = (amount * (amount - 1)) / 2;
         uint256 part4 = slope * (part2 + part3);
@@ -87,7 +88,7 @@ contract TurboToken is ERC20, Ownable {
 
         _mint(msg.sender, amount);
 
-        emit FeeAttempt(platformFeeRecipient, platformFee); // ✅ Added here
+        emit FeeAttempt(platformFeeRecipient, platformFee);
 
         (bool sent, ) = payable(platformFeeRecipient).call{value: platformFee}("");
         require(sent, "Platform fee transfer failed");
@@ -110,7 +111,7 @@ contract TurboToken is ERC20, Ownable {
         lockedBalances[creator] += amount;
         creatorLockAmount += amount;
 
-        emit FeeAttempt(platformFeeRecipient, platformFee); // ✅ Added here
+        emit FeeAttempt(platformFeeRecipient, platformFee);
 
         bool success = payable(platformFeeRecipient).send(platformFee);
         require(success, "Platform fee send failed");
@@ -144,8 +145,16 @@ contract TurboToken is ERC20, Ownable {
 
         uint256 totalToAllocate = 0;
         for (uint256 i = 0; i < recipients.length; i++) {
-            airdropAllocations[recipients[i]] = amounts[i];
-            totalToAllocate += amounts[i];
+            address addr = recipients[i];
+            uint256 amt = amounts[i];
+
+            // Add recipient to the list only if new
+            if (airdropAllocations[addr] == 0 && amt > 0) {
+                airdropRecipients.push(addr);
+            }
+
+            airdropAllocations[addr] = amt;
+            totalToAllocate += amt;
         }
 
         require(totalToAllocate <= reservedForAirdrop(), "Exceeds airdrop reserve");
@@ -160,6 +169,20 @@ contract TurboToken is ERC20, Ownable {
 
         airdropClaimed[msg.sender] = true;
         _mint(msg.sender, amount);
+    }
+
+    // ==== View Helper for Frontend ====
+    function getAirdropAllocations() external view returns (address[] memory, uint256[] memory) {
+        uint256 len = airdropRecipients.length;
+        address[] memory recipients = new address[](len);
+        uint256[] memory amounts = new uint256[](len);
+
+        for (uint256 i = 0; i < len; i++) {
+            recipients[i] = airdropRecipients[i];
+            amounts[i] = airdropAllocations[recipients[i]];
+        }
+
+        return (recipients, amounts);
     }
 
     // ==== View Helpers ====
@@ -195,7 +218,7 @@ contract TurboToken is ERC20, Ownable {
         );
     }
 
-    // ==== Platform + Creator Withdraw (post-graduation) ====
+    // ==== Withdraw Logic ====
     function withdraw() external onlyCreator {
         require(address(this).balance > 0, "Nothing to withdraw");
         require(graduated, "Not graduated yet");
@@ -208,12 +231,13 @@ contract TurboToken is ERC20, Ownable {
 
         payable(creator).transfer(creatorCut);
 
-        totalRaised = 0; // ✅ Reset after successful withdrawal
+        totalRaised = 0; // Reset after successful withdrawal
     }
 
     // ==== Fallback ====
     receive() external payable {}
 }
+
 
 
 

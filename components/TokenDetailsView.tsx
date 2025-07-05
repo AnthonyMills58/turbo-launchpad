@@ -7,6 +7,7 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
 import WithdrawForm from './WithdrawForm'
 import PublicBuySection from './PublicBuySection'
+import AirdropForm from './AirdropForm'
 
 import { Copy } from 'lucide-react'
 
@@ -191,6 +192,7 @@ export default function TokenDetailsView({
               {!isGraduated && (
                 <>
                   <CreatorBuySection token={token} onSuccess={onRefresh} />
+                   <AirdropForm token={token} />
                   {canGraduate && (
                     <button
                       onClick={handleGraduate}
