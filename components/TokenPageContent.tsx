@@ -37,9 +37,10 @@ export default function TokenPageContent() {
         baseTokens.map(async (t) => {
           const contract = new ethers.Contract(t.contract_address, TurboTokenABI.abi, signer)
           try {
-            const [locked, tokenInfoRaw] = await Promise.all([
+            const [locked, tokenInfoRaw, airdropFinalized] = await Promise.all([
               contract.lockedBalances(address),
-              contract.tokenInfo()
+              contract.tokenInfo(),
+              contract.airdropFinalized()  // ✅ dodane
             ])
             const lockedAmount = locked.toString()
             const tokenInfo = {
@@ -48,7 +49,8 @@ export default function TokenPageContent() {
               basePrice: Number(ethers.formatEther(tokenInfoRaw._basePrice)),
               currentPrice: Number(ethers.formatEther(await contract.getCurrentPrice())),
               graduated: tokenInfoRaw._graduated,
-              creatorLockAmount: Number(ethers.formatEther(tokenInfoRaw._creatorLockAmount))
+              creatorLockAmount: Number(ethers.formatEther(tokenInfoRaw._creatorLockAmount)),
+              airdropFinalized: airdropFinalized  // ✅ dodane
             }
             return { ...t, lockedAmount, onChainData: tokenInfo }
           } catch (error) {
