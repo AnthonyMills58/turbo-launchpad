@@ -7,8 +7,14 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 
+type AirdropEntry = {
+  address: string
+  amount: number
+  claimed: boolean
+}
+
 export default function AirdropForm({ token }: { token: Token }) {
-  const [onChainAirdrops, setOnChainAirdrops] = useState<{ address: string; amount: number }[]>([])
+  const [onChainAirdrops, setOnChainAirdrops] = useState<AirdropEntry[]>([])
   const [draftAirdrops, setDraftAirdrops] = useState<{ address: string; amount: number }[]>([])
   const [address, setAddress] = useState('')
   const [amount, setAmount] = useState<number>(0)
@@ -25,10 +31,18 @@ export default function AirdropForm({ token }: { token: Token }) {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, provider)
       const [addresses, amounts]: [string[], bigint[]] = await contract.getAirdropAllocations?.()
-      const parsed = addresses.map((addr, idx) => ({
-        address: addr,
-        amount: Number(amounts[idx]),
-      }))
+
+      const parsed: AirdropEntry[] = await Promise.all(
+        addresses.map(async (addr, idx) => {
+          const allocation: bigint = await contract.airdropAllocations(addr)
+          return {
+            address: addr,
+            amount: Number(amounts[idx]),
+            claimed: allocation === 0n, // allocation === 0 means already claimed
+          }
+        })
+      )
+
       setOnChainAirdrops(parsed)
     } catch (err) {
       console.error('❌ Failed to load airdrops:', err)
@@ -82,94 +96,101 @@ export default function AirdropForm({ token }: { token: Token }) {
   }
 
   return (
-  <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-4">
-    {/* 👤 Show title only in editable state (before confirmation) */}
-    {!isFinalized && onChainAirdrops.length === 0 && (
-      <h3 className="text-white text-sm font-semibold mb-2">
-        Airdrop Manager
-      </h3>
-    )}
-    {/* ➕ Show input fields only if NOT finalized AND no confirmed airdrops yet */}
-    {!isFinalized && onChainAirdrops.length === 0 && (
-      <>
-        <Input
-          name="recipient"
-          type="text"
-          label="Recipient Address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="0x..."
-        />
-        <Input
-          name="amount"
-          type="number"
-          label="Token Amount"
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          min={1}
-          placeholder="e.g. 1000"
-        />
-        <button
-          onClick={handleAdd}
-          className="w-full py-2 rounded-lg font-semibold transition-colors bg-purple-600 hover:bg-purple-700 text-white mt-2 text-sm"
-        >
-          ➕ Add Airdrop
-        </button>
-      </>
-    )}
+    <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-4">
+      {/* 👤 Show title only in editable state (before confirmation) */}
+      {!isFinalized && onChainAirdrops.length === 0 && (
+        <h3 className="text-white text-sm font-semibold mb-2">Airdrop Manager</h3>
+      )}
 
-    {/* 📝 Show draft airdrops list if any (before confirmation) */}
-    {draftAirdrops.length > 0 && !isFinalized && (
-      <div className="mt-4 text-sm text-gray-300">
-        <div className="border-b border-gray-600 pb-1 mb-2 text-white font-semibold">
-          Pending Airdrops
-        </div>
-        {draftAirdrops.map((a, i) => (
-          <div key={`draft-${i}`} className="flex justify-between items-center mb-1">
-            <div className="truncate w-36">{a.address}</div>
-            <div>{a.amount}</div>
-            <button
-              onClick={() => handleRemove(i)}
-              className="text-red-400 hover:text-red-500 text-xs"
-            >
-              🗑️
-            </button>
+      {/* ➕ Input fields for draft airdrops */}
+      {!isFinalized && onChainAirdrops.length === 0 && (
+        <>
+          <Input
+            name="recipient"
+            type="text"
+            label="Recipient Address"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="0x..."
+          />
+          <Input
+            name="amount"
+            type="number"
+            label="Token Amount"
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value))}
+            min={1}
+            placeholder="e.g. 1000"
+          />
+          <button
+            onClick={handleAdd}
+            className="w-full py-2 rounded-lg font-semibold transition-colors bg-purple-600 hover:bg-purple-700 text-white mt-2 text-sm"
+          >
+            ➕ Add Airdrop
+          </button>
+        </>
+      )}
+
+      {/* 📝 Pending airdrops before on-chain submission */}
+      {draftAirdrops.length > 0 && !isFinalized && (
+        <div className="mt-4 text-sm text-gray-300">
+          <div className="border-b border-gray-600 pb-1 mb-2 text-white font-semibold">
+            Pending Airdrops
           </div>
-        ))}
-        <button
-          onClick={handleSubmit}
-          disabled={isPending}
-          className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
-        >
-          {isPending ? 'Submitting...' : '🚀 Confirm Airdrops'}
-        </button>
-      </div>
-    )}
-
-    {/* ✅ Show confirmed airdrops (fetched from chain) */}
-    {onChainAirdrops.length > 0 && (
-      <div className="mt-0 text-sm text-gray-300">
-        <div className="border-b border-gray-600 pb-1 mb-2 text-white font-semibold">
-          Confirmed Airdrops
+          {draftAirdrops.map((a, i) => (
+            <div key={`draft-${i}`} className="flex justify-between items-center mb-1">
+              <div className="truncate w-36">{a.address}</div>
+              <div>{a.amount}</div>
+              <button
+                onClick={() => handleRemove(i)}
+                className="text-red-400 hover:text-red-500 text-xs"
+              >
+                🗑️
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={handleSubmit}
+            disabled={isPending}
+            className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
+          >
+            {isPending ? 'Submitting...' : '🚀 Confirm Airdrops'}
+          </button>
         </div>
-        {onChainAirdrops.map((a, i) => (
-          <div key={`onchain-${i}`} className="flex justify-between items-center mb-1">
-            <div className="truncate w-36">{a.address}</div>
-            <div>{a.amount}</div>
-          </div>
-        ))}
-      </div>
-    )}
+      )}
 
-    {/* ✅ Success message */}
-    {isSuccess && (
-      <div className="mt-3 text-green-400 text-sm text-center">
-        ✅ Airdrops confirmed on-chain.
-      </div>
-    )}
-  </div>
-)
+      {/* ✅ Confirmed airdrops */}
+      {onChainAirdrops.length > 0 && (
+        <div className="mt-0 text-sm text-gray-300">
+          <div className="border-b border-gray-600 pb-1 mb-2 text-white font-semibold">
+            Confirmed Airdrops
+          </div>
+          {onChainAirdrops.map((a, i) => (
+            <div key={`onchain-${i}`} className="flex justify-between items-center mb-1">
+              <div className="truncate w-36">{a.address}</div>
+              <div className="flex items-center gap-2">
+                <span>{a.amount}</span>
+                {a.claimed ? (
+                  <span className="text-green-400 text-xs">✅ Claimed</span>
+                ) : (
+                  <span className="text-yellow-400 text-xs">🕗 Unclaimed</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ✅ Success message */}
+      {isSuccess && (
+        <div className="mt-3 text-green-400 text-sm text-center">
+          ✅ Airdrops confirmed on-chain.
+        </div>
+      )}
+    </div>
+  )
 }
+
 
 
 
