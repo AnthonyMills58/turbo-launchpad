@@ -14,6 +14,10 @@ export type Token = {
   supply: number
   is_graduated: boolean
   lockedAmount?: string // Only for creator
+  // DEX deployment tracking
+  on_dex?: boolean
+  dex_listing_url?: string
+
 
   // Data from tokenInfo() in contract
   onChainData?: {

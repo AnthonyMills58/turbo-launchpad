@@ -131,6 +131,40 @@ export default function TokenDetailsView({
     URL.revokeObjectURL(url)
   }
 
+
+  const [dexUrl, setDexUrl] = useState(token.dex_listing_url || '')
+    const [isSubmittingDex, setIsSubmittingDex] = useState(false)
+    const [dexSubmitSuccess, setDexSubmitSuccess] = useState(false)
+    const [dexSubmitError, setDexSubmitError] = useState(false)
+
+    const handleMarkDexListing = async () => {
+      try {
+        if (!dexUrl) return
+        setIsSubmittingDex(true)
+        setDexSubmitError(false)
+
+        const res = await fetch('/api/mark-dex-listing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractAddress: token.contract_address,
+            dexUrl,
+          }),
+        })
+
+        if (!res.ok) throw new Error('Failed to update DEX status')
+        setDexSubmitSuccess(true)
+        onRefresh()
+      } catch (err) {
+        console.error('Failed to mark as deployed:', err)
+        setDexSubmitError(true)
+      } finally {
+        setIsSubmittingDex(false)
+        setTimeout(() => setDexSubmitSuccess(false), 2000)
+      }
+    }
+
+
   return (
     <div className="max-w-4xl mx-auto mt-6 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
       <button
@@ -252,33 +286,77 @@ export default function TokenDetailsView({
           {!isCreator && isGraduated && <AirdropClaimForm token={token} />}
 
 
-          {/* JSON Metadata Section */}
-          {isCreator && isGraduated && (
-            <div className="mb-6">
-              <h2 className="text-white font-semibold text-lg mb-2">DEX Metadata</h2>
-              <pre className="bg-black text-green-400 text-xs p-4 rounded overflow-auto max-h-60 border border-gray-700">
-                {JSON.stringify(dexMetadata, null, 2)}
-              </pre>
-              <div className="flex gap-4 mt-2">
-                <button
-                  onClick={handleCopyJSON}
-                  className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm"
-                >
-                  📋 Copy JSON
-                </button>
-                <button
-                  onClick={handleDownloadJSON}
-                  className="bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 text-sm"
-                >
-                  💾 Download JSON
-                </button>
-                {copiedJSON && <span className="text-green-400 text-xs mt-2">Copied!</span>}
+          {/* DEX JSON + Deployment Form */}
+          {isCreator && isGraduated && !token.on_dex && (
+            <>
+              {/* JSON Metadata Section */}
+              <div className="mb-6">
+                <h2 className="text-white font-semibold text-lg mb-2">DEX Metadata</h2>
+                <pre className="bg-black text-green-400 text-xs p-4 rounded overflow-auto max-h-60 border border-gray-700">
+                  {JSON.stringify(dexMetadata, null, 2)}
+                </pre>
+                <div className="flex gap-4 mt-2">
+                  <button
+                    onClick={handleCopyJSON}
+                    className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm"
+                  >
+                    📋 Copy JSON
+                  </button>
+                  <button
+                    onClick={handleDownloadJSON}
+                    className="bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 text-sm"
+                  >
+                    💾 Download JSON
+                  </button>
+                  {copiedJSON && <span className="text-green-400 text-xs mt-2">Copied!</span>}
+                </div>
               </div>
-            </div>
+
+              {/* DEX Deployment Form */}
+              <div className="mt-6">
+                <h2 className="text-white font-semibold text-lg mb-2">Mark Token as Deployed to DEX</h2>
+                <input
+                  type="url"
+                  placeholder="Enter DEX listing URL (e.g. https://...)"
+                  className="w-full px-4 py-2 text-sm bg-gray-800 text-white rounded border border-gray-600 focus:outline-none"
+                  value={dexUrl}
+                  onChange={(e) => setDexUrl(e.target.value)}
+                />
+                <button
+                  onClick={handleMarkDexListing}
+                  disabled={isSubmittingDex || !dexUrl}
+                  className={`mt-2 w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+                    isSubmittingDex || !dexUrl
+                      ? 'bg-neutral-700 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-yellow-500 to-pink-500 hover:brightness-110'
+                  }`}
+                >
+                  {isSubmittingDex ? 'Submitting...' : '📡 Mark as Deployed to DEX'}
+                </button>
+                {dexSubmitSuccess && (
+                  <p className="text-green-400 text-sm mt-2">✅ Token marked as deployed!</p>
+                )}
+                {dexSubmitError && (
+                  <p className="text-red-400 text-sm mt-2">❌ Failed to mark deployment. Try again.</p>
+                )}
+              </div>
+            </>
           )}
 
-
-
+          {/* If token is already deployed, optionally show a link */}
+          {isCreator && isGraduated && token.on_dex && token.dex_listing_url && (
+            <div className="mt-6">
+              <h2 className="text-white font-semibold text-lg mb-2">✅ Token is Deployed to DEX</h2>
+              <a
+                href={token.dex_listing_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:underline text-sm"
+              >
+                View Listing on DEX ↗
+              </a>
+            </div>
+          )}
 
         </div>
       </div>

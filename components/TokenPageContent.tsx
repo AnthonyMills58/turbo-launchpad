@@ -200,13 +200,16 @@ export default function TokenPageContent() {
             )}
 
 
-            <div
-              className={`text-xs font-medium ${
-                token.is_graduated ? 'text-green-400' : 'text-yellow-400'
-              }`}
-            >
-              {token.is_graduated ? 'Graduated' : 'In Progress'}
+           <div className="text-xs font-medium">
+              {token.on_dex ? (
+                <span className="text-blue-400">On DEX</span>
+              ) : token.is_graduated ? (
+                <span className="text-green-400">Graduated</span>
+              ) : (
+                <span className="text-yellow-400">In Progress</span>
+              )}
             </div>
+
           </div>
         ))}
       </div>
