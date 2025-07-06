@@ -10,7 +10,6 @@ import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet } from '@/lib/chains'
-
 import { Copy } from 'lucide-react'
 
 export default function TokenDetailsView({
@@ -30,6 +29,7 @@ export default function TokenDetailsView({
   const [copied, setCopied] = useState(false)
   const [isGraduating, setIsGraduating] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
+  const [copiedJSON, setCopiedJSON] = useState(false)
 
   const isCreator = address?.toLowerCase() === token.creator_wallet.toLowerCase()
   const isGraduated = token.onChainData?.graduated ?? false
@@ -37,12 +37,25 @@ export default function TokenDetailsView({
   const cap = token.onChainData?.raiseTarget ?? 0
   const canGraduate = isCreator && !isGraduated && raised >= cap
 
- const explorerBaseUrl =
-  chainId === megaethTestnet.id
-    ? megaethTestnet.blockExplorers!.default.url
-    : megaethMainnet.blockExplorers!.default.url
+  const explorerBaseUrl =
+    chainId === megaethTestnet.id
+      ? megaethTestnet.blockExplorers!.default.url
+      : megaethMainnet.blockExplorers!.default.url
 
   const explorerLink = `${explorerBaseUrl}/address/${token.contract_address}`
+
+  const dexMetadata = {
+    name: token.name,
+    symbol: token.symbol,
+    address: token.contract_address,
+    decimals: 18,
+    chainId,
+    logoURI: token.image || '',
+    website: token.website || '',
+    description: token.description || '',
+    creator: token.creator_wallet,
+    tags: ['launchpad', isGraduated ? 'graduated' : 'in-progress'],
+  }
 
   const handleGraduate = async () => {
     try {
@@ -102,6 +115,22 @@ export default function TokenDetailsView({
     setTimeout(() => setCopied(false), 1500)
   }
 
+  const handleCopyJSON = () => {
+    navigator.clipboard.writeText(JSON.stringify(dexMetadata, null, 2))
+    setCopiedJSON(true)
+    setTimeout(() => setCopiedJSON(false), 1500)
+  }
+
+  const handleDownloadJSON = () => {
+    const blob = new Blob([JSON.stringify(dexMetadata, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${token.symbol}_metadata.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="max-w-4xl mx-auto mt-6 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
       <button
@@ -135,37 +164,21 @@ export default function TokenDetailsView({
           </h1>
           <p className="text-gray-300 mb-4">{token.description}</p>
 
-          {/* 🔗 Links */}
           {(token.website || token.twitter || token.telegram) && (
             <div className="mb-4 text-sm">
               <div className="flex flex-wrap gap-4 text-blue-400">
                 {token.website && (
-                  <a
-                    href={token.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline flex items-center gap-1"
-                  >
+                  <a href={token.website} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-1">
                     🌐 <span className="underline">Website</span>
                   </a>
                 )}
                 {token.twitter && (
-                  <a
-                    href={token.twitter}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline flex items-center gap-1"
-                  >
+                  <a href={token.twitter} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-1">
                     🐦 <span className="underline">Social</span>
                   </a>
                 )}
                 {token.telegram && (
-                  <a
-                    href={token.telegram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline flex items-center gap-1"
-                  >
+                  <a href={token.telegram} target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center gap-1">
                     💬 <span className="underline">Community</span>
                   </a>
                 )}
@@ -173,85 +186,28 @@ export default function TokenDetailsView({
             </div>
           )}
 
-          {/* Contract Address + Copy + Explorer Link */}
+          {/* Contract Info */}
           <div className="flex items-center flex-wrap mb-4 space-x-2 font-mono text-sm text-gray-400 select-all">
             <span>Contract:</span>
             <span>{token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}</span>
-
-            <button
-              onClick={handleCopy}
-              title="Copy contract address"
-              aria-label="Copy contract address"
-              type="button"
-              className="text-gray-400 hover:text-white transition"
-            >
-              <Copy size={16} />
-            </button>
-
-            {copied && (
-              <span className="text-green-400 ml-2 select-none text-xs">Copied!</span>
-            )}
-
-            <a
-              href={explorerLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:underline ml-4 text-xs"
-            >
-              View on Explorer
-            </a>
+            <button onClick={handleCopy} className="text-gray-400 hover:text-white transition"><Copy size={16} /></button>
+            {copied && <span className="text-green-400 ml-2 text-xs">Copied!</span>}
+            <a href={explorerLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline ml-4 text-xs">View on Explorer</a>
           </div>
 
+          
           {/* Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-300 mb-6">
-            <div>
-              <span className="font-semibold text-white">Creator</span>
-              <p className="font-mono">
-                {token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}
-              </p>
-            </div>
-            <div>
-              <span className="font-semibold text-white">Status</span>
-              <p className={isGraduated ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>
-                {isGraduated ? 'Graduated' : 'In Progress'}
-              </p>
-            </div>
-            <div>
-              <span className="font-semibold text-white">Raised</span>
-              <p>{Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH</p>
-            </div>
-            <div>
-              <span className="font-semibold text-white">Current Price</span>
-              <p>{token.onChainData?.currentPrice?.toFixed(7) ?? '–'} ETH</p>
-            </div>
-            <div>
-              <span className="font-semibold text-white">Max Supply</span>
-              <p>{token.supply.toLocaleString()}</p>
-            </div>
-            <div>
-              <span className="font-semibold text-white">Locked by Creator</span>
-              <p>{token.lockedAmount ? parseFloat(token.lockedAmount).toFixed(0) : '0'}</p>
-            </div>
-            <div>
-              <span className="font-semibold text-white">FDV</span>
-              <p>
-                {token.onChainData?.currentPrice
-                  ? `${(token.supply * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH`
-                  : '–'}
-              </p>
-            </div>
-            {token.onChainData?.currentPrice !== undefined &&
-              token.onChainData?.totalSupply !== undefined && (
-                <div>
-                  <span className="font-semibold text-white">Market Cap</span>
-                  <p className="text-sm text-white">
-                    {(
-                      (Number(token.onChainData.totalSupply)  - Number(token.onChainData.creatorLockAmount)) *
-                      token.onChainData.currentPrice
-                    ).toFixed(6).replace(/\.?0+$/, '')} ETH
-                  </p>
-                </div>
-              )}
+            <div><span className="font-semibold text-white">Creator</span><p className="font-mono">{token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}</p></div>
+            <div><span className="font-semibold text-white">Status</span><p className={isGraduated ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>{isGraduated ? 'Graduated' : 'In Progress'}</p></div>
+            <div><span className="font-semibold text-white">Raised</span><p>{Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH</p></div>
+            <div><span className="font-semibold text-white">Current Price</span><p>{token.onChainData?.currentPrice?.toFixed(7) ?? '–'} ETH</p></div>
+            <div><span className="font-semibold text-white">Max Supply</span><p>{token.supply.toLocaleString()}</p></div>
+            <div><span className="font-semibold text-white">Locked by Creator</span><p>{token.lockedAmount ? parseFloat(token.lockedAmount).toFixed(0) : '0'}</p></div>
+            <div><span className="font-semibold text-white">FDV</span><p>{token.onChainData?.currentPrice ? `${(token.supply * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH` : '–'}</p></div>
+            {token.onChainData?.currentPrice !== undefined && token.onChainData?.totalSupply !== undefined && (
+              <div><span className="font-semibold text-white">Market Cap</span><p className="text-sm text-white">{((Number(token.onChainData.totalSupply) - Number(token.onChainData.creatorLockAmount)) * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH</p></div>
+            )}
           </div>
 
           {/* Creator Actions */}
@@ -264,9 +220,7 @@ export default function TokenDetailsView({
                   onClick={handleGraduate}
                   disabled={isGraduating}
                   className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                    isGraduating
-                      ? 'bg-neutral-700 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
+                    isGraduating ? 'bg-neutral-700 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
                   }`}
                 >
                   {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
@@ -277,9 +231,7 @@ export default function TokenDetailsView({
                   onClick={handleUnlock}
                   disabled={isUnlocking}
                   className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                    isUnlocking
-                      ? 'bg-neutral-700 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
+                    isUnlocking ? 'bg-neutral-700 cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
                   }`}
                 >
                   {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
@@ -298,11 +250,42 @@ export default function TokenDetailsView({
           )}
 
           {!isCreator && isGraduated && <AirdropClaimForm token={token} />}
+
+
+          {/* JSON Metadata Section */}
+          {isCreator && isGraduated && (
+            <div className="mb-6">
+              <h2 className="text-white font-semibold text-lg mb-2">DEX Metadata</h2>
+              <pre className="bg-black text-green-400 text-xs p-4 rounded overflow-auto max-h-60 border border-gray-700">
+                {JSON.stringify(dexMetadata, null, 2)}
+              </pre>
+              <div className="flex gap-4 mt-2">
+                <button
+                  onClick={handleCopyJSON}
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm"
+                >
+                  📋 Copy JSON
+                </button>
+                <button
+                  onClick={handleDownloadJSON}
+                  className="bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 text-sm"
+                >
+                  💾 Download JSON
+                </button>
+                {copiedJSON && <span className="text-green-400 text-xs mt-2">Copied!</span>}
+              </div>
+            </div>
+          )}
+
+
+
+
         </div>
       </div>
     </div>
   )
 }
+
 
 
 
