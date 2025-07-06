@@ -4,6 +4,9 @@ export type Token = {
   symbol: string
   description: string
   image: string
+  website?: string
+  twitter?: string
+  telegram?: string
   contract_address: string
   creator_wallet: string
   raise_target: number
@@ -12,7 +15,7 @@ export type Token = {
   is_graduated: boolean
   lockedAmount?: string // Only for creator
 
-  // Dane z tokenInfo() w kontrakcie
+  // Data from tokenInfo() in contract
   onChainData?: {
     raiseTarget: number
     totalRaised: number
@@ -20,6 +23,7 @@ export type Token = {
     currentPrice: number
     graduated: boolean
     creatorLockAmount: number
-    airdropFinalized: boolean;
+    airdropFinalized: boolean
   }
 }
+

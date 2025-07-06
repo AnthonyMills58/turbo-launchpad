@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       image,
       twitter,
       telegram,
+      website, // ✅ NEW
       supply,
       raiseTarget,
       dex,
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
       contractAddress,
     } = body
 
+    // ✅ Basic check (website is optional)
     if (
       !name || !symbol || !description || !raiseTarget || !dex || !curveType ||
       !creatorAddress || !contractAddress
@@ -29,11 +31,11 @@ export async function POST(req: NextRequest) {
 
     const result = await pool.query(
       `INSERT INTO tokens (
-        name, symbol, description, image, twitter, telegram,
+        name, symbol, description, image, twitter, telegram, website,
         supply, raise_target, dex, curve_type,
         creator_wallet, contract_address
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id`,
       [
         name,
@@ -42,6 +44,7 @@ export async function POST(req: NextRequest) {
         image,
         twitter,
         telegram,
+        website ?? null, // 👈 null if not provided
         supply,
         raiseTarget,
         dex,
@@ -57,6 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+
 
 
 

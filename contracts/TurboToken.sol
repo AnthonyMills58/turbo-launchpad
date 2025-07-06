@@ -111,13 +111,17 @@ contract TurboToken is ERC20, Ownable {
         creatorLockAmount += amount;
 
         emit FeeAttempt(platformFeeRecipient, platformFee);
-        bool success = payable(platformFeeRecipient).send(platformFee);
-        require(success, "Platform fee send failed");
+
+        // 👇 ZAMIANA z .send() na .call{value:}
+         (bool success, ) = payable(platformFeeRecipient).call{value: platformFee}("");
+         require(success, "Platform fee call failed");
 
         if (msg.value > cost) {
-            payable(msg.sender).transfer(msg.value - cost);
+            (bool refundSuccess, ) = payable(msg.sender).call{value: msg.value - cost}("");
+            require(refundSuccess, "Refund failed");
         }
     }
+
 
     // ==== Graduation Logic ====
     function graduate() external {

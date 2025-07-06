@@ -20,6 +20,7 @@ export default function CreateTokenForm() {
     image: '',
     twitter: '',
     telegram: '',
+    website: '',
     supply: 1_000_000_000,
     raiseTarget: 12,
     dex: 'GTE',
@@ -198,8 +199,10 @@ export default function CreateTokenForm() {
         )}
       </div>
 
-      <Input label="Twitter" name="twitter" value={form.twitter} onChange={handleChange} />
-      <Input label="Telegram" name="telegram" value={form.telegram} onChange={handleChange} />
+      <Input label="Social" name="twitter" value={form.twitter} onChange={handleChange} />
+      <Input label="Community" name="telegram" value={form.telegram} onChange={handleChange} />
+      <Input label="Website" name="website" value={form.website} onChange={handleChange} />
+
 
       <div className="flex items-center space-x-2 pt-1">
         <input

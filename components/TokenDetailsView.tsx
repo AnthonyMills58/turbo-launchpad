@@ -124,7 +124,47 @@ export default function TokenDetailsView({
           <h1 className="text-3xl font-bold mb-2">
             {token.name} <span className="text-gray-400">({token.symbol})</span>
           </h1>
-          <p className="text-gray-300 mb-6">{token.description}</p>
+          <p className="text-gray-300 mb-4">{token.description}</p>
+
+          {/* 🔗 Links */}
+          {(token.website || token.twitter || token.telegram) && (
+            <div className="mb-4 text-sm">
+              <span className="font-semibold text-white block mb-1">Links:</span>
+              <div className="flex flex-wrap gap-4 text-blue-400">
+                {token.website && (
+                  <a
+                    href={token.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline flex items-center gap-1"
+                  >
+                    🌐 <span className="underline">Website</span>
+                  </a>
+                )}
+                {token.twitter && (
+                  <a
+                    href={token.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline flex items-center gap-1"
+                  >
+                    🐦 <span className="underline">Social</span>
+                  </a>
+                )}
+                {token.telegram && (
+                  <a
+                    href={token.telegram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline flex items-center gap-1"
+                  >
+                    💬 <span className="underline">Community</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
 
           {/* Contract Address + Copy */}
           <div className="flex items-center mb-4 space-x-2 font-mono text-sm text-gray-400 select-all">
@@ -187,20 +227,15 @@ export default function TokenDetailsView({
             </div>
           </div>
 
-          {/* Creator Buy + Graduate or Unlock */}
+          {/* Creator Actions */}
           {isCreator && (
             <div className="inline-flex flex-col items-stretch space-y-4">
-              {/* 🛒 Creator can buy only before graduation */}
               {!isGraduated && (
-                <>
-                  <CreatorBuySection token={token} onSuccess={onRefresh} />
-                </>
+                <CreatorBuySection token={token} onSuccess={onRefresh} />
               )}
 
-              {/* 🪂 Show AirdropForm always — it handles its own visibility */}
               <AirdropForm token={token} />
 
-              {/* 🎓 Show graduate button only if creator & cap reached & not yet graduated */}
               {canGraduate && (
                 <button
                   onClick={handleGraduate}
@@ -215,7 +250,6 @@ export default function TokenDetailsView({
                 </button>
               )}
 
-              {/* 🔓 Unlock only after graduation */}
               {isGraduated && Number(token.lockedAmount ?? 0) > 0 && (
                 <button
                   onClick={handleUnlock}
@@ -230,28 +264,27 @@ export default function TokenDetailsView({
                 </button>
               )}
 
-              {/* 💸 Show withdraw button only after graduation & if there are raised funds */}
               {isGraduated && Number(raised) > 0 && (
                 <WithdrawForm contractAddress={token.contract_address} onSuccess={onRefresh} />
               )}
             </div>
           )}
 
-           {!isCreator && !isGraduated && (
-                <div className="mt-6">
-                  <PublicBuySection token={token} onSuccess={onRefresh} />
-                </div>
+          {!isCreator && !isGraduated && (
+            <div className="mt-6">
+              <PublicBuySection token={token} onSuccess={onRefresh} />
+            </div>
           )}
 
           {!isCreator && isGraduated && (
             <AirdropClaimForm token={token} />
           )}
-
         </div>
       </div>
     </div>
   )
 }
+
 
 
 
