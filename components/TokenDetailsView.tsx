@@ -129,7 +129,7 @@ export default function TokenDetailsView({
           {/* 🔗 Links */}
           {(token.website || token.twitter || token.telegram) && (
             <div className="mb-4 text-sm">
-              <span className="font-semibold text-white block mb-1">Links:</span>
+              
               <div className="flex flex-wrap gap-4 text-blue-400">
                 {token.website && (
                   <a
@@ -234,7 +234,10 @@ export default function TokenDetailsView({
                 <CreatorBuySection token={token} onSuccess={onRefresh} />
               )}
 
-              <AirdropForm token={token} />
+              {/* ✅ Only show if airdrops were set */}
+              {token.onChainData?.airdropFinalized && (
+                <AirdropForm token={token} />
+              )}
 
               {canGraduate && (
                 <button
