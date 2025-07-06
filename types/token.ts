@@ -24,6 +24,7 @@ export type Token = {
     graduated: boolean
     creatorLockAmount: number
     airdropFinalized: boolean
+    totalSupply: number   // ✅ Added
   }
 }
 

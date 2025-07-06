@@ -225,6 +225,33 @@ export default function TokenDetailsView({
               <span className="font-semibold text-white">Locked by Creator</span>
               <p>{token.lockedAmount ? parseFloat(token.lockedAmount).toFixed(0) : '0'}</p>
             </div>
+
+            <div>
+              <span className="font-semibold text-white">FDV</span>
+              <p>
+                {token.onChainData?.currentPrice
+                  ? `${(token.supply * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH`
+                  : '–'}
+              </p>
+            </div>
+
+            {token.onChainData?.currentPrice !== undefined &&
+            token.onChainData?.totalSupply !== undefined && (
+              <div>
+                <span className="font-semibold text-white">Market Cap</span>
+                <p className="text-sm text-white">
+                  {(
+                    (Number(token.onChainData.totalSupply) / 1e18 - Number(token.onChainData.creatorLockAmount)) *
+                    token.onChainData.currentPrice
+                  )
+                    .toFixed(6)
+                    .replace(/\.?0+$/, '')}{' '}
+                  ETH
+                </p>
+              </div>
+            )}
+
+
           </div>
 
           {/* Creator Actions */}

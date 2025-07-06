@@ -37,10 +37,11 @@ export default function TokenPageContent() {
         baseTokens.map(async (t) => {
           const contract = new ethers.Contract(t.contract_address, TurboTokenABI.abi, signer)
           try {
-            const [locked, tokenInfoRaw, airdropFinalized] = await Promise.all([
+            const [locked, tokenInfoRaw, airdropFinalized, totalSupply] = await Promise.all([
               contract.lockedBalances(address),
               contract.tokenInfo(),
-              contract.airdropFinalized()  // ✅ dodane
+              contract.airdropFinalized(),  // ✅ dodane
+              contract.totalSupply()
             ])
             const lockedAmount = locked.toString()
             const tokenInfo = {
@@ -50,7 +51,8 @@ export default function TokenPageContent() {
               currentPrice: Number(ethers.formatEther(await contract.getCurrentPrice())),
               graduated: tokenInfoRaw._graduated,
               creatorLockAmount: Number(ethers.formatEther(tokenInfoRaw._creatorLockAmount)),
-              airdropFinalized: airdropFinalized  // ✅ dodane
+              airdropFinalized: airdropFinalized, // ✅ dodane
+              totalSupply: totalSupply  // ✅ NEW FIELD
             }
             return { ...t, lockedAmount, onChainData: tokenInfo }
           } catch (error) {
@@ -173,6 +175,30 @@ export default function TokenPageContent() {
               </span>
             
             </div>
+
+            {token.onChainData?.currentPrice && (
+              <div className="text-sm text-gray-400 mb-1">
+                FDV:{' '}
+                <span className="text-white">
+                  {(token.supply * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH
+                </span>
+              </div>
+            )}
+
+            {token.onChainData?.currentPrice && token.onChainData?.totalSupply !== undefined && token.lockedAmount !== undefined && (
+              <div className="text-sm text-gray-400 mb-1">
+                Market Cap:{' '}
+                <span className="text-white">
+                  {(
+                    (Number(token.onChainData.totalSupply)/1e18 - Number(token.lockedAmount)) *
+                    token.onChainData.currentPrice
+                  )
+                    .toFixed(6)
+                    .replace(/\.?0+$/, '')} ETH
+                </span>
+              </div>
+            )}
+
 
             <div
               className={`text-xs font-medium ${
