@@ -30,18 +30,23 @@ export default function AirdropForm({ token }: { token: Token }) {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, provider)
-      const [addresses, amounts]: [string[], bigint[]] = await contract.getAirdropAllocations?.()
+      const [addresses]: [string[]] = await contract.getAirdropAllocations?.()
 
       const parsed: AirdropEntry[] = await Promise.all(
-        addresses.map(async (addr, idx) => {
-          const allocation: bigint = await contract.airdropAllocations(addr)
+        addresses.map(async (addr) => {
+          const [allocation, claimed]: [bigint, boolean] = await Promise.all([
+            contract.airdropAllocations(addr),
+            contract.airdropClaimed(addr),
+          ])
           return {
             address: addr,
-            amount: Number(amounts[idx]),
-            claimed: allocation === 0n, // allocation === 0 means already claimed
+            amount: Number(allocation),
+            claimed,
           }
         })
       )
+
+
 
       setOnChainAirdrops(parsed)
     } catch (err) {
@@ -167,13 +172,15 @@ export default function AirdropForm({ token }: { token: Token }) {
           </div>
           {onChainAirdrops.map((a, i) => (
             <div key={`onchain-${i}`} className="flex justify-between items-center mb-1">
-              <div className="truncate w-36">{a.address}</div>
-              <div className="flex items-center gap-2">
-                <span>{a.amount}</span>
+              <div className="truncate w-32">
+                {a.address.slice(0, 6)}...{a.address.slice(-4)}
+              </div>
+              <div className="flex items-center gap-1 justify-end min-w-[80px]">
+                <span className="text-white text-xs">{a.amount}</span>
                 {a.claimed ? (
-                  <span className="text-green-400 text-xs">✅ Claimed</span>
+                  <span className="text-green-400 text-xs whitespace-nowrap">✅</span>
                 ) : (
-                  <span className="text-yellow-400 text-xs">🕗 Unclaimed</span>
+                  <span className="text-yellow-400 text-xs whitespace-nowrap">🕗</span>
                 )}
               </div>
             </div>
@@ -190,6 +197,7 @@ export default function AirdropForm({ token }: { token: Token }) {
     </div>
   )
 }
+
 
 
 

@@ -8,6 +8,7 @@ import CreatorBuySection from './CreatorBuySection'
 import WithdrawForm from './WithdrawForm'
 import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
+import AirdropClaimForm from './AirdropClaimForm'
 
 import { Copy } from 'lucide-react'
 
@@ -240,7 +241,12 @@ export default function TokenDetailsView({
                 <div className="mt-6">
                   <PublicBuySection token={token} onSuccess={onRefresh} />
                 </div>
-              )}
+          )}
+
+          {!isCreator && isGraduated && (
+            <AirdropClaimForm token={token} />
+          )}
+
         </div>
       </div>
     </div>
