@@ -1,7 +1,7 @@
 'use client'
 
 import { Token } from '@/types/token'
-import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
+import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
 import { useState } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
@@ -9,6 +9,7 @@ import WithdrawForm from './WithdrawForm'
 import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
+import { megaethTestnet, megaethMainnet } from '@/lib/chains'
 
 import { Copy } from 'lucide-react'
 
@@ -23,6 +24,7 @@ export default function TokenDetailsView({
 }) {
   const { address } = useAccount()
   const publicClient = usePublicClient()
+  const chainId = useChainId()
   const { writeContractAsync } = useWriteContract()
 
   const [copied, setCopied] = useState(false)
@@ -34,6 +36,13 @@ export default function TokenDetailsView({
   const raised = token.onChainData?.totalRaised ?? 0
   const cap = token.onChainData?.raiseTarget ?? 0
   const canGraduate = isCreator && !isGraduated && raised >= cap
+
+ const explorerBaseUrl =
+  chainId === megaethTestnet.id
+    ? megaethTestnet.blockExplorers!.default.url
+    : megaethMainnet.blockExplorers!.default.url
+
+  const explorerLink = `${explorerBaseUrl}/address/${token.contract_address}`
 
   const handleGraduate = async () => {
     try {
@@ -129,7 +138,6 @@ export default function TokenDetailsView({
           {/* 🔗 Links */}
           {(token.website || token.twitter || token.telegram) && (
             <div className="mb-4 text-sm">
-              
               <div className="flex flex-wrap gap-4 text-blue-400">
                 {token.website && (
                   <a
@@ -165,14 +173,11 @@ export default function TokenDetailsView({
             </div>
           )}
 
-
-          {/* Contract Address + Copy */}
-          <div className="flex items-center mb-4 space-x-2 font-mono text-sm text-gray-400 select-all">
+          {/* Contract Address + Copy + Explorer Link */}
+          <div className="flex items-center flex-wrap mb-4 space-x-2 font-mono text-sm text-gray-400 select-all">
             <span>Contract:</span>
-            <span>
-              {token.contract_address.slice(0, 6)}...
-              {token.contract_address.slice(-4)}
-            </span>
+            <span>{token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}</span>
+
             <button
               onClick={handleCopy}
               title="Copy contract address"
@@ -182,9 +187,19 @@ export default function TokenDetailsView({
             >
               <Copy size={16} />
             </button>
+
             {copied && (
               <span className="text-green-400 ml-2 select-none text-xs">Copied!</span>
             )}
+
+            <a
+              href={explorerLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:underline ml-4 text-xs"
+            >
+              View on Explorer
+            </a>
           </div>
 
           {/* Stats Grid */}
@@ -197,21 +212,13 @@ export default function TokenDetailsView({
             </div>
             <div>
               <span className="font-semibold text-white">Status</span>
-              <p
-                className={
-                  isGraduated
-                    ? 'text-green-400 font-semibold'
-                    : 'text-yellow-400 font-semibold'
-                }
-              >
+              <p className={isGraduated ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>
                 {isGraduated ? 'Graduated' : 'In Progress'}
               </p>
             </div>
             <div>
               <span className="font-semibold text-white">Raised</span>
-              <p>
-                {Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH
-              </p>
+              <p>{Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH</p>
             </div>
             <div>
               <span className="font-semibold text-white">Current Price</span>
@@ -225,7 +232,6 @@ export default function TokenDetailsView({
               <span className="font-semibold text-white">Locked by Creator</span>
               <p>{token.lockedAmount ? parseFloat(token.lockedAmount).toFixed(0) : '0'}</p>
             </div>
-
             <div>
               <span className="font-semibold text-white">FDV</span>
               <p>
@@ -234,38 +240,25 @@ export default function TokenDetailsView({
                   : '–'}
               </p>
             </div>
-
             {token.onChainData?.currentPrice !== undefined &&
-            token.onChainData?.totalSupply !== undefined && (
-              <div>
-                <span className="font-semibold text-white">Market Cap</span>
-                <p className="text-sm text-white">
-                  {(
-                    (Number(token.onChainData.totalSupply) / 1e18 - Number(token.onChainData.creatorLockAmount)) *
-                    token.onChainData.currentPrice
-                  )
-                    .toFixed(6)
-                    .replace(/\.?0+$/, '')}{' '}
-                  ETH
-                </p>
-              </div>
-            )}
-
-
+              token.onChainData?.totalSupply !== undefined && (
+                <div>
+                  <span className="font-semibold text-white">Market Cap</span>
+                  <p className="text-sm text-white">
+                    {(
+                      (Number(token.onChainData.totalSupply) / 1e18 - Number(token.onChainData.creatorLockAmount)) *
+                      token.onChainData.currentPrice
+                    ).toFixed(6).replace(/\.?0+$/, '')} ETH
+                  </p>
+                </div>
+              )}
           </div>
 
           {/* Creator Actions */}
           {isCreator && (
             <div className="inline-flex flex-col items-stretch space-y-4">
-              {!isGraduated && (
-                <CreatorBuySection token={token} onSuccess={onRefresh} />
-              )}
-
-              {/* ✅ Only show if airdrops were set */}
-              {token.onChainData?.airdropFinalized && (
-                <AirdropForm token={token} />
-              )}
-
+              {!isGraduated && <CreatorBuySection token={token} onSuccess={onRefresh} />}
+              {token.onChainData?.airdropFinalized && <AirdropForm token={token} />}
               {canGraduate && (
                 <button
                   onClick={handleGraduate}
@@ -279,7 +272,6 @@ export default function TokenDetailsView({
                   {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
                 </button>
               )}
-
               {isGraduated && Number(token.lockedAmount ?? 0) > 0 && (
                 <button
                   onClick={handleUnlock}
@@ -293,7 +285,6 @@ export default function TokenDetailsView({
                   {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
                 </button>
               )}
-
               {isGraduated && Number(raised) > 0 && (
                 <WithdrawForm contractAddress={token.contract_address} onSuccess={onRefresh} />
               )}
@@ -306,14 +297,13 @@ export default function TokenDetailsView({
             </div>
           )}
 
-          {!isCreator && isGraduated && (
-            <AirdropClaimForm token={token} />
-          )}
+          {!isCreator && isGraduated && <AirdropClaimForm token={token} />}
         </div>
       </div>
     </div>
   )
 }
+
 
 
 

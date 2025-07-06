@@ -15,17 +15,15 @@ export const megaethTestnet: Chain = {
   },
   blockExplorers: {
     default: {
-      name: 'Mega Explorer',
-      url: 'https://megaexplorer.xyz',
+      name: 'OKLink',
+      url: 'https://www.oklink.com/megaeth-testnet',
     },
   },
-  testnet: true
-}
+  testnet: true,
+};
 
-
-// Placeholder for mainnet
-export const megaethMainnet = {
-  id: 9999, // Replace with real ID when known
+export const megaethMainnet: Chain = {
+  id: 9999, // Replace with real ID later
   name: 'MegaETH Mainnet (Coming Soon)',
   nativeCurrency: {
     name: 'ETH',
@@ -34,14 +32,14 @@ export const megaethMainnet = {
   },
   rpcUrls: {
     default: {
-      http: ['https://mainnet.megaeth.com/rpc'], // Replace when known
+      http: ['https://mainnet.megaeth.com/rpc'],
     },
   },
   blockExplorers: {
     default: {
-      name: 'MegaETH Explorer',
-      url: 'https://megaeth.com', // Placeholder
+      name: 'OKLink',
+      url: 'https://www.oklink.com/megaeth',
     },
   },
   testnet: false,
-}
+};
