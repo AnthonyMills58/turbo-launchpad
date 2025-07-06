@@ -190,7 +190,7 @@ export default function TokenPageContent() {
                 Market Cap:{' '}
                 <span className="text-white">
                   {(
-                    (Number(token.onChainData.totalSupply)/1e18 - Number(token.lockedAmount)) *
+                    (Number(token.onChainData.totalSupply) - Number(token.onChainData.creatorLockAmount)) *
                     token.onChainData.currentPrice
                   )
                     .toFixed(6)

@@ -246,7 +246,7 @@ export default function TokenDetailsView({
                   <span className="font-semibold text-white">Market Cap</span>
                   <p className="text-sm text-white">
                     {(
-                      (Number(token.onChainData.totalSupply) / 1e18 - Number(token.onChainData.creatorLockAmount)) *
+                      (Number(token.onChainData.totalSupply)  - Number(token.onChainData.creatorLockAmount)) *
                       token.onChainData.currentPrice
                     ).toFixed(6).replace(/\.?0+$/, '')} ETH
                   </p>
