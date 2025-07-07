@@ -103,8 +103,18 @@ export default function PublicBuySection({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contractAddress: token.contract_address }),
           })
+
+          // Then sync on-chain state to DB
+          await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tokenId: token.id,
+              contractAddress: token.contract_address,
+            }),
+          })
         } catch (err) {
-          console.error('Failed to update token in DB:', err)
+          console.error('Failed to update or sync token:', err)
         }
 
         if (onSuccess) onSuccess()
@@ -116,7 +126,8 @@ export default function PublicBuySection({
     }
 
     waitForTx()
-  }, [txHash, publicClient, refreshWallet, onSuccess, token.contract_address])
+}, [txHash, publicClient, refreshWallet, onSuccess, token])
+
 
   const displayPrice = parseFloat(price).toFixed(8)
 

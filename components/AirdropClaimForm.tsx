@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { ethers } from 'ethers'
+import { useRouter } from 'next/navigation'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Token } from '@/types/token'
 
@@ -10,13 +11,14 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
+  const router = useRouter()
 
   const [allocation, setAllocation] = useState<number | null>(null)
   const [claimed, setClaimed] = useState<boolean>(false)
   const [isClaiming, setIsClaiming] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  const isGraduated = token.onChainData?.graduated ?? false
+  const isGraduated = token.is_graduated === true
   const isCreator = address?.toLowerCase() === token.creator_wallet.toLowerCase()
 
   useEffect(() => {
@@ -53,8 +55,22 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
       })
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      // ✅ Sync DB
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tokenId: token.id,
+          contractAddress: token.contract_address,
+        }),
+      })
+
       setClaimed(true)
       setSuccess(true)
+
+      // 🔄 Force refresh of UI to update stats (FDV, market cap, etc.)
+      router.refresh()
     } catch (err) {
       console.error('❌ Airdrop claim failed:', err)
     } finally {
@@ -62,6 +78,7 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
     }
   }
 
+  // ⛔ Prevent rendering if not eligible
   if (!address || isCreator || !isGraduated || allocation === null || allocation === 0) return null
 
   if (claimed) {
@@ -98,4 +115,5 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
     </div>
   )
 }
+
 

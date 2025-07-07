@@ -141,12 +141,38 @@ export default function CreateTokenForm() {
         body: JSON.stringify(payload),
       })
 
-      const data = await res.json()
-      if (data.success) {
-        router.push('/')
-      } else {
-        alert('❌ Backend error: ' + data.error)
+
+    const data = await res.json()
+
+    if (data.success && data.tokenId) {
+      try {
+        // 🔁 Sync with on-chain token state
+        const syncRes = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractAddress,
+            tokenId: data.tokenId,
+          }),
+        })
+
+        const syncData = await syncRes.json()
+        if (!syncData.success) {
+          console.warn('⚠️ Sync failed:', syncData.error)
+        }
+      } catch (syncErr) {
+        console.error('❌ Error during token sync:', syncErr)
       }
+
+      router.push('/')
+    } else {
+      alert('❌ Backend error: ' + data.error)
+    }
+
+
+
+
+
     } catch (err) {
       console.error(err)
       alert('❌ Failed to deploy token contract.')

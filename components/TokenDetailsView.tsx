@@ -27,14 +27,18 @@ export default function TokenDetailsView({
   const { writeContractAsync } = useWriteContract()
 
   const [copied, setCopied] = useState(false)
+  const [copiedJSON, setCopiedJSON] = useState(false)
   const [isGraduating, setIsGraduating] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
-  const [copiedJSON, setCopiedJSON] = useState(false)
+  const [dexUrl, setDexUrl] = useState(token.dex_listing_url || '')
+  const [isSubmittingDex, setIsSubmittingDex] = useState(false)
+  const [dexSubmitSuccess, setDexSubmitSuccess] = useState(false)
+  const [dexSubmitError, setDexSubmitError] = useState(false)
 
   const isCreator = address?.toLowerCase() === token.creator_wallet.toLowerCase()
-  const isGraduated = token.onChainData?.graduated ?? false
-  const raised = token.onChainData?.totalRaised ?? 0
-  const cap = token.onChainData?.raiseTarget ?? 0
+  const isGraduated = token.is_graduated
+  const raised = token.eth_raised
+  const cap = token.raise_target
   const canGraduate = isCreator && !isGraduated && raised >= cap
 
   const explorerBaseUrl =
@@ -59,7 +63,7 @@ export default function TokenDetailsView({
 
   const handleGraduate = async () => {
     try {
-      if (!publicClient) return console.error('Public client not available')
+      if (!publicClient) return
       setIsGraduating(true)
 
       const txHash = await writeContractAsync({
@@ -69,10 +73,22 @@ export default function TokenDetailsView({
       })
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      // 1. Update token fast fields
       await fetch('/api/update-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contractAddress: token.contract_address }),
+      })
+
+      // 2. Sync full on-chain state to DB
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tokenId: token.id,
+          contractAddress: token.contract_address,
+        }),
       })
 
       onBack()
@@ -83,9 +99,10 @@ export default function TokenDetailsView({
     }
   }
 
+
   const handleUnlock = async () => {
     try {
-      if (!publicClient) return console.error('Public client not available')
+      if (!publicClient) return
       setIsUnlocking(true)
 
       const txHash = await writeContractAsync({
@@ -95,10 +112,22 @@ export default function TokenDetailsView({
       })
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      // 1. Fast update
       await fetch('/api/update-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contractAddress: token.contract_address }),
+      })
+
+      // 2. Sync on-chain state into DB
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tokenId: token.id,
+          contractAddress: token.contract_address,
+        }),
       })
 
       onBack()
@@ -108,6 +137,7 @@ export default function TokenDetailsView({
       setIsUnlocking(false)
     }
   }
+
 
   const handleCopy = () => {
     navigator.clipboard.writeText(token.contract_address)
@@ -131,39 +161,32 @@ export default function TokenDetailsView({
     URL.revokeObjectURL(url)
   }
 
-
-  const [dexUrl, setDexUrl] = useState(token.dex_listing_url || '')
-    const [isSubmittingDex, setIsSubmittingDex] = useState(false)
-    const [dexSubmitSuccess, setDexSubmitSuccess] = useState(false)
-    const [dexSubmitError, setDexSubmitError] = useState(false)
-
-    const handleMarkDexListing = async () => {
-      try {
-        if (!dexUrl) return
-        setIsSubmittingDex(true)
-        setDexSubmitError(false)
-
-        const res = await fetch('/api/mark-dex-listing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contractAddress: token.contract_address,
-            dexUrl,
-          }),
-        })
-
-        if (!res.ok) throw new Error('Failed to update DEX status')
-        setDexSubmitSuccess(true)
-        onRefresh()
-      } catch (err) {
-        console.error('Failed to mark as deployed:', err)
-        setDexSubmitError(true)
-      } finally {
-        setIsSubmittingDex(false)
-        setTimeout(() => setDexSubmitSuccess(false), 2000)
-      }
+  const handleMarkDexListing = async () => {
+    try {
+      if (!dexUrl) return
+      setIsSubmittingDex(true)
+      setDexSubmitError(false)
+      const res = await fetch('/api/mark-dex-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractAddress: token.contract_address,
+          dexUrl,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to update DEX status')
+      setDexSubmitSuccess(true)
+      onRefresh()
+    } catch (err) {
+      console.error('❌ Failed to mark DEX listing:', err)
+      setDexSubmitError(true)
+    } finally {
+      setIsSubmittingDex(false)
+      setTimeout(() => setDexSubmitSuccess(false), 2000)
     }
+  }
 
+ 
 
   return (
     <div className="max-w-4xl mx-auto mt-6 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
@@ -230,25 +253,66 @@ export default function TokenDetailsView({
           </div>
 
           
-          {/* Stats Grid */}
+        {/* Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-300 mb-6">
-            <div><span className="font-semibold text-white">Creator</span><p className="font-mono">{token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}</p></div>
-            <div><span className="font-semibold text-white">Status</span><p className={isGraduated ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>{isGraduated ? 'Graduated' : 'In Progress'}</p></div>
-            <div><span className="font-semibold text-white">Raised</span><p>{Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH</p></div>
-            <div><span className="font-semibold text-white">Current Price</span><p>{token.onChainData?.currentPrice?.toFixed(7) ?? '–'} ETH</p></div>
-            <div><span className="font-semibold text-white">Max Supply</span><p>{token.supply.toLocaleString()}</p></div>
-            <div><span className="font-semibold text-white">Locked by Creator</span><p>{token.lockedAmount ? parseFloat(token.lockedAmount).toFixed(0) : '0'}</p></div>
-            <div><span className="font-semibold text-white">FDV</span><p>{token.onChainData?.currentPrice ? `${(token.supply * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH` : '–'}</p></div>
-            {token.onChainData?.currentPrice !== undefined && token.onChainData?.totalSupply !== undefined && (
-              <div><span className="font-semibold text-white">Market Cap</span><p className="text-sm text-white">{((Number(token.onChainData.totalSupply) - Number(token.onChainData.creatorLockAmount)) * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH</p></div>
+            <div>
+              <span className="font-semibold text-white">Creator</span>
+              <p className="font-mono">
+                {token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}
+              </p>
+            </div>
+            <div>
+              <span className="font-semibold text-white">Status</span>
+              <p className={isGraduated ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>
+                {isGraduated ? 'Graduated' : 'In Progress'}
+              </p>
+            </div>
+            <div>
+              <span className="font-semibold text-white">Raised</span>
+              <p>{Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH</p>
+            </div>
+            <div>
+              <span className="font-semibold text-white">Current Price</span>
+              <p>
+                {token.current_price !== undefined
+                  ? `${Number(token.current_price).toFixed(10).replace(/\.?0+$/, '')} ETH`
+                  : '–'}
+              </p>
+            </div>
+            <div>
+              <span className="font-semibold text-white">Max Supply</span>
+              <p>{Number(token.supply).toLocaleString()}</p>
+            </div>
+            <div>
+              <span className="font-semibold text-white">Locked by Creator</span>
+              <p>{token.creator_lock_amount ? Number(token.creator_lock_amount).toFixed(0) : '0'}</p>
+            </div>
+            <div>
+              <span className="font-semibold text-white">FDV</span>
+              <p>
+                {token.fdv !== undefined
+                  ? `${Number(token.fdv).toFixed(6).replace(/\.?0+$/, '')} ETH`
+                  : '–'}
+              </p>
+            </div>
+            {token.market_cap !== undefined && (
+              <div>
+                <span className="font-semibold text-white">Market Cap</span>
+                <p className="text-sm text-white">
+                  {Number(token.market_cap).toFixed(6).replace(/\.?0+$/, '')} ETH
+                </p>
+              </div>
             )}
           </div>
+
+
 
           {/* Creator Actions */}
           {isCreator && (
             <div className="inline-flex flex-col items-stretch space-y-4">
               {!isGraduated && <CreatorBuySection token={token} onSuccess={onRefresh} />}
-              {token.onChainData?.airdropFinalized && <AirdropForm token={token} />}
+              <AirdropForm token={token} onSuccess={onRefresh} />
+
               {canGraduate && (
                 <button
                   onClick={handleGraduate}
@@ -272,7 +336,7 @@ export default function TokenDetailsView({
                 </button>
               )}
               {isGraduated && Number(raised) > 0 && (
-                <WithdrawForm contractAddress={token.contract_address} onSuccess={onRefresh} />
+                <WithdrawForm token={token} onSuccess={onRefresh} />
               )}
             </div>
           )}

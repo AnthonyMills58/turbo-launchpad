@@ -1,15 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { ethers } from 'ethers'
-import { useAccount } from 'wagmi'
-import TurboTokenABI from '@/lib/abi/TurboToken.json'
+
+import { useSearchParams, useRouter } from 'next/navigation'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
-import { useSearchParams, useRouter } from 'next/navigation'
 
 export default function TokenPageContent() {
-  const { address } = useAccount()
+  //const { address } = useAccount()
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -23,53 +21,9 @@ export default function TokenPageContent() {
     const res = await fetch('/api/all-tokens')
     const baseTokens: Token[] = await res.json()
 
-    if (!address) {
-      setTokens(baseTokens)
-      setSelectedToken(selectedIndex !== null ? baseTokens[selectedIndex] : null)
-      return
-    }
-
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-
-      const tokensWithOnChain = await Promise.all(
-        baseTokens.map(async (t) => {
-          const contract = new ethers.Contract(t.contract_address, TurboTokenABI.abi, signer)
-          try {
-            const [locked, tokenInfoRaw, airdropFinalized, totalSupply] = await Promise.all([
-              contract.lockedBalances(address),
-              contract.tokenInfo(),
-              contract.airdropFinalized(),  // ✅ dodane
-              contract.totalSupply()
-            ])
-            const lockedAmount = locked.toString()
-            const tokenInfo = {
-              raiseTarget: Number(ethers.formatEther(tokenInfoRaw._raiseTarget)),
-              totalRaised: Number(ethers.formatEther(tokenInfoRaw._totalRaised)),
-              basePrice: Number(ethers.formatEther(tokenInfoRaw._basePrice)),
-              currentPrice: Number(ethers.formatEther(await contract.getCurrentPrice())),
-              graduated: tokenInfoRaw._graduated,
-              creatorLockAmount: Number(ethers.formatEther(tokenInfoRaw._creatorLockAmount)),
-              airdropFinalized: airdropFinalized, // ✅ dodane
-              totalSupply: totalSupply  // ✅ NEW FIELD
-            }
-            return { ...t, lockedAmount, onChainData: tokenInfo }
-          } catch (error) {
-            console.error(`Error fetching on-chain data for ${t.name}:`, error)
-            return { ...t, lockedAmount: undefined }
-          }
-        })
-      )
-
-      setTokens(tokensWithOnChain)
-      setSelectedToken(selectedIndex !== null ? tokensWithOnChain[selectedIndex] : null)
-    } catch (err) {
-      console.error('Failed to initialize provider or signer', err)
-      setTokens(baseTokens)
-      setSelectedToken(selectedIndex !== null ? baseTokens[selectedIndex] : null)
-    }
-  }, [address, selectedIndex])
+    setTokens(baseTokens)
+    setSelectedToken(selectedIndex !== null ? baseTokens[selectedIndex] : null)
+  }, [selectedIndex])
 
   useEffect(() => {
     fetchTokens()
@@ -156,10 +110,11 @@ export default function TokenPageContent() {
             <p className="text-sm text-gray-300 mb-2 line-clamp-3">{token.description}</p>
 
             <div className="text-sm text-gray-400 mb-1">
-              Raised: <span className="text-white">
-                        {Number(token.eth_raised).toFixed(6).replace(/\.?0+$/, '')} ETH
-                      </span> / {token.raise_target} ETH
-
+              Raised:{' '}
+              <span className="text-white">
+                {Number(token.eth_raised).toFixed(6).replace(/\.?0+$/, '')} ETH
+              </span>{' '}
+              / {token.raise_target} ETH
             </div>
 
             <div className="text-sm text-gray-400 mb-1">
@@ -169,38 +124,29 @@ export default function TokenPageContent() {
               </span>
             </div>
 
-            <div className="text-sm text-gray-400 mb-1 flex justify-between">
-              <span>
-                Max Supply: <span className="text-white">{token.supply}</span>
-              </span>
-            
+            <div className="text-sm text-gray-400 mb-1">
+              Max Supply: <span className="text-white">{token.supply}</span>
             </div>
 
-            {token.onChainData?.currentPrice && (
+            {token.fdv && (
               <div className="text-sm text-gray-400 mb-1">
                 FDV:{' '}
                 <span className="text-white">
-                  {(token.supply * token.onChainData.currentPrice).toFixed(6).replace(/\.?0+$/, '')} ETH
+                  {Number(token.fdv).toFixed(6).replace(/\.?0+$/, '')} ETH
                 </span>
               </div>
             )}
 
-            {token.onChainData?.currentPrice && token.onChainData?.totalSupply !== undefined && token.lockedAmount !== undefined && (
+            {token.market_cap && (
               <div className="text-sm text-gray-400 mb-1">
                 Market Cap:{' '}
                 <span className="text-white">
-                  {(
-                    (Number(token.onChainData.totalSupply) - Number(token.onChainData.creatorLockAmount)) *
-                    token.onChainData.currentPrice
-                  )
-                    .toFixed(6)
-                    .replace(/\.?0+$/, '')} ETH
+                  {Number(token.market_cap).toFixed(6).replace(/\.?0+$/, '')} ETH
                 </span>
               </div>
             )}
 
-
-           <div className="text-xs font-medium">
+            <div className="text-xs font-medium">
               {token.on_dex ? (
                 <span className="text-blue-400">On DEX</span>
               ) : token.is_graduated ? (
@@ -209,10 +155,10 @@ export default function TokenPageContent() {
                 <span className="text-yellow-400">In Progress</span>
               )}
             </div>
-
           </div>
         ))}
       </div>
     </div>
   )
 }
+

@@ -14,12 +14,21 @@ export type Token = {
   supply: number
   is_graduated: boolean
   lockedAmount?: string // Only for creator
+
   // DEX deployment tracking
   on_dex?: boolean
   dex_listing_url?: string
 
+  // Synced on-chain data (from DB)
+  current_price?: number
+  fdv?: number
+  market_cap?: number
+  total_supply?: number
+  creator_lock_amount?: number
+  airdrop_finalized?: boolean
+  airdrop_allocations?: Record<string, number>
 
-  // Data from tokenInfo() in contract
+  // Legacy on-chain read support
   onChainData?: {
     raiseTarget: number
     totalRaised: number
@@ -28,7 +37,8 @@ export type Token = {
     graduated: boolean
     creatorLockAmount: number
     airdropFinalized: boolean
-    totalSupply: number   // ✅ Added
+    totalSupply: number
   }
 }
+
 

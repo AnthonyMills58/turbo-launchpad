@@ -13,7 +13,13 @@ type AirdropEntry = {
   claimed: boolean
 }
 
-export default function AirdropForm({ token }: { token: Token }) {
+export default function AirdropForm({
+  token,
+  onSuccess,
+}: {
+  token: Token
+  onSuccess?: () => void
+}) {
   const [onChainAirdrops, setOnChainAirdrops] = useState<AirdropEntry[]>([])
   const [draftAirdrops, setDraftAirdrops] = useState<{ address: string; amount: number }[]>([])
   const [address, setAddress] = useState('')
@@ -24,36 +30,33 @@ export default function AirdropForm({ token }: { token: Token }) {
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
 
-  const isFinalized = token.onChainData?.graduated === true
+  const isGraduated = token.is_graduated === true
 
   const fetchAirdrops = useCallback(async () => {
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, provider)
-      const [addresses]: [string[]] = await contract.getAirdropAllocations?.()
+      const allocations = token.airdrop_allocations
+      if (!allocations || typeof allocations !== 'object') {
+        setOnChainAirdrops([])
+        return
+      }
 
-      const parsed: AirdropEntry[] = await Promise.all(
-        addresses.map(async (addr) => {
-          const [allocation, claimed]: [bigint, boolean] = await Promise.all([
-            contract.airdropAllocations(addr),
-            contract.airdropClaimed(addr),
-          ])
-          return {
-            address: addr,
-            amount: Number(allocation),
-            claimed,
-          }
-        })
-      )
+      type AllocationData = { amount: number; claimed: boolean }
 
-
+      const parsed: AirdropEntry[] = Object.entries(allocations).map(([address, raw]) => {
+        const data = raw as AllocationData | number
+        const amount =
+          typeof data === 'object' && 'amount' in data ? data.amount : (data as number)
+        const claimed =
+          typeof data === 'object' && 'claimed' in data ? data.claimed : false
+        return { address, amount, claimed }
+      })
 
       setOnChainAirdrops(parsed)
     } catch (err) {
-      console.error('❌ Failed to load airdrops:', err)
+      console.error('❌ Failed to load airdrops from DB:', err)
       setOnChainAirdrops([])
     }
-  }, [token.contract_address])
+  }, [token.airdrop_allocations])
 
   useEffect(() => {
     fetchAirdrops()
@@ -78,20 +81,36 @@ export default function AirdropForm({ token }: { token: Token }) {
     if (draftAirdrops.length === 0) return
     setIsPending(true)
     setIsSuccess(false)
+
     try {
       const addresses = draftAirdrops.map((a) => a.address)
       const amounts = draftAirdrops.map((a) => BigInt(a.amount))
+
       const hash = await writeContractAsync({
         address: token.contract_address as `0x${string}`,
         abi: TurboTokenABI.abi,
         functionName: 'setAirdropAllocations',
         args: [addresses, amounts],
       })
+
       if (publicClient) {
         await publicClient.waitForTransactionReceipt({ hash })
+
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tokenId: token.id,
+            contractAddress: token.contract_address,
+          }),
+        })
+
         setIsSuccess(true)
         setDraftAirdrops([])
         fetchAirdrops()
+
+        // ✅ Trigger parent refresh (TokenDetailsView)
+        onSuccess?.()
       }
     } catch (err) {
       console.error('❌ Failed to submit airdrops:', err)
@@ -102,13 +121,13 @@ export default function AirdropForm({ token }: { token: Token }) {
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-4">
-      {/* 👤 Show title only in editable state (before confirmation) */}
-      {!isFinalized && onChainAirdrops.length === 0 && (
+      {/* 👤 Show title in editable mode */}
+      {!isGraduated && (
         <h3 className="text-white text-sm font-semibold mb-2">Airdrop Manager</h3>
       )}
 
-      {/* ➕ Input fields for draft airdrops */}
-      {!isFinalized && onChainAirdrops.length === 0 && (
+      {/* ➕ Input fields for new entries */}
+      {!isGraduated && (
         <>
           <Input
             name="recipient"
@@ -136,8 +155,8 @@ export default function AirdropForm({ token }: { token: Token }) {
         </>
       )}
 
-      {/* 📝 Pending airdrops before on-chain submission */}
-      {draftAirdrops.length > 0 && !isFinalized && (
+      {/* 📝 Pending before submission */}
+      {draftAirdrops.length > 0 && !isGraduated && (
         <div className="mt-4 text-sm text-gray-300">
           <div className="border-b border-gray-600 pb-1 mb-2 text-white font-semibold">
             Pending Airdrops
@@ -188,7 +207,6 @@ export default function AirdropForm({ token }: { token: Token }) {
         </div>
       )}
 
-      {/* ✅ Success message */}
       {isSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
           ✅ Airdrops confirmed on-chain.
@@ -197,6 +215,7 @@ export default function AirdropForm({ token }: { token: Token }) {
     </div>
   )
 }
+
 
 
 
