@@ -27,13 +27,15 @@ export default function PublicBuySection({
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
 
+  const isBusy = loadingPrice || isPending
+
   useEffect(() => {
     const fetchMaxSupplyForSale = async () => {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum)
         const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, provider)
         const result = await contract.maxSupplyForSale()
-        setMaxSupply(Number(result)/1e18)
+        setMaxSupply(Number(result) / 1e18)
       } catch (err) {
         console.error('Failed to fetch maxSupplyForSale:', err)
       }
@@ -96,7 +98,6 @@ export default function PublicBuySection({
         setIsSuccess(true)
         if (refreshWallet) refreshWallet()
 
-        // Update backend token stats
         try {
           await fetch('/api/update-token', {
             method: 'POST',
@@ -104,7 +105,6 @@ export default function PublicBuySection({
             body: JSON.stringify({ contractAddress: token.contract_address }),
           })
 
-          // Then sync on-chain state to DB
           await fetch('/api/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -126,8 +126,7 @@ export default function PublicBuySection({
     }
 
     waitForTx()
-}, [txHash, publicClient, refreshWallet, onSuccess, token])
-
+  }, [txHash, publicClient, refreshWallet, onSuccess, token])
 
   const displayPrice = parseFloat(price).toFixed(8)
 
@@ -148,11 +147,12 @@ export default function PublicBuySection({
         min={1}
         max={maxSupply}
         placeholder="e.g. 1"
+        disabled={isBusy}
       />
 
       <button
         onClick={fetchPrice}
-        disabled={!amount || loadingPrice}
+        disabled={!amount || isBusy}
         className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
       >
         {loadingPrice ? 'Checking price…' : 'Check Price'}
@@ -167,7 +167,7 @@ export default function PublicBuySection({
       {price !== '0' && (
         <button
           onClick={handleBuy}
-          disabled={isPending}
+          disabled={isBusy}
           className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
         >
           {isPending ? 'Processing...' : 'Buy Tokens'}
@@ -182,5 +182,6 @@ export default function PublicBuySection({
     </div>
   )
 }
+
 
 

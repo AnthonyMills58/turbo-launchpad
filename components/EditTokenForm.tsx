@@ -23,42 +23,41 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async () => {
-  setIsSaving(true)
-  setError(null)
+    setIsSaving(true)
+    setError(null)
 
-  try {
-    const res = await fetch('/api/edit-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tokenId: token.id,
-        website,
-        twitter,
-        telegram,
-        dex: dexName,
-      }),
-    })
+    try {
+      const res = await fetch('/api/edit-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tokenId: token.id,
+          website,
+          twitter,
+          telegram,
+          dex: dexName,
+        }),
+      })
 
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.message || 'Failed to save changes')
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.message || 'Failed to save changes')
+      }
+
+      if (onSuccess) onSuccess()
+      router.refresh()
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('❌ Failed to save token edits:', err)
+        setError(err.message || 'Something went wrong')
+      } else {
+        console.error('❌ Unknown error during token edit:', err)
+        setError('Something went wrong')
+      }
+    } finally {
+      setIsSaving(false)
     }
-
-    if (onSuccess) onSuccess()
-    router.refresh()
-  } catch (err) {
-    if (err instanceof Error) {
-      console.error('❌ Failed to save token edits:', err)
-      setError(err.message || 'Something went wrong')
-    } else {
-      console.error('❌ Unknown error during token edit:', err)
-      setError('Something went wrong')
-    }
-  } finally {
-    setIsSaving(false)
   }
-}
-
 
   return (
     <div className="bg-[#1e1f25] p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
@@ -71,6 +70,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
         value={website}
         onChange={(e) => setWebsite(e.target.value)}
         placeholder="https://example.com"
+        disabled={isSaving}
       />
 
       <Input
@@ -80,6 +80,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
         value={twitter}
         onChange={(e) => setTwitter(e.target.value)}
         placeholder="https://twitter.com/yourtoken"
+        disabled={isSaving}
       />
 
       <Input
@@ -89,6 +90,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
         value={telegram}
         onChange={(e) => setTelegram(e.target.value)}
         placeholder="https://t.me/yourcommunity"
+        disabled={isSaving}
       />
 
       <div className="mb-4">
@@ -96,9 +98,9 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
         <select
           value={dexName}
           onChange={(e) => setDexName(e.target.value)}
-          className="w-full rounded-md bg-[#2c2f3a] text-white p-2 text-sm border border-[#3a3d4a] focus:outline-none focus:ring focus:border-blue-500"
+          disabled={isSaving}
+          className="w-full rounded-md bg-[#2c2f3a] text-white p-2 text-sm border border-[#3a3d4a] focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          
           <option value="Bronto">Bronto</option>
           <option value="GTE">GTE</option>
         </select>
@@ -109,7 +111,8 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
       <div className="flex justify-end gap-3">
         <button
           onClick={onCancel}
-          className="px-4 py-2 rounded-md bg-gray-600 text-white text-sm hover:bg-gray-700"
+          disabled={isSaving}
+          className="px-4 py-2 rounded-md bg-gray-600 text-white text-sm hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancel
         </button>
@@ -128,3 +131,4 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
     </div>
   )
 }
+

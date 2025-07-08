@@ -10,6 +10,7 @@ export type InputProps = {
   placeholder?: string
   min?: number   // <-- dodane
   max?: number   // <-- dodane
+  disabled?: boolean
 }
 
 export function Input({ label, ...props }: InputProps) {

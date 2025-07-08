@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useAccount, useWalletClient } from 'wagmi'
@@ -27,7 +28,8 @@ export default function CreateTokenForm() {
     curveType: 'linear',
   })
   const [error, setError] = useState<string | null>(null)
-  const [imageValid, setImageValid] = useState<boolean | null>(null) // null = not validated yet
+  const [imageValid, setImageValid] = useState<boolean | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -36,11 +38,10 @@ export default function CreateTokenForm() {
     setForm({ ...form, [e.target.name]: value })
     setError(null)
     if (e.target.name === 'image') {
-      setImageValid(null) // reset validation when user edits the URL
+      setImageValid(null)
     }
   }
 
-  // Validate image URL by trying to load it
   const validateImageURL = (url: string) => {
     return new Promise<boolean>((resolve) => {
       if (!url) return resolve(false)
@@ -51,7 +52,6 @@ export default function CreateTokenForm() {
     })
   }
 
-  // Validate on blur
   const onImageBlur = async () => {
     const valid = await validateImageURL(form.image)
     setImageValid(valid)
@@ -75,6 +75,7 @@ export default function CreateTokenForm() {
       return
     }
 
+    setIsSubmitting(true)
     try {
       const ethersProvider = new ethers.BrowserProvider(walletClient)
       const signer = await ethersProvider.getSigner()
@@ -91,13 +92,6 @@ export default function CreateTokenForm() {
       const totalSupply = ethers.parseUnits(form.supply.toString(), 18)
       const platformFeeRecipient = process.env.NEXT_PUBLIC_PLATFORM_FEE_RECIPIENT as string
 
-      console.log("Deploying TurboToken with params:")
-      console.log("Token Name:", tokenName)
-      console.log("Token Symbol:", tokenSymbol)
-      console.log("Raise Target (wei):", raiseTarget.toString())
-      console.log("Total Supply (token units):", totalSupply.toString())
-      console.log("Fee address: ",platformFeeRecipient)
-
       const contract = await factory.deploy(
         tokenName,
         tokenSymbol,
@@ -108,11 +102,7 @@ export default function CreateTokenForm() {
       )
 
       await contract.waitForDeployment()
-
-      
-
       const contractAddress = await contract.getAddress()
-      console.log('✅ Token deployed at:', contractAddress)
 
       const typedContract = new ethers.Contract(
         contract.target as string,
@@ -120,10 +110,8 @@ export default function CreateTokenForm() {
         signer
       );
 
-      // 🔍 NEW: Read tokenInfo() to verify contract state
       try {
-        const tokenInfo = await typedContract.tokenInfo();
-        console.log("📦 tokenInfo() result:", tokenInfo)
+        await typedContract.tokenInfo();
       } catch (err) {
         console.error("❌ Failed to call tokenInfo():", err)
       }
@@ -141,41 +129,36 @@ export default function CreateTokenForm() {
         body: JSON.stringify(payload),
       })
 
+      const data = await res.json()
 
-    const data = await res.json()
+      if (data.success && data.tokenId) {
+        try {
+          const syncRes = await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contractAddress,
+              tokenId: data.tokenId,
+            }),
+          })
 
-    if (data.success && data.tokenId) {
-      try {
-        // 🔁 Sync with on-chain token state
-        const syncRes = await fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contractAddress,
-            tokenId: data.tokenId,
-          }),
-        })
-
-        const syncData = await syncRes.json()
-        if (!syncData.success) {
-          console.warn('⚠️ Sync failed:', syncData.error)
+          const syncData = await syncRes.json()
+          if (!syncData.success) {
+            console.warn('⚠️ Sync failed:', syncData.error)
+          }
+        } catch (syncErr) {
+          console.error('❌ Error during token sync:', syncErr)
         }
-      } catch (syncErr) {
-        console.error('❌ Error during token sync:', syncErr)
+
+        router.push('/')
+      } else {
+        alert('❌ Backend error: ' + data.error)
       }
-
-      router.push('/')
-    } else {
-      alert('❌ Backend error: ' + data.error)
-    }
-
-
-
-
-
     } catch (err) {
       console.error(err)
       alert('❌ Failed to deploy token contract.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -211,7 +194,6 @@ export default function CreateTokenForm() {
           )}
         </div>
 
-        {/* Preview box - only show if image is valid */}
         {form.image && imageValid && (
           <div className="w-20 h-20 rounded-md border border-gray-600 bg-[#1b1e2b] flex items-center justify-center overflow-hidden">
             <img
@@ -228,7 +210,6 @@ export default function CreateTokenForm() {
       <Input label="Social" name="twitter" value={form.twitter} onChange={handleChange} />
       <Input label="Community" name="telegram" value={form.telegram} onChange={handleChange} />
       <Input label="Website" name="website" value={form.website} onChange={handleChange} />
-
 
       <div className="flex items-center space-x-2 pt-1">
         <input
@@ -256,14 +237,13 @@ export default function CreateTokenForm() {
             value={form.raiseTarget}
             onChange={handleChange}
             options={[
-              { label: '0.001 (test)', value: '0.001' }, // 🧪 Just for testing
+              { label: '0.001 (test)', value: '0.001' },
               { label: '5', value: '5' },
               { label: '12', value: '12' },
               { label: '25', value: '25' },
             ]}
             suffix="ETH"
           />
-
           <Select
             label="Target DEX"
             name="dex"
@@ -286,7 +266,7 @@ export default function CreateTokenForm() {
             ]}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Controls how the price increases as users buy. Most creators choose linear.
+            Controls how the price increases as users buy. Most creators choose linear. 
             ⚠️ For MVP, all tokens use linear pricing under the hood.
           </p>
         </>
@@ -294,14 +274,15 @@ export default function CreateTokenForm() {
 
       <button
         type="submit"
-        disabled={!isConnected || !imageValid}
+        disabled={isSubmitting || !isConnected || !imageValid}
         className="w-full bg-green-600 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isConnected ? 'Create Token' : 'Connect Wallet to Create'}
+        {isSubmitting ? 'Creating...' : isConnected ? 'Create Token' : 'Connect Wallet to Create'}
       </button>
     </form>
   )
 }
+
 
 
 

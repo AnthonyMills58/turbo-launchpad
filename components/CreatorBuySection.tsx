@@ -42,6 +42,7 @@ export default function CreatorBuySection({
   const fetchPrice = async () => {
     if (!amount || amount <= 0) return
     setLoadingPrice(true)
+    setPrice('0')
     try {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
@@ -76,22 +77,17 @@ export default function CreatorBuySection({
     }
   }
 
- // Wait for transaction confirmation
+  // Wait for transaction confirmation
   useEffect(() => {
     if (!txHash || !publicClient) return
 
     const waitForTx = async () => {
       try {
-        // 1. Wait for confirmation
         await publicClient.waitForTransactionReceipt({ hash: txHash })
 
-        // 2. Mark success
         setIsSuccess(true)
-
-        // 3. Refresh wallet balance
         if (refreshWallet) refreshWallet()
 
-        // 4. Sync on-chain state to DB
         try {
           await fetch('/api/sync', {
             method: 'POST',
@@ -105,7 +101,6 @@ export default function CreatorBuySection({
           console.error('Failed to sync token state:', err)
         }
 
-        // 5. Run external onSuccess
         if (onSuccess) onSuccess()
       } catch (err) {
         console.error('Tx failed or dropped:', err)
@@ -117,8 +112,8 @@ export default function CreatorBuySection({
     waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token])
 
-
   const displayPrice = parseFloat(price).toFixed(8)
+  const isBusy = loadingPrice || isPending
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">
@@ -137,11 +132,12 @@ export default function CreatorBuySection({
         min={1}
         max={maxAllowedAmount}
         placeholder="e.g. 1"
+        disabled={isBusy}
       />
 
       <button
         onClick={fetchPrice}
-        disabled={!amount || loadingPrice}
+        disabled={!amount || isBusy}
         className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
       >
         {loadingPrice ? 'Checking price…' : 'Check Price'}
@@ -171,6 +167,7 @@ export default function CreatorBuySection({
     </div>
   )
 }
+
 
 
 

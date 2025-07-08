@@ -24,12 +24,11 @@ export default function AirdropForm({
   const [draftAirdrops, setDraftAirdrops] = useState<{ address: string; amount: number }[]>([])
   const [address, setAddress] = useState('')
   const [amount, setAmount] = useState<number>(0)
-  const [isPending, setIsPending] = useState(false)
+  const [isBusy, setIsBusy] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
 
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
-
   const isGraduated = token.is_graduated === true
 
   const fetchAirdrops = useCallback(async () => {
@@ -79,7 +78,7 @@ export default function AirdropForm({
 
   const handleSubmit = async () => {
     if (draftAirdrops.length === 0) return
-    setIsPending(true)
+    setIsBusy(true)
     setIsSuccess(false)
 
     try {
@@ -108,25 +107,21 @@ export default function AirdropForm({
         setIsSuccess(true)
         setDraftAirdrops([])
         fetchAirdrops()
-
-        // ✅ Trigger parent refresh (TokenDetailsView)
         onSuccess?.()
       }
     } catch (err) {
       console.error('❌ Failed to submit airdrops:', err)
     } finally {
-      setIsPending(false)
+      setIsBusy(false)
     }
   }
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">
-      {/* 👤 Show title in editable mode */}
       {!isGraduated && (
         <h3 className="text-white text-sm font-semibold mb-2">Airdrop Manager</h3>
       )}
 
-      {/* ➕ Input fields for new entries */}
       {!isGraduated && (
         <>
           <Input
@@ -136,6 +131,7 @@ export default function AirdropForm({
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="0x..."
+            disabled={isBusy}
           />
           <Input
             name="amount"
@@ -145,17 +141,18 @@ export default function AirdropForm({
             onChange={(e) => setAmount(Number(e.target.value))}
             min={1}
             placeholder="e.g. 1000"
+            disabled={isBusy}
           />
           <button
             onClick={handleAdd}
-            className="w-full py-2 rounded-lg font-semibold transition-colors bg-purple-600 hover:bg-purple-700 text-white mt-2 text-sm"
+            disabled={isBusy}
+            className="w-full py-2 rounded-lg font-semibold transition-colors bg-purple-600 hover:bg-purple-700 text-white mt-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ➕ Add Airdrop
           </button>
         </>
       )}
 
-      {/* 📝 Pending before submission */}
       {draftAirdrops.length > 0 && !isGraduated && (
         <div className="mt-4 text-sm text-gray-300">
           <div className="border-b border-gray-600 pb-1 mb-2 text-white font-semibold">
@@ -167,7 +164,8 @@ export default function AirdropForm({
               <div>{a.amount}</div>
               <button
                 onClick={() => handleRemove(i)}
-                className="text-red-400 hover:text-red-500 text-xs"
+                disabled={isBusy}
+                className="text-red-400 hover:text-red-500 text-xs disabled:opacity-50"
               >
                 🗑️
               </button>
@@ -175,15 +173,14 @@ export default function AirdropForm({
           ))}
           <button
             onClick={handleSubmit}
-            disabled={isPending}
-            className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
+            disabled={isBusy}
+            className="w-full py-2 rounded-lg font-semibold transition-colors bg-green-600 hover:bg-green-700 text-white mt-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isPending ? 'Submitting...' : '🚀 Confirm Airdrops'}
+            {isBusy ? 'Submitting...' : '🚀 Confirm Airdrops'}
           </button>
         </div>
       )}
 
-      {/* ✅ Confirmed airdrops */}
       {onChainAirdrops.length > 0 && (
         <div className="mt-0 text-sm text-gray-300">
           <div className="border-b border-gray-600 pb-1 mb-2 text-white font-semibold">

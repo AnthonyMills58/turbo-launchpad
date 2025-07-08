@@ -15,13 +15,13 @@ export default function WithdrawForm({
 }) {
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
-  const [withdrawing, setWithdrawing] = useState(false)
   const refreshWallet = useWalletRefresh()
+  const [isBusy, setIsBusy] = useState(false)
 
   const handleWithdraw = async () => {
     try {
       if (!publicClient) return console.error('No public client')
-      setWithdrawing(true)
+      setIsBusy(true)
 
       const txHash = await writeContractAsync({
         address: token.contract_address as `0x${string}`,
@@ -54,22 +54,23 @@ export default function WithdrawForm({
     } catch (err) {
       console.error('❌ Withdraw failed:', err)
     } finally {
-      setWithdrawing(false)
+      setIsBusy(false)
     }
   }
 
   return (
     <button
       onClick={handleWithdraw}
-      disabled={withdrawing}
+      disabled={isBusy}
       className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-        withdrawing
+        isBusy
           ? 'bg-neutral-700 cursor-not-allowed'
           : 'bg-gradient-to-r from-yellow-500 to-orange-600 hover:brightness-110'
       }`}
     >
-      {withdrawing ? 'Withdrawing ETH...' : '💸 Withdraw ETH'}
+      {isBusy ? 'Withdrawing ETH...' : '💸 Withdraw ETH'}
     </button>
   )
 }
+
 
