@@ -11,6 +11,9 @@ import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet } from '@/lib/chains'
 import { Copy } from 'lucide-react'
+import EditTokenForm from './EditTokenForm'
+
+
 
 export default function TokenDetailsView({
   token,
@@ -27,6 +30,7 @@ export default function TokenDetailsView({
   const { writeContractAsync } = useWriteContract()
 
   const [copied, setCopied] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
   const [copiedJSON, setCopiedJSON] = useState(false)
   const [isGraduating, setIsGraduating] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
@@ -261,12 +265,25 @@ export default function TokenDetailsView({
                 {token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}
               </p>
             </div>
-            <div>
+              <div>
               <span className="font-semibold text-white">Status</span>
-              <p className={isGraduated ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>
-                {isGraduated ? 'Graduated' : 'In Progress'}
+              <p
+                className={`font-semibold ${
+                  token.on_dex
+                    ? 'text-blue-400'
+                    : isGraduated
+                    ? 'text-green-400'
+                    : 'text-yellow-400'
+                }`}
+              >
+                {token.on_dex
+                  ? `Listed on ${token.dex ?? 'DEX'}`
+                  : isGraduated
+                  ? 'Graduated'
+                  : 'In Progress'}
               </p>
             </div>
+
             <div>
               <span className="font-semibold text-white">Raised</span>
               <p>{Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH</p>
@@ -307,39 +324,76 @@ export default function TokenDetailsView({
 
 
 
-          {/* Creator Actions */}
-          {isCreator && (
-            <div className="inline-flex flex-col items-stretch space-y-4">
-              {!isGraduated && <CreatorBuySection token={token} onSuccess={onRefresh} />}
-              <AirdropForm token={token} onSuccess={onRefresh} />
+{/* Creator Actions */}
+{isCreator && (
+  <div className="flex flex-col space-y-4">
+    {/* Buy & Airdrop in one row on desktop */}
+    {!isGraduated && (
+      <div className="flex flex-col md:flex-row md:items-start gap-4">
+        <CreatorBuySection token={token} onSuccess={onRefresh} />
+        <AirdropForm token={token} onSuccess={onRefresh} />
+      </div>
+    )}
 
-              {canGraduate && (
-                <button
-                  onClick={handleGraduate}
-                  disabled={isGraduating}
-                  className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                    isGraduating ? 'bg-neutral-700 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
-                  }`}
-                >
-                  {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
-                </button>
-              )}
-              {isGraduated && Number(token.lockedAmount ?? 0) > 0 && (
-                <button
-                  onClick={handleUnlock}
-                  disabled={isUnlocking}
-                  className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                    isUnlocking ? 'bg-neutral-700 cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
-                  }`}
-                >
-                  {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
-                </button>
-              )}
-              {isGraduated && Number(raised) > 0 && (
-                <WithdrawForm token={token} onSuccess={onRefresh} />
-              )}
-            </div>
-          )}
+    {/* Graduate Button */}
+    {canGraduate && (
+      <button
+        onClick={handleGraduate}
+        disabled={isGraduating}
+        className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+          isGraduating
+            ? 'bg-neutral-700 cursor-not-allowed'
+            : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
+        }`}
+      >
+        {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
+      </button>
+    )}
+
+    {/* Unlock Button */}
+    {isGraduated && Number(token.creator_lock_amount ?? 0) > 0 && (
+      <button
+        onClick={handleUnlock}
+        disabled={isUnlocking}
+        className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+          isUnlocking
+            ? 'bg-neutral-700 cursor-not-allowed'
+            : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
+        }`}
+      >
+        {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
+      </button>
+    )}
+
+    {/* Withdraw Form */}
+    {isGraduated && Number(raised) > 0 && (
+      <WithdrawForm token={token} onSuccess={onRefresh} />
+    )}
+
+   {/* ✏️ Edit Token Info */}
+    <button
+      onClick={() => setIsEditing(!isEditing)}
+      className="w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition bg-gray-800 hover:bg-gray-700"
+    >
+      {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
+    </button>
+
+    {isEditing && (
+      <EditTokenForm
+        token={token}
+        onSuccess={() => {
+          setIsEditing(false)
+          onRefresh()
+        }}
+        onCancel={() => setIsEditing(false)} // ✅ required prop
+      />
+    )}
+
+  </div>
+)}
+
+
+
 
           {!isCreator && !isGraduated && (
             <div className="mt-6">

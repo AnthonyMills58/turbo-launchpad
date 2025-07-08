@@ -120,7 +120,7 @@ export default function AirdropForm({
   }
 
   return (
-    <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-4">
+    <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">
       {/* 👤 Show title in editable mode */}
       {!isGraduated && (
         <h3 className="text-white text-sm font-semibold mb-2">Airdrop Manager</h3>

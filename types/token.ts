@@ -16,6 +16,7 @@ export type Token = {
   lockedAmount?: string // Only for creator
 
   // DEX deployment tracking
+  dex?: string
   on_dex?: boolean
   dex_listing_url?: string
 
