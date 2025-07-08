@@ -1,29 +1,43 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-
 import { useSearchParams, useRouter } from 'next/navigation'
+import { useAccount } from 'wagmi'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
+import { useFilters } from '@/lib/FiltersContext'
 
 export default function TokenPageContent() {
-  //const { address } = useAccount()
   const searchParams = useSearchParams()
   const router = useRouter()
-
   const selectedParam = searchParams.get('selected')
   const selectedIndex = selectedParam ? Number(selectedParam) : null
 
   const [tokens, setTokens] = useState<Token[]>([])
   const [selectedToken, setSelectedToken] = useState<Token | null>(null)
 
+  const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
+  const { address } = useAccount()
+
   const fetchTokens = useCallback(async () => {
-    const res = await fetch('/api/all-tokens')
+    const params = new URLSearchParams({
+      search,
+      creator: creatorFilter,
+      status: statusFilter,
+      sort: sortFilter,
+    })
+
+    // Only send address if "mine" or "others" is selected
+    if (creatorFilter !== 'all' && address) {
+      params.set('address', address)
+    }
+
+    const res = await fetch(`/api/all-tokens?${params.toString()}`)
     const baseTokens: Token[] = await res.json()
 
     setTokens(baseTokens)
     setSelectedToken(selectedIndex !== null ? baseTokens[selectedIndex] : null)
-  }, [selectedIndex])
+  }, [search, creatorFilter, statusFilter, sortFilter, selectedIndex, address])
 
   useEffect(() => {
     fetchTokens()
@@ -51,6 +65,7 @@ export default function TokenPageContent() {
         router.push(`/?selected=${selectedIndex}`)
       }
     }
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [tokens, selectedIndex, selectedToken, router])
@@ -58,11 +73,7 @@ export default function TokenPageContent() {
   if (selectedToken) {
     return (
       <div className="min-h-screen bg-[#0d0f1a] p-6">
-        <TokenDetailsView
-          token={selectedToken}
-          onBack={backToList}
-          onRefresh={fetchTokens}
-        />
+        <TokenDetailsView token={selectedToken} onBack={backToList} onRefresh={fetchTokens} />
       </div>
     )
   }
@@ -96,7 +107,6 @@ export default function TokenPageContent() {
                   draggable={false}
                 />
               )}
-
               <div>
                 <h2 className="font-semibold text-lg text-white">
                   {token.name} ({token.symbol})
@@ -161,4 +171,7 @@ export default function TokenPageContent() {
     </div>
   )
 }
+
+
+
 
