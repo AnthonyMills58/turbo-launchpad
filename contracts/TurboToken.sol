@@ -140,6 +140,7 @@ contract TurboToken is ERC20, Ownable {
 
         uint256 amount = lockedBalances[creator];
         lockedBalances[creator] = 0;
+        creatorLockAmount = 0; // 👈 Reset the public variable!
         _transfer(address(this), creator, amount);
     }
 
