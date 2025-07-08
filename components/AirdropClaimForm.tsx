@@ -23,7 +23,7 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
 
   useEffect(() => {
     const fetchClaimStatus = async () => {
-      if (!address || !isGraduated) return
+      if (!address ) return
       try {
         const provider = new ethers.BrowserProvider(window.ethereum)
         const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, provider)
@@ -79,7 +79,7 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
   }
 
   // ⛔ Prevent rendering if not eligible
-  if (!address || isCreator || !isGraduated || allocation === null || allocation === 0) return null
+  if (!address || isCreator || allocation === null || allocation === 0) return null
 
   if (claimed) {
     return (
@@ -91,29 +91,40 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
     )
   }
 
-  return (
-    <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-4">
-      <h3 className="text-white text-sm font-semibold mb-2">🎁 Claim Your Airdrop</h3>
-
-      <div className="text-sm text-gray-300 mb-4">
-        You have <span className="text-white font-semibold">{allocation}</span> tokens waiting.
-      </div>
-
-      <button
-        onClick={handleClaim}
-        disabled={isClaiming}
-        className="w-full py-2 rounded-lg font-semibold transition-colors bg-blue-600 hover:bg-blue-700 text-white text-sm"
-      >
-        {isClaiming ? 'Claiming...' : '🚀 Claim Airdrop'}
-      </button>
-
-      {success && (
-        <div className="text-green-400 text-sm text-center mt-3">
-          ✅ Success! Tokens have been sent.
-        </div>
-      )}
+ return (
+  <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-4">
+    <div className="text-sm text-gray-300 mb-2">
+      You have <span className="text-white font-semibold">{allocation}</span> tokens waiting.
     </div>
-  )
+
+    {isGraduated ? (
+      <>
+        <h3 className="text-white text-sm font-semibold mb-2">🎁 Claim Your Airdrop</h3>
+
+        <button
+          onClick={handleClaim}
+          disabled={isClaiming}
+          className="w-full py-2 rounded-lg font-semibold transition-colors bg-blue-600 hover:bg-blue-700 text-white text-sm"
+        >
+          {isClaiming ? 'Claiming...' : '🚀 Claim Airdrop'}
+        </button>
+
+        {success && (
+          <div className="text-green-400 text-sm text-center mt-3">
+            ✅ Success! Tokens have been sent.
+          </div>
+        )}
+      </>
+    ) : (
+      <div className="text-yellow-400 text-sm text-center mt-2">
+        🛠️ Airdrop claim will be available after graduation.
+      </div>
+    )}
+  </div>
+)
+
+
+
 }
 
 

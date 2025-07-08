@@ -347,7 +347,8 @@ export default function TokenDetailsView({
             </div>
           )}
 
-          {!isCreator && isGraduated && <AirdropClaimForm token={token} />}
+          {!isCreator && <AirdropClaimForm token={token} />}
+
 
 
           {/* DEX JSON + Deployment Form */}

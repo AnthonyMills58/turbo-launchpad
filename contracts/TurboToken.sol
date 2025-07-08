@@ -62,13 +62,18 @@ contract TurboToken is ERC20, Ownable {
         _;
     }
 
+    // ==== Decimal Helper ====
+    function scaleAmount(uint256 amount) internal view returns (uint256) {
+        return amount * 10 ** decimals();
+    }
+
     // ==== Bonding Curve Pricing ====
     function getPrice(uint256 amount) public view returns (uint256) {
         uint256 currentSupply = totalSupply();
         uint256 part1 = amount * basePrice;
         uint256 part2 = amount * currentSupply;
         uint256 part3 = (amount * (amount - 1)) / 2;
-        uint256 part4 = slope * (part2 + part3);
+        uint256 part4 = (slope * (part2 + part3))/1e18;
         uint256 total = part1 + part4;
         return total;
     }
@@ -81,12 +86,12 @@ contract TurboToken is ERC20, Ownable {
     function buy(uint256 amount) external payable onlyBeforeGraduate {
         uint256 cost = getPrice(amount);
         require(msg.value >= cost, "Insufficient ETH sent");
-        require(totalSupply() + amount <= maxSupplyForSale(), "Exceeds available supply");
+        require(totalSupply() + scaleAmount(amount) <= maxSupplyForSale(), "Exceeds available supply");
 
         uint256 platformFee = (cost * 100) / 10000;
         totalRaised += (cost - platformFee);
 
-        _mint(msg.sender, amount);
+        _mint(msg.sender, scaleAmount(amount));
 
         emit FeeAttempt(platformFeeRecipient, platformFee);
         (bool sent, ) = payable(platformFeeRecipient).call{value: platformFee}("");
@@ -100,28 +105,26 @@ contract TurboToken is ERC20, Ownable {
     function creatorBuy(uint256 amount) external payable onlyCreator onlyBeforeGraduate {
         uint256 cost = getPrice(amount);
         require(msg.value >= cost, "Insufficient ETH sent");
-        require(totalSupply() + amount <= maxSupplyForSale(), "Exceeds available supply");
-        require(lockedBalances[creator] + amount <= reservedForAirdrop(), "Exceeds lock allocation");
+        require(totalSupply() + scaleAmount(amount) <= maxSupplyForSale(), "Exceeds available supply");
+        require(lockedBalances[creator] + scaleAmount(amount) <= reservedForAirdrop(), "Exceeds lock allocation");
 
         uint256 platformFee = (cost * 100) / 10000;
         totalRaised += (cost - platformFee);
 
-        _mint(address(this), amount);
-        lockedBalances[creator] += amount;
-        creatorLockAmount += amount;
+        _mint(address(this), scaleAmount(amount));
+        lockedBalances[creator] += scaleAmount(amount);
+        creatorLockAmount += scaleAmount(amount);
 
         emit FeeAttempt(platformFeeRecipient, platformFee);
 
-        // 👇 ZAMIANA z .send() na .call{value:}
-         (bool success, ) = payable(platformFeeRecipient).call{value: platformFee}("");
-         require(success, "Platform fee call failed");
+        (bool success, ) = payable(platformFeeRecipient).call{value: platformFee}("");
+        require(success, "Platform fee call failed");
 
         if (msg.value > cost) {
             (bool refundSuccess, ) = payable(msg.sender).call{value: msg.value - cost}("");
             require(refundSuccess, "Refund failed");
         }
     }
-
 
     // ==== Graduation Logic ====
     function graduate() external {
@@ -158,7 +161,7 @@ contract TurboToken is ERC20, Ownable {
             totalToAllocate += amt;
         }
 
-        require(totalToAllocate <= reservedForAirdrop(), "Exceeds airdrop reserve");
+        require(scaleAmount(totalToAllocate) <= reservedForAirdrop(), "Exceeds airdrop reserve");
     }
 
     function claimAirdrop() external {
@@ -169,7 +172,7 @@ contract TurboToken is ERC20, Ownable {
         require(amount > 0, "No allocation");
 
         airdropClaimed[msg.sender] = true;
-        _mint(msg.sender, amount);
+        _mint(msg.sender, scaleAmount(amount));
     }
 
     // ==== View Helper for Frontend ====
@@ -242,6 +245,7 @@ contract TurboToken is ERC20, Ownable {
     // ==== Fallback ====
     receive() external payable {}
 }
+
 
 
 

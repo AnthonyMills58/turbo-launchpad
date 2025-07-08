@@ -37,10 +37,10 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
       contract.totalSupply()
     ])
 
-    const totalSupply = Number(totalSupplyRaw)
+    const totalSupply = Number(totalSupplyRaw) / 1e18
     const maxSupply = Number(tokenInfoRaw._maxSupply) / 1e18
     const currentPrice = Number(ethers.formatEther(currentPriceRaw))
-    const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount)
+    const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
     const fdv = maxSupply * currentPrice
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
 

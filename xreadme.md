@@ -26,3 +26,5 @@ this is a site with a list and images of crypto tokens logos
 <a href="https://ibb.co/wFbvLrtr"><img src="https://i.ibb.co/wFbvLrtr/floki-inu-floki-logo.png" alt="floki-inu-floki-logo" border="0"></a> 
 <a href="https://ibb.co/F2Sq235"><img src="https://i.ibb.co/F2Sq235/origin-dollar-ousd-logo.png" alt="origin-dollar-ousd-logo" border="0"></a> 
 <a href="https://ibb.co/Wv169LJC"><img src="https://i.ibb.co/Wv169LJC/storj-storj-logo.png" alt="storj-storj-logo" border="0"></a>
+
+
