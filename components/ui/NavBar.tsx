@@ -5,6 +5,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useBalance } from 'wagmi'
 import { useRef, useEffect, useState } from 'react'
 import { FiSliders } from 'react-icons/fi'
+import { FaSearch } from 'react-icons/fa'
 import { useFilters } from '@/lib/FiltersContext'
 
 export default function NavBar() {
@@ -20,15 +21,19 @@ export default function NavBar() {
     },
   })
   console.log(balance)
+
   const filterRef = useRef<HTMLDivElement>(null)
   const [showFilters, setShowFilters] = useState(false)
 
-  const handleSearch = (e: React.FormEvent) => {
+  const [inputValue, setInputValue] = useState(search || '')
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (search.trim()) {
-      router.push(`/?search=${encodeURIComponent(search.trim())}`)
-    }
+    const trimmed = inputValue.trim()
+    setSearch(trimmed)
+    router.push(`/?search=${encodeURIComponent(trimmed)}`)
   }
+
 
   // Close filter dropdown on outside click
   useEffect(() => {
@@ -60,16 +65,18 @@ export default function NavBar() {
       </div>
 
       {/* Search + Filter */}
-      <form onSubmit={handleSearch} className="flex items-center space-x-2 mt-2 sm:mt-0 relative">
+      <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2 mt-2 sm:mt-0 relative">
         <input
           type="text"
           placeholder="Search tokens or address"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
           className="px-3 py-1 rounded bg-[#1A1B23] text-sm border border-gray-600 focus:outline-none"
         />
-        <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm">
-          Search
+
+
+        <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-sm" title="Search">
+          <FaSearch className="w-4 h-4" />
         </button>
 
         <button
@@ -159,6 +166,7 @@ export default function NavBar() {
     </nav>
   )
 }
+
 
 
 
