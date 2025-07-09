@@ -13,6 +13,8 @@ type SyncFields = {
   airdrop_allocations: Record<string, { amount: number; claimed: boolean }>
   last_synced_at: string
   total_raised: number
+  base_price: number
+  slope: number
 }
 
 /**
@@ -43,6 +45,8 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
     const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
     const fdv = maxSupply * currentPrice
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
+    const basePrice = Number(tokenInfoRaw._basePrice)
+    const slope = Number(tokenInfoRaw._slope)
 
     // --- Airdrop allocations + claimed/unclaimed ---
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}
@@ -71,7 +75,9 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
       airdrop_finalized: airdropFinalized,
       airdrop_allocations: airdropAllocations,
       last_synced_at: new Date().toISOString(),
-      total_raised: totalRaised
+      total_raised: totalRaised,
+      base_price: basePrice,
+      slope
     }
 
     await db.query(
@@ -84,8 +90,10 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
         airdrop_finalized = $6,
         airdrop_allocations = $7,
         last_synced_at = $8,
-        eth_raised = $9
-       WHERE id = $10`,
+        eth_raised = $9,
+        base_price = $10,
+        slope = $11
+       WHERE id = $12`,
       [
         syncFields.current_price,
         syncFields.fdv,
@@ -96,6 +104,8 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
         JSON.stringify(syncFields.airdrop_allocations),
         syncFields.last_synced_at,
         syncFields.total_raised,
+        syncFields.base_price,
+        syncFields.slope,
         tokenId
       ]
     )

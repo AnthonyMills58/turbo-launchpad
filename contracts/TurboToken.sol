@@ -46,9 +46,15 @@ contract TurboToken is ERC20, Ownable {
         platformFeeRecipient = platformFeeRecipient_;
 
         // Calculate bonding curve
-        uint256 graduateSupply = maxSupply_ / 100;
-        basePrice = (raiseTarget_ * 1e18) / (graduateSupply * 2);
-        slope = (basePrice * 1e18) / graduateSupply;
+        uint256 baseRaiseTarget = 5 ether;
+        // 0.005 USD in ETH (wei), assuming ETH = $2600
+        uint256 basePriceFloor = uint256(5e15) / 2600;
+        // 0.4% of max supply (used as x value in slope calculation)
+        uint256 graduateThreshold = 4 * maxSupply / 1000;
+        // Price floor proportional to raise target
+        uint256 priceFloor = ( raiseTarget * basePriceFloor ) / baseRaiseTarget;
+        basePrice = 2e18 * raiseTarget / graduateThreshold - priceFloor;
+        slope = 1e18 * (priceFloor - basePrice) / graduateThreshold;
     }
 
     // ==== Modifiers ====
@@ -70,11 +76,11 @@ contract TurboToken is ERC20, Ownable {
     // ==== Bonding Curve Pricing ====
     function getPrice(uint256 amount) public view returns (uint256) {
         uint256 currentSupply = totalSupply();
-        uint256 part1 = amount * basePrice;
-        uint256 part2 = amount * currentSupply;
-        uint256 part3 = (amount * (amount - 1)) / 2;
-        uint256 part4 = (slope * (part2 + part3))/1e18;
-        uint256 total = part1 + part4;
+        uint256 c1 = basePrice + slope * (currentSupply + 1e18)/1e18;
+        uint256 c2 = basePrice + slope * (currentSupply + scaleAmount(amount))/1e18;
+        // Average price over the range
+        uint256 avgPrice = (c1 + c2) / 2;
+        uint256 total = amount * avgPrice;
         return total;
     }
 
