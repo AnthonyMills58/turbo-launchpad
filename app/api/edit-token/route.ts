@@ -4,7 +4,15 @@ import pool from '@/lib/db'
 export async function POST(req: NextRequest) {
   try {
     const data = await req.json()
-    const { tokenId, website, twitter, telegram, dex } = data
+    const {
+      tokenId,
+      website,
+      twitter,
+      telegram,
+      dex,
+      description,
+      image,
+    } = data
 
     if (!tokenId) {
       return NextResponse.json({ message: 'Missing tokenId' }, { status: 400 })
@@ -18,10 +26,20 @@ export async function POST(req: NextRequest) {
         twitter = $2,
         telegram = $3,
         dex = $4,
+        description = $5,
+        image = $6,
         updated_at = NOW()
-      WHERE id = $5
+      WHERE id = $7
     `,
-      [website || null, twitter || null, telegram || null, dex || null, tokenId]
+      [
+        website || null,
+        twitter || null,
+        telegram || null,
+        dex || null,
+        description || null,
+        image || null,
+        tokenId,
+      ]
     )
 
     return NextResponse.json({ success: true })
@@ -33,3 +51,4 @@ export async function POST(req: NextRequest) {
     )
   }
 }
+
