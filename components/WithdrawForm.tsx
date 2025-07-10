@@ -47,8 +47,10 @@ export default function WithdrawForm({
         body: JSON.stringify({
           tokenId: token.id,
           contractAddress: token.contract_address,
+          chainId: publicClient?.chain.id, // ✅ send active chain
         }),
       })
+
 
       onSuccess()
     } catch (err) {

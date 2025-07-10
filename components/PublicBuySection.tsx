@@ -111,8 +111,10 @@ export default function PublicBuySection({
             body: JSON.stringify({
               tokenId: token.id,
               contractAddress: token.contract_address,
+              chainId: publicClient?.chain.id, // ✅ send active chain
             }),
           })
+
         } catch (err) {
           console.error('Failed to update or sync token:', err)
         }

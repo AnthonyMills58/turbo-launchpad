@@ -1,14 +1,29 @@
 import { createPublicClient, http } from 'viem'
 import TurboTokenABI from './abi/TurboToken.json'
-import { megaethTestnet } from '@/lib/chains'
+import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
+import type { Chain } from 'viem/chains'
 
-export async function getTokenOnChainData(contractAddress: `0x${string}`) {
+
+// Optional: helper
+const chainsById: Record<number, Chain> = {
+  6342: megaethTestnet,
+  9999: megaethMainnet,
+  11155111: sepoliaTestnet,
+}
+
+
+export async function getTokenOnChainData(
+  contractAddress: `0x${string}`,
+  chainId: number
+) {
+  const chain = chainsById[chainId]
+  if (!chain) throw new Error(`Unsupported chain ID: ${chainId}`)
+
   const client = createPublicClient({
-    chain: megaethTestnet,
+    chain,
     transport: http(),
   })
 
-  // Explicit return type to fix "unknown" error
   const result = await client.readContract({
     address: contractAddress,
     abi: TurboTokenABI.abi,
@@ -33,5 +48,6 @@ export async function getTokenOnChainData(contractAddress: `0x${string}`) {
     totalRaised: Number(_totalRaised) / 1e18,
   }
 }
+
 
 

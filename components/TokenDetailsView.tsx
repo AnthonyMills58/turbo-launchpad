@@ -9,7 +9,7 @@ import WithdrawForm from './WithdrawForm'
 import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
-import { megaethTestnet, megaethMainnet } from '@/lib/chains'
+import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { Copy } from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 
@@ -45,10 +45,17 @@ export default function TokenDetailsView({
   const cap = token.raise_target
   const canGraduate = isCreator && !isGraduated && raised >= cap
 
-  const explorerBaseUrl =
-    chainId === megaethTestnet.id
-      ? megaethTestnet.blockExplorers!.default.url
-      : megaethMainnet.blockExplorers!.default.url
+
+
+  const chainMap = {
+    [megaethTestnet.id]: megaethTestnet,
+    [megaethMainnet.id]: megaethMainnet,
+    [sepoliaTestnet.id]: sepoliaTestnet,
+  }
+
+  const chain = chainMap[chainId]
+  const explorerBaseUrl = chain?.blockExplorers?.default.url ?? ''
+
 
   const explorerLink = `${explorerBaseUrl}/address/${token.contract_address}`
 
@@ -92,8 +99,10 @@ export default function TokenDetailsView({
         body: JSON.stringify({
           tokenId: token.id,
           contractAddress: token.contract_address,
+          chainId, // ✅ include current chain ID
         }),
       })
+
 
       onBack()
     } catch (err) {
@@ -131,8 +140,10 @@ export default function TokenDetailsView({
         body: JSON.stringify({
           tokenId: token.id,
           contractAddress: token.contract_address,
+          chainId, // ✅ include current chain ID
         }),
       })
+
 
       onBack()
     } catch (err) {

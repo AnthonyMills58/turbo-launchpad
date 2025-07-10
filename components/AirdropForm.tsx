@@ -101,8 +101,10 @@ export default function AirdropForm({
           body: JSON.stringify({
             tokenId: token.id,
             contractAddress: token.contract_address,
+            chainId: publicClient?.chain.id, // 👈 include chainId here
           }),
         })
+
 
         setIsSuccess(true)
         setDraftAirdrops([])

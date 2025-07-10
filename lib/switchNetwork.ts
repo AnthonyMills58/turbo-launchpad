@@ -80,6 +80,74 @@ export async function switchToMegaTestnet(): Promise<boolean> {
 }
 
 
+export async function switchToSepolia(): Promise<boolean> {
+  const sepoliaChainId = '0xaa36a7' // 11155111 in hex
+
+  const ethereum = window.ethereum
+  if (!ethereum) {
+    alert('Ethereum provider not found.')
+    return false
+  }
+
+  try {
+    await ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: sepoliaChainId }],
+    })
+    console.log('Switched to Sepolia Testnet')
+    return true
+  } catch (switchError: unknown) {
+    if (
+      typeof switchError === 'object' &&
+      switchError !== null &&
+      'code' in switchError &&
+      typeof (switchError as { code: number }).code === 'number'
+    ) {
+      const errorCode = (switchError as { code: number }).code
+
+      if (errorCode === 4902) {
+        try {
+          await ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: sepoliaChainId,
+                chainName: 'Sepolia Testnet',
+                rpcUrls: ['https://rpc.sepolia.org'],
+                nativeCurrency: {
+                  name: 'Sepolia ETH',
+                  symbol: 'ETH',
+                  decimals: 18,
+                },
+                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+              },
+            ],
+          })
+
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: sepoliaChainId }],
+          })
+
+          console.log('Added and switched to Sepolia Testnet')
+          return true
+        } catch (addError) {
+          alert('Failed to add Sepolia network.')
+          console.error('Add chain error:', addError)
+          return false
+        }
+      } else {
+        alert('Failed to switch network.')
+        console.error('Switch error:', switchError)
+        return false
+      }
+    } else {
+      alert('Unexpected error switching network.')
+      console.error('Unexpected error:', switchError)
+      return false
+    }
+  }
+}
 
 
 

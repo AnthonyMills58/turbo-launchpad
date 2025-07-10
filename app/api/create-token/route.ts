@@ -12,19 +12,20 @@ export async function POST(req: NextRequest) {
       image,
       twitter,
       telegram,
-      website, // ✅ NEW
+      website, // optional
       supply,
       raiseTarget,
       dex,
       curveType,
       creatorAddress,
       contractAddress,
+      chainId, // ✅ NEW: must be passed from frontend
     } = body
 
-    // ✅ Basic check (website is optional)
+    // ✅ Basic validation
     if (
       !name || !symbol || !description || !raiseTarget || !dex || !curveType ||
-      !creatorAddress || !contractAddress
+      !creatorAddress || !contractAddress || !chainId
     ) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
@@ -33,9 +34,10 @@ export async function POST(req: NextRequest) {
       `INSERT INTO tokens (
         name, symbol, description, image, twitter, telegram, website,
         supply, raise_target, dex, curve_type,
-        creator_wallet, contract_address
+        creator_wallet, contract_address, chain_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7,
+              $8, $9, $10, $11, $12, $13, $14)
       RETURNING id`,
       [
         name,
@@ -44,13 +46,14 @@ export async function POST(req: NextRequest) {
         image,
         twitter,
         telegram,
-        website ?? null, // 👈 null if not provided
+        website ?? null,
         supply,
         raiseTarget,
         dex,
         curveType,
         creatorAddress.toLowerCase(),
         contractAddress,
+        chainId, // ✅ Store chain ID in DB
       ]
     )
 
@@ -60,6 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+
 
 
 

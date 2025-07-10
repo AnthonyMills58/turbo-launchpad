@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
-import { getTokenOnChainData } from '@/lib/contractReader' // <- your Moralis or read contract logic
+import { getTokenOnChainData } from '@/lib/contractReader'
 import pool from '@/lib/db'
 
 export async function POST(req: Request) {
   try {
-    const { contractAddress } = await req.json()
+    const { contractAddress, chainId } = await req.json()
 
-    const onChainData = await getTokenOnChainData(contractAddress) // <- must include `graduated`, `totalRaised`
+    if (!contractAddress || !chainId) {
+      return NextResponse.json({ error: 'Missing contractAddress or chainId' }, { status: 400 })
+    }
+
+    const onChainData = await getTokenOnChainData(contractAddress, chainId)
 
     await pool.query(
       `UPDATE tokens
@@ -21,3 +25,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: 'Update failed' }, { status: 500 })
   }
 }
+

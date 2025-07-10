@@ -1,7 +1,7 @@
 import { ethers } from 'ethers'
 import TurboTokenABI from './abi/TurboToken.json'
 import db from './db'
-import { megaethTestnet } from './chains'
+import { megaethTestnet, megaethMainnet, sepoliaTestnet } from './chains'
 
 type SyncFields = {
   current_price: number
@@ -17,13 +17,28 @@ type SyncFields = {
   slope: number
 }
 
+// ✅ Map chain IDs to their RPC URLs
+const rpcUrlsByChainId: Record<number, string> = {
+  6342: megaethTestnet.rpcUrls.default.http[0],
+  9999: megaethMainnet.rpcUrls.default.http[0],
+  11155111: sepoliaTestnet.rpcUrls.default.http[0],
+}
+
 /**
  * Syncs a token's on-chain state to the database
  * @param contractAddress Contract address of the token
  * @param tokenId Corresponding token ID in the DB
+ * @param chainId Network the token lives on
  */
-export async function syncTokenState(contractAddress: string, tokenId: number): Promise<void> {
-  const provider = new ethers.JsonRpcProvider(megaethTestnet.rpcUrls.default.http[0])
+export async function syncTokenState(
+  contractAddress: string,
+  tokenId: number,
+  chainId: number
+): Promise<void> {
+  const rpcUrl = rpcUrlsByChainId[chainId]
+  if (!rpcUrl) throw new Error(`Unsupported chain ID: ${chainId}`)
+
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
   const contract = new ethers.Contract(contractAddress, TurboTokenABI.abi, provider)
 
   try {
@@ -48,9 +63,7 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
     const basePrice = Number(tokenInfoRaw._basePrice)
     const slope = Number(tokenInfoRaw._slope)
 
-    // --- Airdrop allocations + claimed/unclaimed ---
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}
-   
 
     if (airdropFinalized) {
       const [recipients, amounts]: [string[], bigint[]] = await contract.getAirdropAllocations()
@@ -58,7 +71,6 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
       for (let i = 0; i < recipients.length; i++) {
         const address = recipients[i]
         const amount = Number(amounts[i])
-
         const claimed = await contract.airdropClaimed(address)
         airdropAllocations[address] = { amount, claimed }
       }
@@ -116,6 +128,7 @@ export async function syncTokenState(contractAddress: string, tokenId: number): 
     throw error
   }
 }
+
 
 
 

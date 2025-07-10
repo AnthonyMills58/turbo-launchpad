@@ -13,6 +13,7 @@ export default function CreateTokenForm() {
   const router = useRouter()
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
+  const chainId = walletClient?.chain.id
   const [proMode, setProMode] = useState(false)
   const [form, setForm] = useState<TokenForm>({
     name: '',
@@ -121,7 +122,9 @@ export default function CreateTokenForm() {
         symbol: tokenSymbol,
         creatorAddress: address,
         contractAddress,
+        chainId, // ✅ pass chainId here
       }
+
 
       const res = await fetch('/api/create-token', {
         method: 'POST',
@@ -139,8 +142,14 @@ export default function CreateTokenForm() {
             body: JSON.stringify({
               contractAddress,
               tokenId: data.tokenId,
+              chainId,
             }),
           })
+
+          if (!chainId) {
+            console.warn('Missing chainId — skipping sync')
+            return
+          }
 
           const syncData = await syncRes.json()
           if (!syncData.success) {

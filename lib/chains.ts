@@ -1,5 +1,7 @@
 import type { Chain } from 'viem'
 
+
+
 export const megaethTestnet: Chain = {
   id: 6342,
   name: 'MegaETH Testnet',
@@ -43,3 +45,32 @@ export const megaethMainnet: Chain = {
   },
   testnet: false,
 };
+
+export const sepoliaTestnet: Chain = {
+  id: 11155111,
+  name: 'Sepolia Testnet',
+  nativeCurrency: {
+    name: 'Sepolia ETH',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+       http: ['https://sepolia.infura.io/v3/c62e2440577446019dc4fabb2e698c53'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Etherscan',
+      url: 'https://sepolia.etherscan.io',
+    },
+  },
+  testnet: true,
+}
+
+export const chainNamesById: Record<number, string> = {
+  [megaethTestnet.id]: megaethTestnet.name,
+  [megaethMainnet.id]: megaethMainnet.name,
+  [sepoliaTestnet.id]: sepoliaTestnet.name,
+}
+

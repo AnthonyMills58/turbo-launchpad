@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
+import { chainNamesById } from '@/lib/chains'
 
 export default function TokenPageContent() {
   const searchParams = useSearchParams()
@@ -17,17 +18,22 @@ export default function TokenPageContent() {
   const [selectedToken, setSelectedToken] = useState<Token | null>(null)
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
-  const { address } = useAccount()
+  const { address, chain } = useAccount() // ✅ get `chain` from `useAccount`
 
   const fetchTokens = useCallback(async () => {
+    if (!chain) {
+      setTokens([])
+      return
+    }
+
     const params = new URLSearchParams({
       search,
       creator: creatorFilter,
       status: statusFilter,
       sort: sortFilter,
+      chainId: String(chain.id), // ✅ send chainId to API
     })
 
-    // Only send address if "mine" or "others" is selected
     if (creatorFilter !== 'all' && address) {
       params.set('address', address)
     }
@@ -37,7 +43,7 @@ export default function TokenPageContent() {
 
     setTokens(baseTokens)
     setSelectedToken(selectedIndex !== null ? baseTokens[selectedIndex] : null)
-  }, [search, creatorFilter, statusFilter, sortFilter, selectedIndex, address])
+  }, [search, creatorFilter, statusFilter, sortFilter, selectedIndex, address, chain])
 
   useEffect(() => {
     fetchTokens()
@@ -156,6 +162,15 @@ export default function TokenPageContent() {
               </div>
             )}
 
+            {token.chain_id && (
+              <div className="text-sm text-gray-400 mb-1">
+                Chain:{' '}
+                <span className="text-white">
+                  {chainNamesById[token.chain_id] ?? `Chain ID ${token.chain_id}`}
+                </span>
+              </div>
+            )}
+
             <div className="text-xs font-medium">
               {token.on_dex ? (
                 <span className="text-blue-400">On DEX</span>
@@ -171,6 +186,7 @@ export default function TokenPageContent() {
     </div>
   )
 }
+
 
 
 

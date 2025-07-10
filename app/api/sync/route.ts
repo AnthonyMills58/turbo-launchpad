@@ -3,13 +3,13 @@ import { syncTokenState } from '@/lib/syncTokensState'
 
 export async function POST(req: NextRequest) {
   try {
-    const { tokenId, contractAddress } = await req.json()
+    const { tokenId, contractAddress, chainId } = await req.json()
 
-    if (!tokenId || !contractAddress) {
-      return NextResponse.json({ error: 'Missing tokenId or contractAddress' }, { status: 400 })
+    if (!tokenId || !contractAddress || !chainId) {
+      return NextResponse.json({ error: 'Missing tokenId, contractAddress, or chainId' }, { status: 400 })
     }
 
-    await syncTokenState(contractAddress, tokenId)
+    await syncTokenState(contractAddress, tokenId, chainId)
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -17,3 +17,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+

@@ -89,14 +89,16 @@ export default function CreatorBuySection({
         if (refreshWallet) refreshWallet()
 
         try {
-          await fetch('/api/sync', {
+         await fetch('/api/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               tokenId: token.id,
               contractAddress: token.contract_address,
+              chainId: publicClient?.chain.id, // ✅ send active chain
             }),
           })
+
         } catch (err) {
           console.error('Failed to sync token state:', err)
         }

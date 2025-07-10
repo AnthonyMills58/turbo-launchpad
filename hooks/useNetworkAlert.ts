@@ -15,14 +15,4 @@ export function useNetworkAlert() {
       setHasAlerted(true)
     }
   }, [isConnected, chainId, hasAlerted])
-/*
-  function getNetworkName(chainId: number) {
-    switch (chainId) {
-      case 11155111: return 'Sepolia'
-      case 1337: return 'MegaETH (Localhost)'
-      case 6342: return 'MegaETH (Testnet)'
-      default: return `Unknown Network (Chain ID ${chainId})`
-    }
-  }
-    */
 }

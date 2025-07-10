@@ -63,8 +63,10 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
         body: JSON.stringify({
           tokenId: token.id,
           contractAddress: token.contract_address,
+          chainId: publicClient?.chain.id, // 👈 include chainId here
         }),
       })
+
 
       setClaimed(true)
       setSuccess(true)

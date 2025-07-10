@@ -28,6 +28,7 @@ export type Token = {
   creator_lock_amount?: number
   airdrop_finalized?: boolean
   airdrop_allocations?: Record<string, number>
+  chain_id?: number
 
   // Legacy on-chain read support
   onChainData?: {
