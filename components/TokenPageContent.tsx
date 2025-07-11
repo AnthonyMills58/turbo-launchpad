@@ -20,30 +20,36 @@ export default function TokenPageContent() {
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount() // ✅ get `chain` from `useAccount`
 
-  const fetchTokens = useCallback(async () => {
-    if (!chain) {
-      setTokens([])
-      return
-    }
+const fetchTokens = useCallback(async () => {
+  const params = new URLSearchParams({
+    search,
+    creator: creatorFilter,
+    status: statusFilter,
+    sort: sortFilter,
+  })
 
-    const params = new URLSearchParams({
-      search,
-      creator: creatorFilter,
-      status: statusFilter,
-      sort: sortFilter,
-      chainId: String(chain.id), // ✅ send chainId to API
-    })
+  // ✅ Only include chainId if wallet is connected and chain is available
+  if (chain?.id) {
+    params.set('chainId', String(chain.id))
+  }
 
-    if (creatorFilter !== 'all' && address) {
-      params.set('address', address)
-    }
+  // ✅ Only include address for "mine" or "others" filters
+  if (creatorFilter !== 'all' && address) {
+    params.set('address', address)
+  }
 
+  try {
     const res = await fetch(`/api/all-tokens?${params.toString()}`)
     const baseTokens: Token[] = await res.json()
 
     setTokens(baseTokens)
     setSelectedToken(selectedIndex !== null ? baseTokens[selectedIndex] : null)
-  }, [search, creatorFilter, statusFilter, sortFilter, selectedIndex, address, chain])
+  } catch (error) {
+    console.error('Failed to fetch tokens:', error)
+    setTokens([])
+  }
+}, [search, creatorFilter, statusFilter, sortFilter, selectedIndex, address, chain])
+
 
   useEffect(() => {
     fetchTokens()
@@ -77,12 +83,23 @@ export default function TokenPageContent() {
   }, [tokens, selectedIndex, selectedToken, router])
 
   if (selectedToken) {
+  if (!address) {
     return (
-      <div className="min-h-screen bg-[#0d0f1a] p-6">
-        <TokenDetailsView token={selectedToken} onBack={backToList} onRefresh={fetchTokens} />
+      <div className="min-h-screen bg-[#0d0f1a] p-6 text-white">
+        <p className="text-center text-lg mt-20">
+          🔒 Please connect your wallet to view token details.
+        </p>
       </div>
     )
   }
+
+  return (
+    <div className="min-h-screen bg-[#0d0f1a] p-6">
+      <TokenDetailsView token={selectedToken} onBack={backToList} onRefresh={fetchTokens} />
+    </div>
+  )
+}
+
 
   return (
     <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">

@@ -10,18 +10,16 @@ export async function GET(req: NextRequest) {
   const sortFilter = searchParams.get('sort') || 'created_desc'
   const chainId = searchParams.get('chainId')
 
-  if (!chainId) {
-    return NextResponse.json([]) // no chainId = return nothing
-  }
-
   const values: (string | number | boolean | null)[] = []
   const conditions: string[] = ['contract_address IS NOT NULL']
 
-  // Chain ID filter
-  values.push(Number(chainId))
-  conditions.push(`chain_id = $${values.length}`)
+  // ✅ Optional chain ID filter
+  if (chainId) {
+    values.push(Number(chainId))
+    conditions.push(`chain_id = $${values.length}`)
+  }
 
-  // Search filter
+  // ✅ Search filter
   if (search) {
     values.push(`%${search.toLowerCase()}%`)
     conditions.push(`
@@ -32,7 +30,7 @@ export async function GET(req: NextRequest) {
     `)
   }
 
-  // Creator filter
+  // ✅ Creator filter
   if (creatorFilter === 'mine' || creatorFilter === 'others') {
     const isMine = creatorFilter === 'mine'
     const userAddress = searchParams.get('address')?.toLowerCase() || ''
@@ -44,7 +42,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Status filter
+  // ✅ Status filter
   if (statusFilter === 'in_progress') {
     conditions.push('is_graduated = false AND on_dex = false')
   } else if (statusFilter === 'graduated') {
@@ -53,7 +51,7 @@ export async function GET(req: NextRequest) {
     conditions.push('on_dex = true')
   }
 
-  // Sorting
+  // ✅ Sorting
   let orderClause = 'ORDER BY id DESC'
   if (sortFilter === 'created_asc') orderClause = 'ORDER BY id ASC'
   if (sortFilter === 'name') orderClause = 'ORDER BY name ASC'
@@ -73,5 +71,6 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Failed to fetch tokens', { status: 500 })
   }
 }
+
 
 
