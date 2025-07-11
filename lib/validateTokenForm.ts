@@ -27,11 +27,11 @@ export function validateTokenForm(form: TokenForm, proMode: boolean): string | n
     return 'Image URL must be a valid link.'
 
  if (form.twitter && !/^https:\/\/[a-zA-Z0-9./?=_-]+$/.test(form.twitter)) {
-  return 'Twitter link must be a valid URL starting with https://';
+  return 'Social link must be a valid URL starting with https://';
 }
 
 if (form.telegram && !/^https:\/\/[a-zA-Z0-9./?=_-]+$/.test(form.telegram)) {
-  return 'Telegram link must be a valid URL starting with https://';
+  return 'Community link must be a valid URL starting with https://';
 }
 
 

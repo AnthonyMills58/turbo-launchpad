@@ -91,7 +91,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
       />
 
       <Input
-        label="Twitter"
+        label="Social"
         name="twitter"
         type="text"
         value={twitter}
@@ -101,7 +101,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
       />
 
       <Input
-        label="Telegram"
+        label="Community"
         name="telegram"
         type="text"
         value={telegram}
