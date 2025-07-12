@@ -1,4 +1,4 @@
-import { ethers } from 'ethers'
+import { ethers, formatUnits } from 'ethers'
 import TurboTokenABI from './abi/TurboToken.json'
 import db from './db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from './chains'
@@ -69,11 +69,16 @@ export async function syncTokenState(
       const [recipients, amounts]: [string[], bigint[]] = await contract.getAirdropAllocations()
 
       for (let i = 0; i < recipients.length; i++) {
-        const address = recipients[i]
-        const amount = Number(amounts[i]) / 1e18 // ✅ convert to decimal
-        const claimed = await contract.airdropClaimed(address)
-        airdropAllocations[address] = { amount, claimed }
-      }
+  const address = recipients[i]
+  const raw = amounts[i]
+  const readable = parseFloat(formatUnits(raw, 18)) // ✅ accurate
+
+  const claimed = await contract.airdropClaimed(address)
+
+  console.log(`🔍 SYNC - ${address}: raw=${raw.toString()}, readable=${readable}, claimed=${claimed}`)
+
+  airdropAllocations[address] = { amount: readable, claimed }
+}
     }
 
     const marketCap = (totalSupply - creatorLockAmount) * currentPrice

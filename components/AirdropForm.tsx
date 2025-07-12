@@ -83,8 +83,9 @@ export default function AirdropForm({
 
     try {
       const addresses = draftAirdrops.map((a) => a.address)
-      const amounts = draftAirdrops.map((a) => BigInt(a.amount))
-
+      const amounts = draftAirdrops.map((a) => BigInt(Math.floor(a.amount * 1e18))) // 🟢 convert to wei
+      console.log('airdrop amounts:', amounts)
+      console.log('airdrop addresses:',addresses)
       const hash = await writeContractAsync({
         address: token.contract_address as `0x${string}`,
         abi: TurboTokenABI.abi,
@@ -101,10 +102,9 @@ export default function AirdropForm({
           body: JSON.stringify({
             tokenId: token.id,
             contractAddress: token.contract_address,
-            chainId: publicClient?.chain.id, // 👈 include chainId here
+            chainId: publicClient?.chain.id,
           }),
         })
-
 
         setIsSuccess(true)
         setDraftAirdrops([])
@@ -117,6 +117,7 @@ export default function AirdropForm({
       setIsBusy(false)
     }
   }
+
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">

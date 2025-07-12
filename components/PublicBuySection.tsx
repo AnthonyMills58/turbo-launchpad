@@ -7,6 +7,7 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
+import { calculateBuyAmountFromCost } from '@/lib/calculateBuyAmount'
 
 export default function PublicBuySection({
   token,
@@ -15,71 +16,62 @@ export default function PublicBuySection({
   token: Token
   onSuccess?: () => void
 }) {
-  const [amount, setAmount] = useState<number>(1)
+  const [amount, setAmount] = useState<number>(1.0)
   const [price, setPrice] = useState<string>('0')
-  const [maxSupply, setMaxSupply] = useState<number>(0)
   const [loadingPrice, setLoadingPrice] = useState(false)
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
 
+  const maxAvailableAmount = token.supply - parseFloat(token.lockedAmount ?? '0') || 1
   const isBusy = loadingPrice || isPending
 
-  useEffect(() => {
-    const fetchMaxSupplyForSale = async () => {
-      try {
-        const provider = new ethers.BrowserProvider(window.ethereum)
-        const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, provider)
-        const result = await contract.maxSupplyForSale()
-        setMaxSupply(Number(result) / 1e18)
-      } catch (err) {
-        console.error('Failed to fetch maxSupplyForSale:', err)
-      }
-    }
-
-    fetchMaxSupplyForSale()
-  }, [token.contract_address])
-
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = Number(e.target.value)
+    let val = parseFloat(e.target.value)
     if (isNaN(val)) val = 1
     if (val < 1) val = 1
-    else if (val > maxSupply) val = maxSupply
+    else if (val > maxAvailableAmount) val = maxAvailableAmount
     setAmount(val)
+    setShowSuccess(false)
   }
 
   const fetchPrice = async () => {
     if (!amount || amount <= 0) return
     setLoadingPrice(true)
+    setPrice('0')
+    setShowSuccess(false)
+
     try {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
       const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
-      const amountInt = BigInt(amount)
+      const amountInt = ethers.parseUnits(amount.toString(), 18)
       const priceBigInt = await contract.getPrice(amountInt)
       setPrice(ethers.formatEther(priceBigInt))
     } catch (err) {
       console.error('Failed to fetch price:', err)
       setPrice('0')
     }
+
     setLoadingPrice(false)
   }
 
   const handleBuy = async () => {
     if (!amount || price === '0') return
+    setShowSuccess(false)
     setIsPending(true)
-    setIsSuccess(false)
+
     try {
-      const amountInt = BigInt(amount)
+      const amountWei = ethers.parseUnits(amount.toString(), 18)
       const hash = await writeContractAsync({
         address: token.contract_address as `0x${string}`,
         abi: TurboTokenABI.abi,
         functionName: 'buy',
-        args: [amountInt],
+        args: [amountWei],
         value: ethers.parseEther(price),
       })
       setTxHash(hash)
@@ -95,7 +87,8 @@ export default function PublicBuySection({
     const waitForTx = async () => {
       try {
         await publicClient.waitForTransactionReceipt({ hash: txHash })
-        setIsSuccess(true)
+        setShowSuccess(true)
+        setTxHash(null)
         if (refreshWallet) refreshWallet()
 
         try {
@@ -111,10 +104,9 @@ export default function PublicBuySection({
             body: JSON.stringify({
               tokenId: token.id,
               contractAddress: token.contract_address,
-              chainId: publicClient?.chain.id, // ✅ send active chain
+              chainId: publicClient?.chain.id,
             }),
           })
-
         } catch (err) {
           console.error('Failed to update or sync token:', err)
         }
@@ -137,18 +129,51 @@ export default function PublicBuySection({
       <h3 className="text-white text-sm font-semibold mb-2">
         Public Buy
         <br />
-        <span className="text-xs text-gray-400">Max supply for sale: {maxSupply}</span>
+        <span className="text-xs text-gray-400">max {maxAvailableAmount}</span>
       </h3>
+
+      {/* ETH-based preset buttons */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {[1 / 10000, 1 / 1000, 1 / 100].map((fraction) => {
+          const ethAmount = token.raise_target * fraction
+          return (
+            <button
+              key={fraction}
+              type="button"
+              onClick={() => {
+                setShowSuccess(false)
+                try {
+                  const calculated = calculateBuyAmountFromCost(
+                    ethAmount,
+                    BigInt(Math.floor(token.total_supply ?? 0) * 1e18),
+                    BigInt(Math.floor(token.base_price)),
+                    BigInt(Math.floor(token.slope))
+                  )
+                  const rounded = Math.min(calculated, maxAvailableAmount)
+                  const precise = parseFloat(rounded.toFixed(6))
+                  setAmount(precise)
+                  setPrice('0')
+                } catch (err) {
+                  console.error('Curve calc error:', err)
+                }
+              }}
+              className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
+            >
+              {parseFloat(ethAmount.toFixed(6)).toString()} ETH
+            </button>
+          )
+        })}
+      </div>
 
       <Input
         type="number"
-        label={`Amount to Buy (1 - ${maxSupply})`}
+        label={`Amount to Buy (1 - ${maxAvailableAmount})`}
         name="amount"
         value={amount}
         onChange={handleAmountChange}
         min={1}
-        max={maxSupply}
-        placeholder="e.g. 1"
+        max={maxAvailableAmount}
+        placeholder="e.g. 1.5"
         disabled={isBusy}
       />
 
@@ -161,29 +186,30 @@ export default function PublicBuySection({
       </button>
 
       {price !== '0' && (
-        <div className="mt-2 text-sm text-gray-300 text-center">
-          Total cost: <strong>{displayPrice} ETH</strong>
-        </div>
+        <>
+          <div className="mt-2 text-sm text-gray-300 text-center">
+            Total cost: <strong>{displayPrice} ETH</strong>
+          </div>
+
+          <button
+            onClick={handleBuy}
+            disabled={isPending}
+            className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
+          >
+            {isPending ? 'Processing...' : 'Buy Tokens'}
+          </button>
+        </>
       )}
 
-      {price !== '0' && (
-        <button
-          onClick={handleBuy}
-          disabled={isBusy}
-          className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
-        >
-          {isPending ? 'Processing...' : 'Buy Tokens'}
-        </button>
-      )}
-
-      {isSuccess && (
+      {showSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
-          ✅ Transaction confirmed! You may refresh the page.
+          ✅ Transaction confirmed!
         </div>
       )}
     </div>
   )
 }
+
 
 
 

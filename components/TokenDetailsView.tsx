@@ -406,13 +406,18 @@ export default function TokenDetailsView({
 
 
 
-          {!isCreator && !isGraduated && (
-            <div className="mt-6">
-              <PublicBuySection token={token} onSuccess={onRefresh} />
+          {!isCreator && (
+            <div className="mt-6 flex flex-col md:flex-row md:items-start gap-4">
+              {!isGraduated && (
+                <div className="flex-1">
+                  <PublicBuySection token={token} onSuccess={onRefresh} />
+                </div>
+              )}
+              <div className="flex-1">
+                <AirdropClaimForm token={token} />
+              </div>
             </div>
           )}
-
-          {!isCreator && <AirdropClaimForm token={token} />}
 
 
 
