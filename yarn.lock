@@ -1692,6 +1692,13 @@
   dependencies:
     "@types/ms" "*"
 
+"@types/decimal.js@^7.4.3":
+  version "7.4.3"
+  resolved "https://registry.yarnpkg.com/@types/decimal.js/-/decimal.js-7.4.3.tgz#3efed8739abbb0dc9f4e3498542efba0b6ddfbea"
+  integrity sha512-7MpxcJPHqQ637FCZwJLtJMaDZkcD/iyUxj0m8A+m06slFeqRiK9QtgEyuocWNRbEtCrOZOEbZPTSSR88hMZVsg==
+  dependencies:
+    decimal.js "*"
+
 "@types/deep-eql@*":
   version "4.0.2"
   resolved "https://registry.yarnpkg.com/@types/deep-eql/-/deep-eql-4.0.2.tgz#334311971d3a07121e7eb91b684a605e7eea9cbd"
@@ -3412,6 +3419,11 @@ decamelize@^4.0.0:
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/decamelize/-/decamelize-4.0.0.tgz#aa472d7bf660eb15f3494efd531cab7f2a709837"
   integrity sha512-9iE1PgSik9HeIIw2JO94IidnE3eBoQrFJ3w7sFuzSX4DpmZ3v5sZpUiV5Swcf6mQEF+Y0ru8Neo+p+nyh2J+hQ==
+
+decimal.js@*:
+  version "10.6.0"
+  resolved "https://registry.yarnpkg.com/decimal.js/-/decimal.js-10.6.0.tgz#e649a43e3ab953a72192ff5983865e509f37ed9a"
+  integrity sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==
 
 decode-uri-component@^0.2.2:
   version "0.2.2"

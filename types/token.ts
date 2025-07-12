@@ -30,17 +30,11 @@ export type Token = {
   airdrop_allocations?: Record<string, number>
   chain_id?: number
 
-  // Legacy on-chain read support
-  onChainData?: {
-    raiseTarget: number
-    totalRaised: number
-    basePrice: number
-    currentPrice: number
-    graduated: boolean
-    creatorLockAmount: number
-    airdropFinalized: boolean
-    totalSupply: number
-  }
+  // basePrice and slope (from db)
+  base_price: number
+  slope: number
+
+  
 }
 
 

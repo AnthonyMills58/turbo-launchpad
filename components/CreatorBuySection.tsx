@@ -7,6 +7,7 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
+import { calculateBuyAmountFromCost } from '@/lib/calculateBuyAmount'
 
 export default function CreatorBuySection({
   token,
@@ -20,34 +21,36 @@ export default function CreatorBuySection({
     1
   )
 
-  const [amount, setAmount] = useState<number>(1)
+  const [amount, setAmount] = useState<number>(1.0)
   const [price, setPrice] = useState<string>('0')
   const [loadingPrice, setLoadingPrice] = useState(false)
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = Number(e.target.value)
+    let val = parseFloat(e.target.value)
     if (isNaN(val)) val = 1
     if (val < 1) val = 1
     else if (val > maxAllowedAmount) val = maxAllowedAmount
     setAmount(val)
+    setShowSuccess(false)
   }
 
   const fetchPrice = async () => {
     if (!amount || amount <= 0) return
+    setShowSuccess(false)
     setLoadingPrice(true)
     setPrice('0')
     try {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
       const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
-      const amountInt = BigInt(amount)
+      const amountInt = ethers.parseUnits(amount.toString(), 18)
       const priceBigInt = await contract.getPrice(amountInt)
       setPrice(ethers.formatEther(priceBigInt))
     } catch (err) {
@@ -59,15 +62,15 @@ export default function CreatorBuySection({
 
   const handleBuy = async () => {
     if (!amount || price === '0') return
+    setShowSuccess(false)
     setIsPending(true)
-    setIsSuccess(false)
     try {
-      const amountInt = BigInt(amount)
+      const amountWei = ethers.parseUnits(amount.toString(), 18)
       const hash = await writeContractAsync({
         address: token.contract_address as `0x${string}`,
         abi: TurboTokenABI.abi,
         functionName: 'creatorBuy',
-        args: [amountInt],
+        args: [amountWei],
         value: ethers.parseEther(price),
       })
       setTxHash(hash)
@@ -77,7 +80,6 @@ export default function CreatorBuySection({
     }
   }
 
-  // Wait for transaction confirmation
   useEffect(() => {
     if (!txHash || !publicClient) return
 
@@ -85,20 +87,20 @@ export default function CreatorBuySection({
       try {
         await publicClient.waitForTransactionReceipt({ hash: txHash })
 
-        setIsSuccess(true)
+        setShowSuccess(true)
+        setTxHash(null)
         if (refreshWallet) refreshWallet()
 
         try {
-         await fetch('/api/sync', {
+          await fetch('/api/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               tokenId: token.id,
               contractAddress: token.contract_address,
-              chainId: publicClient?.chain.id, // ✅ send active chain
+              chainId: publicClient?.chain.id,
             }),
           })
-
         } catch (err) {
           console.error('Failed to sync token state:', err)
         }
@@ -125,6 +127,38 @@ export default function CreatorBuySection({
         <span className="text-xs text-gray-400">max {maxAllowedAmount} (20% of maxSupply)</span>
       </h3>
 
+      <div className="flex flex-wrap gap-2 mb-3">
+        {[1 / 10000, 1 / 1000, 1 / 100].map((fraction) => {
+          const ethAmount = token.raise_target * fraction
+          return (
+            <button
+              key={fraction}
+              type="button"
+              onClick={() => {
+                setShowSuccess(false)
+                try {
+                  const calculated = calculateBuyAmountFromCost(
+                    ethAmount,
+                    BigInt(Math.floor(token.total_supply ?? 0) * 1e18),
+                    BigInt(Math.floor(token.base_price)),
+                    BigInt(Math.floor(token.slope))
+                  )
+                  const rounded = Math.min(calculated, maxAllowedAmount)
+                  const precise = parseFloat(rounded.toFixed(6))
+                  setAmount(precise)
+                  setPrice('0')
+                } catch (err) {
+                  console.error('Curve calc error:', err)
+                }
+              }}
+              className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
+            >
+              {parseFloat(ethAmount.toFixed(6)).toString()} ETH
+            </button>
+          )
+        })}
+      </div>
+
       <Input
         type="number"
         label={`Amount to Buy & Lock (1 - ${maxAllowedAmount})`}
@@ -133,7 +167,7 @@ export default function CreatorBuySection({
         onChange={handleAmountChange}
         min={1}
         max={maxAllowedAmount}
-        placeholder="e.g. 1"
+        placeholder="e.g. 1.5"
         disabled={isBusy}
       />
 
@@ -146,29 +180,32 @@ export default function CreatorBuySection({
       </button>
 
       {price !== '0' && (
-        <div className="mt-2 text-sm text-gray-300 text-center">
-          Total cost: <strong>{displayPrice} ETH</strong>
-        </div>
+        <>
+          <div className="mt-2 text-sm text-gray-300 text-center">
+            Total cost: <strong>{displayPrice} ETH</strong>
+          </div>
+
+          <button
+            onClick={handleBuy}
+            disabled={isPending}
+            className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
+          >
+            {isPending ? 'Processing...' : 'Buy & Lock'}
+          </button>
+        </>
       )}
 
-      {price !== '0' && (
-        <button
-          onClick={handleBuy}
-          disabled={isPending}
-          className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
-        >
-          {isPending ? 'Processing...' : 'Buy & Lock'}
-        </button>
-      )}
-
-      {isSuccess && (
+      {showSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
-          ✅ Transaction confirmed! You may refresh the page.
+          ✅ Transaction confirmed!
         </div>
       )}
     </div>
   )
 }
+
+
+
 
 
 

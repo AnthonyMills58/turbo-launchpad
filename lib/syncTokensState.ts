@@ -70,7 +70,7 @@ export async function syncTokenState(
 
       for (let i = 0; i < recipients.length; i++) {
         const address = recipients[i]
-        const amount = Number(amounts[i])
+        const amount = Number(amounts[i]) / 1e18 // ✅ convert to decimal
         const claimed = await contract.airdropClaimed(address)
         airdropAllocations[address] = { amount, claimed }
       }

@@ -233,13 +233,37 @@ export default function CreateTokenForm() {
 
       {proMode && (
         <>
-          <Input
-            type="number"
-            label="Total Supply"
-            name="supply"
-            value={form.supply}
-            onChange={handleChange}
-          />
+          <div>
+  <label className="block text-sm font-medium text-white mb-1">Total Supply</label>
+  <div className="flex gap-2 mb-2">
+    {[
+      { label: '1M', value: 1_000_000 },
+      { label: '10M', value: 10_000_000 },
+      { label: '100M', value: 100_000_000 },
+      { label: '200M', value: 200_000_000 },
+      { label: '500M', value: 500_000_000 },
+      { label: '1B', value: 1_000_000_000 },
+    ].map((option) => (
+      <button
+        key={option.label}
+        type="button"
+        onClick={() => setForm({ ...form, supply: option.value })}
+        className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
+      >
+        {option.label}
+      </button>
+    ))}
+  </div>
+  <Input
+    type="number"
+    name="supply"
+    value={form.supply}
+    onChange={handleChange}
+    placeholder="Enter total supply"
+    label="Max Supply"
+  />
+</div>
+
           <Select
             label="Raise Target"
             name="raiseTarget"

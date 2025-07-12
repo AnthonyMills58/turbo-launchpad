@@ -20,7 +20,7 @@ contract TurboToken is ERC20, Ownable {
     mapping(address => uint256) public lockedBalances;
 
     // ==== Airdrop allocations ====
-    mapping(address => uint256) public airdropAllocations;
+    mapping(address => uint256) public airdropAllocations; // amounts are now 1e18-scaled
     mapping(address => bool) public airdropClaimed;
     address[] public airdropRecipients;
 
@@ -31,7 +31,6 @@ contract TurboToken is ERC20, Ownable {
     // ==== Events ====
     event FeeAttempt(address recipient, uint256 amount);
 
-    // ==== Constructor ====
     constructor(
         string memory name_,
         string memory symbol_,
@@ -47,14 +46,13 @@ contract TurboToken is ERC20, Ownable {
 
         // Calculate bonding curve
         uint256 baseRaiseTarget = 5 ether;
-        // 0.005 USD in ETH (wei), assuming ETH = $2600 and maxSupply is 1000000000
+         // 0.005 USD in ETH (wei), assuming ETH = $2600 and maxSupply is 1000000000
         uint256 basePriceFloor = (5e15 * 1e27) / (2600 * maxSupply);
-        // 0.4% of max supply (used as x value in slope calculation)
-        uint256 graduateThreshold = 4 * maxSupply / 1000;
-        // Price floor proportional to raise target
-        uint256 priceFloor = ( raiseTarget * basePriceFloor ) / baseRaiseTarget;
-        basePrice = 2e18 * raiseTarget / graduateThreshold - priceFloor;
-        slope = 1e18 * (priceFloor - basePrice) / graduateThreshold;
+        uint256 graduateThreshold = (4 * maxSupply) / 1000;
+        uint256 priceFloor = (raiseTarget * basePriceFloor) / baseRaiseTarget;
+
+        basePrice = (2e18 * raiseTarget) / graduateThreshold - priceFloor;
+        slope = (1e18 * (priceFloor - basePrice)) / graduateThreshold;
     }
 
     // ==== Modifiers ====
@@ -68,19 +66,16 @@ contract TurboToken is ERC20, Ownable {
         _;
     }
 
-    // ==== Decimal Helper ====
-    function scaleAmount(uint256 amount) internal view returns (uint256) {
-        return amount * 10 ** decimals();
-    }
-
     // ==== Bonding Curve Pricing ====
     function getPrice(uint256 amount) public view returns (uint256) {
-        uint256 currentSupply = totalSupply();
-        uint256 c1 = basePrice + slope * (currentSupply + 1e18)/1e18;
-        uint256 c2 = basePrice + slope * (currentSupply + scaleAmount(amount))/1e18;
-        // Average price over the range
+        uint256 currentSupply = totalSupply(); // 1e18-scaled
+
+        uint256 c1 = basePrice + (slope * (currentSupply + 1e18)) / 1e18;
+        uint256 c2 = basePrice + (slope * (currentSupply + amount)) / 1e18;
+
         uint256 avgPrice = (c1 + c2) / 2;
-        uint256 total = amount * avgPrice;
+        uint256 total = (amount * avgPrice) / 1e18;
+
         return total;
     }
 
@@ -92,12 +87,12 @@ contract TurboToken is ERC20, Ownable {
     function buy(uint256 amount) external payable onlyBeforeGraduate {
         uint256 cost = getPrice(amount);
         require(msg.value >= cost, "Insufficient ETH sent");
-        require(totalSupply() + scaleAmount(amount) <= maxSupplyForSale(), "Exceeds available supply");
+        require(totalSupply() + amount <= maxSupplyForSale(), "Exceeds available supply");
 
         uint256 platformFee = (cost * 100) / 10000;
         totalRaised += (cost - platformFee);
 
-        _mint(msg.sender, scaleAmount(amount));
+        _mint(msg.sender, amount);
 
         emit FeeAttempt(platformFeeRecipient, platformFee);
         (bool sent, ) = payable(platformFeeRecipient).call{value: platformFee}("");
@@ -111,15 +106,15 @@ contract TurboToken is ERC20, Ownable {
     function creatorBuy(uint256 amount) external payable onlyCreator onlyBeforeGraduate {
         uint256 cost = getPrice(amount);
         require(msg.value >= cost, "Insufficient ETH sent");
-        require(totalSupply() + scaleAmount(amount) <= maxSupplyForSale(), "Exceeds available supply");
-        require(lockedBalances[creator] + scaleAmount(amount) <= reservedForAirdrop(), "Exceeds lock allocation");
+        require(totalSupply() + amount <= maxSupplyForSale(), "Exceeds available supply");
+        require(lockedBalances[creator] + amount <= reservedForAirdrop(), "Exceeds lock allocation");
 
         uint256 platformFee = (cost * 100) / 10000;
         totalRaised += (cost - platformFee);
 
-        _mint(address(this), scaleAmount(amount));
-        lockedBalances[creator] += scaleAmount(amount);
-        creatorLockAmount += scaleAmount(amount);
+        _mint(address(this), amount);
+        lockedBalances[creator] += amount;
+        creatorLockAmount += amount;
 
         emit FeeAttempt(platformFeeRecipient, platformFee);
 
@@ -146,7 +141,7 @@ contract TurboToken is ERC20, Ownable {
 
         uint256 amount = lockedBalances[creator];
         lockedBalances[creator] = 0;
-        creatorLockAmount = 0; // 👈 Reset the public variable!
+        creatorLockAmount = 0;
         _transfer(address(this), creator, amount);
     }
 
@@ -168,7 +163,7 @@ contract TurboToken is ERC20, Ownable {
             totalToAllocate += amt;
         }
 
-        require(scaleAmount(totalToAllocate) <= reservedForAirdrop(), "Exceeds airdrop reserve");
+        require(totalToAllocate <= reservedForAirdrop(), "Exceeds airdrop reserve");
     }
 
     function claimAirdrop() external {
@@ -179,10 +174,10 @@ contract TurboToken is ERC20, Ownable {
         require(amount > 0, "No allocation");
 
         airdropClaimed[msg.sender] = true;
-        _mint(msg.sender, scaleAmount(amount));
+        _mint(msg.sender, amount);
     }
 
-    // ==== View Helper for Frontend ====
+    // ==== View Helpers for Frontend ====
     function getAirdropAllocations() external view returns (address[] memory, uint256[] memory) {
         uint256 len = airdropRecipients.length;
         address[] memory recipients = new address[](len);
@@ -200,7 +195,6 @@ contract TurboToken is ERC20, Ownable {
         return airdropRecipients.length > 0;
     }
 
-    // ==== View Helpers ====
     function maxSupplyForSale() public view returns (uint256) {
         return (maxSupply * (100 - LP_AND_AIRDROP_PERCENT)) / 100;
     }
@@ -246,10 +240,9 @@ contract TurboToken is ERC20, Ownable {
 
         payable(creator).transfer(creatorCut);
 
-        totalRaised = 0; // Reset after successful withdrawal
+        totalRaised = 0;
     }
 
-    // ==== Fallback ====
     receive() external payable {}
 }
 
