@@ -1,8 +1,8 @@
 'use client'
-
+import { ethers } from 'ethers'
 import { Token } from '@/types/token'
 import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
 import WithdrawForm from './WithdrawForm'
@@ -205,7 +205,27 @@ export default function TokenDetailsView({
     }
   }
 
- 
+ const [userTokenBalance, setUserTokenBalance] = useState<number | null>(null)
+
+useEffect(() => {
+  const fetchTokenBalance = async () => {
+    try {
+      if (!window.ethereum || !token?.contract_address) return
+
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
+      const balance = await contract.balanceOf(await signer.getAddress())
+      const formatted = parseFloat(ethers.formatUnits(balance, 18))
+      setUserTokenBalance(formatted)
+    } catch (err) {
+      console.error('Failed to fetch user token balance:', err)
+    }
+  }
+
+  fetchTokenBalance()
+}, [token.contract_address])
+
 
   return (
     <div className="max-w-4xl mx-auto mt-6 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
@@ -409,22 +429,26 @@ export default function TokenDetailsView({
 
 
           {!isCreator && (
-            <div className="mt-6 flex flex-col md:flex-row md:items-start gap-4">
+            <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
               {!isGraduated && (
                 <>
-                  <div className="flex-4">
+                  <div className="w-full md:w-3/4">
                     <PublicBuySection token={token} onSuccess={onRefresh} />
                   </div>
-                  <div className="flex-2">
-                    <PublicSellSection token={token} onSuccess={onRefresh} />
-                  </div>
+
+                  {userTokenBalance !== null && userTokenBalance > 0 && (
+                    <div className="w-full md:w-1/2">
+                      <PublicSellSection token={token} onSuccess={onRefresh} />
+                    </div>
+                  )}
                 </>
               )}
-              <div className="flex-1">
+              <div className="w-full md:w-1/3">
                 <AirdropClaimForm token={token} />
               </div>
             </div>
           )}
+
 
 
 
