@@ -6,8 +6,10 @@ import { ethers } from 'ethers'
 import { useRouter } from 'next/navigation'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Token } from '@/types/token'
+import { useSync } from '@/lib/SyncContext'
 
 export default function AirdropClaimForm({ token }: { token: Token }) {
+  const { triggerSync } = useSync()
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
@@ -66,6 +68,7 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
           chainId: publicClient?.chain.id, // 👈 include chainId here
         }),
       })
+      triggerSync() // 🔁 frontendowy refresh TokenDetailsView
 
 
       setClaimed(true)

@@ -12,6 +12,9 @@ import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { Copy } from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
+import PublicSellSection from './PublicSellSection'
+import { useSync } from '@/lib/SyncContext'
+
 
 
 
@@ -24,6 +27,7 @@ export default function TokenDetailsView({
   onBack: () => void
   onRefresh: () => void
 }) {
+  const { triggerSync } = useSync()
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const chainId = useChainId()
@@ -102,7 +106,7 @@ export default function TokenDetailsView({
           chainId, // ✅ include current chain ID
         }),
       })
-
+      triggerSync() // 🔁 frontendowy refresh TokenDetailsView
 
       onBack()
     } catch (err) {
@@ -143,7 +147,7 @@ export default function TokenDetailsView({
           chainId, // ✅ include current chain ID
         }),
       })
-
+      triggerSync() // 🔁 frontendowy refresh TokenDetailsView
 
       onBack()
     } catch (err) {
@@ -335,89 +339,93 @@ export default function TokenDetailsView({
 
 
 
-{/* Creator Actions */}
-{isCreator && (
-  <div className="flex flex-col space-y-4">
-    {/* Buy & Airdrop in one row on desktop */}
-    {!isGraduated && (
-      <div className="flex flex-col md:flex-row md:items-start gap-4">
-        <CreatorBuySection token={token} onSuccess={onRefresh} />
-        <AirdropForm token={token} onSuccess={onRefresh} />
-      </div>
-    )}
+          {/* Creator Actions */}
+          {isCreator && (
+            <div className="flex flex-col space-y-4">
+              {/* Buy & Airdrop in one row on desktop */}
+              {!isGraduated && (
+                <div className="flex flex-col md:flex-row md:items-start gap-4">
+                  <CreatorBuySection token={token} onSuccess={onRefresh} />
+                  <AirdropForm token={token} onSuccess={onRefresh} />
+                </div>
+              )}
 
-    {/* Graduate Button */}
-    {canGraduate && (
-      <button
-        onClick={handleGraduate}
-        disabled={isGraduating}
-        className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-          isGraduating
-            ? 'bg-neutral-700 cursor-not-allowed'
-            : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
-        }`}
-      >
-        {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
-      </button>
-    )}
+              {/* Graduate Button */}
+              {canGraduate && (
+                <button
+                  onClick={handleGraduate}
+                  disabled={isGraduating}
+                  className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+                    isGraduating
+                      ? 'bg-neutral-700 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:brightness-110'
+                  }`}
+                >
+                  {isGraduating ? 'Graduating...' : '🚀 Graduate Token'}
+                </button>
+              )}
 
-    {/* Unlock Button */}
-    {isGraduated && Number(token.creator_lock_amount ?? 0) > 0 && (
-      <button
-        onClick={handleUnlock}
-        disabled={isUnlocking}
-        className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-          isUnlocking
-            ? 'bg-neutral-700 cursor-not-allowed'
-            : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
-        }`}
-      >
-        {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
-      </button>
-    )}
+              {/* Unlock Button */}
+              {isGraduated && Number(token.creator_lock_amount ?? 0) > 0 && (
+                <button
+                  onClick={handleUnlock}
+                  disabled={isUnlocking}
+                  className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+                    isUnlocking
+                      ? 'bg-neutral-700 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
+                  }`}
+                >
+                  {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
+                </button>
+              )}
 
-    {/* Withdraw Form */}
-    {isGraduated && Number(raised) > 0 && (
-      <WithdrawForm token={token} onSuccess={onRefresh} />
-    )}
+              {/* Withdraw Form */}
+              {isGraduated && Number(raised) > 0 && (
+                <WithdrawForm token={token} onSuccess={onRefresh} />
+              )}
 
-   {/* ✏️ Edit Token Info */}
-    <button
-      onClick={() => setIsEditing(!isEditing)}
-      className="w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition bg-gray-800 hover:bg-gray-700"
-    >
-      {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
-    </button>
+            {/* ✏️ Edit Token Info */}
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition bg-gray-800 hover:bg-gray-700"
+              >
+                {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
+              </button>
 
-    {isEditing && (
-      <EditTokenForm
-        token={token}
-        onSuccess={() => {
-          setIsEditing(false)
-          onRefresh()
-        }}
-        onCancel={() => setIsEditing(false)} // ✅ required prop
-      />
-    )}
+              {isEditing && (
+                <EditTokenForm
+                  token={token}
+                  onSuccess={() => {
+                    setIsEditing(false)
+                    onRefresh()
+                  }}
+                  onCancel={() => setIsEditing(false)} // ✅ required prop
+                />
+              )}
 
-  </div>
-)}
-
-
+            </div>
+          )}
 
 
           {!isCreator && (
             <div className="mt-6 flex flex-col md:flex-row md:items-start gap-4">
               {!isGraduated && (
-                <div className="flex-1">
-                  <PublicBuySection token={token} onSuccess={onRefresh} />
-                </div>
+                <>
+                  <div className="flex-4">
+                    <PublicBuySection token={token} onSuccess={onRefresh} />
+                  </div>
+                  <div className="flex-2">
+                    <PublicSellSection token={token} onSuccess={onRefresh} />
+                  </div>
+                </>
               )}
               <div className="flex-1">
                 <AirdropClaimForm token={token} />
               </div>
             </div>
           )}
+
 
 
 

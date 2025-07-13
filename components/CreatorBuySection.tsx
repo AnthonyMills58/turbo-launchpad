@@ -7,7 +7,8 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
-import { calculateBuyAmountFromCost } from '@/lib/calculateBuyAmount'
+import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
+import { useSync } from '@/lib/SyncContext'
 
 export default function CreatorBuySection({
   token,
@@ -20,7 +21,7 @@ export default function CreatorBuySection({
     Math.floor(token.supply * 0.2) - (token.lockedAmount ? parseFloat(token.lockedAmount) : 0),
     1
   )
-
+  const { triggerSync } = useSync()
   const [amount, setAmount] = useState<number>(1.0)
   const [price, setPrice] = useState<string>('0')
   const [loadingPrice, setLoadingPrice] = useState(false)
@@ -101,6 +102,7 @@ export default function CreatorBuySection({
               chainId: publicClient?.chain.id,
             }),
           })
+          triggerSync() // 🔁 frontendowy refresh TokenDetailsView
         } catch (err) {
           console.error('Failed to sync token state:', err)
         }
@@ -114,7 +116,7 @@ export default function CreatorBuySection({
     }
 
     waitForTx()
-  }, [txHash, publicClient, refreshWallet, onSuccess, token])
+  }, [txHash, publicClient, refreshWallet, onSuccess, token, triggerSync])
 
   const displayPrice = parseFloat(price).toFixed(8)
   const isBusy = loadingPrice || isPending
@@ -128,29 +130,42 @@ export default function CreatorBuySection({
       </h3>
 
       <div className="flex flex-wrap gap-2 mb-3">
-        {[1 / 10000, 1 / 1000, 1 / 100].map((fraction) => {
+        {[1 / 10000, 1 / 1000, 1 / 100, 1 / 10 ].map((fraction) => {
           const ethAmount = token.raise_target * fraction
           return (
             <button
               key={fraction}
               type="button"
-              onClick={() => {
-                setShowSuccess(false)
-                try {
-                  const calculated = calculateBuyAmountFromCost(
-                    ethAmount,
-                    BigInt(Math.floor(token.total_supply ?? 0) * 1e18),
-                    BigInt(Math.floor(token.base_price)),
-                    BigInt(Math.floor(token.slope))
-                  )
-                  const rounded = Math.min(calculated, maxAllowedAmount)
-                  const precise = parseFloat(rounded.toFixed(6))
-                  setAmount(precise)
-                  setPrice('0')
-                } catch (err) {
-                  console.error('Curve calc error:', err)
-                }
-              }}
+              onClick={async () => {
+              setShowSuccess(false)
+              try {
+                const ethWei = BigInt(Math.floor(ethAmount * 1e18))
+
+                const provider = new ethers.BrowserProvider(window.ethereum)
+                const signer = await provider.getSigner()
+                const contract = new ethers.Contract(
+                  token.contract_address,
+                  TurboTokenABI.abi,
+                  signer
+                )
+                const currentPriceWei = await contract.getCurrentPrice()
+
+                const calculated = calculateBuyAmountFromETH(
+                  ethWei,                         // ETH in wei
+                  BigInt(currentPriceWei.toString()), // on-chain current price in wei
+                  BigInt(Math.floor(token.slope))     // slope in wei
+                )
+
+                const rounded = Math.min(calculated, maxAllowedAmount)
+                const precise = parseFloat(rounded.toFixed(6))
+
+                setAmount(precise)
+                setPrice('0')
+              } catch (err) {
+                console.error('Curve calc error:', err)
+              }
+            }}
+
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
               {parseFloat(ethAmount.toFixed(6)).toString()} ETH

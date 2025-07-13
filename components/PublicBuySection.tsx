@@ -7,7 +7,9 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
-import { calculateBuyAmountFromCost } from '@/lib/calculateBuyAmount'
+import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
+import { useSync } from '@/lib/SyncContext'
+
 
 export default function PublicBuySection({
   token,
@@ -16,6 +18,7 @@ export default function PublicBuySection({
   token: Token
   onSuccess?: () => void
 }) {
+  const { triggerSync } = useSync()
   const [amount, setAmount] = useState<number>(1.0)
   const [price, setPrice] = useState<string>('0')
   const [loadingPrice, setLoadingPrice] = useState(false)
@@ -107,6 +110,7 @@ export default function PublicBuySection({
               chainId: publicClient?.chain.id,
             }),
           })
+          triggerSync() // 🔁 frontendowy refresh TokenDetailsView
         } catch (err) {
           console.error('Failed to update or sync token:', err)
         }
@@ -120,7 +124,7 @@ export default function PublicBuySection({
     }
 
     waitForTx()
-  }, [txHash, publicClient, refreshWallet, onSuccess, token])
+  }, [txHash, publicClient, refreshWallet, onSuccess, token, triggerSync])
 
   const displayPrice = parseFloat(price).toFixed(8)
 
@@ -134,29 +138,42 @@ export default function PublicBuySection({
 
       {/* ETH-based preset buttons */}
       <div className="flex flex-wrap gap-2 mb-3">
-        {[1 / 10000, 1 / 1000, 1 / 100].map((fraction) => {
+        {[1 / 10000, 1 / 1000, 1 / 100, 1 / 10].map((fraction) => {
           const ethAmount = token.raise_target * fraction
           return (
             <button
               key={fraction}
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 setShowSuccess(false)
                 try {
-                  const calculated = calculateBuyAmountFromCost(
-                    ethAmount,
-                    BigInt(Math.floor(token.total_supply ?? 0) * 1e18),
-                    BigInt(Math.floor(token.base_price)),
+                  const ethWei = BigInt(Math.floor(ethAmount * 1e18))
+
+                  const provider = new ethers.BrowserProvider(window.ethereum)
+                  const signer = await provider.getSigner()
+                  const contract = new ethers.Contract(
+                    token.contract_address,
+                    TurboTokenABI.abi,
+                    signer
+                  )
+                  const currentPriceWei = await contract.getCurrentPrice()
+
+                  const calculated2 = calculateBuyAmountFromETH(
+                    ethWei,
+                    BigInt(currentPriceWei.toString()), // make sure it's bigint
                     BigInt(Math.floor(token.slope))
                   )
-                  const rounded = Math.min(calculated, maxAvailableAmount)
+
+                  const rounded = Math.min(calculated2, maxAvailableAmount)
                   const precise = parseFloat(rounded.toFixed(6))
+
                   setAmount(precise)
                   setPrice('0')
                 } catch (err) {
                   console.error('Curve calc error:', err)
                 }
               }}
+
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
               {parseFloat(ethAmount.toFixed(6)).toString()} ETH

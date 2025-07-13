@@ -6,6 +6,7 @@ import { usePublicClient, useWriteContract } from 'wagmi'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
+import { useSync } from '@/lib/SyncContext'
 
 type AirdropEntry = {
   address: string
@@ -20,6 +21,7 @@ export default function AirdropForm({
   token: Token
   onSuccess?: () => void
 }) {
+  const { triggerSync } = useSync()
   const [onChainAirdrops, setOnChainAirdrops] = useState<AirdropEntry[]>([])
   const [draftAirdrops, setDraftAirdrops] = useState<{ address: string; amount: number }[]>([])
   const [address, setAddress] = useState('')
@@ -105,11 +107,12 @@ export default function AirdropForm({
             chainId: publicClient?.chain.id,
           }),
         })
-
+       
         setIsSuccess(true)
         setDraftAirdrops([])
         fetchAirdrops()
         onSuccess?.()
+        triggerSync() // 🔁 frontendowy refresh TokenDetailsView
       }
     } catch (err) {
       console.error('❌ Failed to submit airdrops:', err)

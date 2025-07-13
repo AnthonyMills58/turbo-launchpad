@@ -68,10 +68,22 @@ contract TurboToken is ERC20, Ownable {
 
     // ==== Bonding Curve Pricing ====
     function getPrice(uint256 amount) public view returns (uint256) {
-        uint256 currentSupply = totalSupply(); // 1e18-scaled
+       
+        uint256 c1 = getCurrentPrice();
+        uint256 c2 = c1 + (slope * amount) / 1e18;
 
-        uint256 c1 = basePrice + (slope * (currentSupply + 1e18)) / 1e18;
-        uint256 c2 = basePrice + (slope * (currentSupply + amount)) / 1e18;
+        uint256 avgPrice = (c1 + c2) / 2;
+        uint256 total = (amount * avgPrice) / 1e18;
+
+        return total;
+    }
+
+    function getSellPrice(uint256 amount) public view returns (uint256) {
+        uint256 currentSupply = totalSupply();
+        require(amount <= currentSupply, "Amount exceeds supply");
+
+        uint256 c1 = getCurrentPrice(); 
+        uint256 c2 = c1 - (slope * amount) / 1e18; 
 
         uint256 avgPrice = (c1 + c2) / 2;
         uint256 total = (amount * avgPrice) / 1e18;
@@ -126,6 +138,32 @@ contract TurboToken is ERC20, Ownable {
             require(refundSuccess, "Refund failed");
         }
     }
+
+
+    function sell(uint256 amount) external onlyBeforeGraduate {
+        require(amount > 0, "Amount must be greater than zero");
+        require(balanceOf(msg.sender) >= amount, "Insufficient token balance");
+
+        uint256 refund = getSellPrice(amount);
+        require(address(this).balance >= refund, "Contract has insufficient ETH");
+
+        // === Apply 1.5% sell fee (150 bps) ===
+        uint256 platformFee = (refund * 150) / 10000;
+        uint256 payout = refund - platformFee;
+
+        // === Burn sold tokens ===
+        _burn(msg.sender, amount);
+
+        // === Payout ETH to seller ===
+        (bool sentUser, ) = payable(msg.sender).call{value: payout}("");
+        require(sentUser, "ETH payout failed");
+
+        // === Send fee to platform ===
+        emit FeeAttempt(platformFeeRecipient, platformFee);
+        (bool sentFee, ) = payable(platformFeeRecipient).call{value: platformFee}("");
+        require(sentFee, "Platform fee transfer failed");
+    }
+
 
     // ==== Graduation Logic ====
     function graduate() external {

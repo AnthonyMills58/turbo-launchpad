@@ -32,7 +32,7 @@ export function calculateBuyAmountFromCost(
   if (amountTokens <= 0) throw new Error('Resulting amount is zero or negative.')
 
   console.log('🧪 amountTokens:', amountTokens)
-  return amountTokens
+  return amountTokens/1e18
 }
 
 
@@ -51,6 +51,48 @@ function bigintSqrt(value: bigint): bigint {
 
   return x0
 }
+
+
+export function calculateBuyAmountFromETH(
+  ethAmountWei: bigint,        // E (in wei)
+  currentPriceWei: bigint,     // p (in wei)
+  slopeWei: bigint             // s (in wei)
+): number {
+
+  console.log('eth:', ethAmountWei)
+  console.log('cprice:', currentPriceWei)
+  console.log('slope:', slopeWei)
+
+
+  const ONE = 10n ** 18n;
+
+  // Unscaled wersja równania kwadratowego:
+  // s*a^2 + 2p*1e18*a - 2e*1e18 = 0
+  const a = slopeWei;
+  const b = 2n * currentPriceWei * ONE;
+  const c = -2n * ethAmountWei * ONE * ONE;
+
+  const discriminant = b * b - 4n * a * c;
+  if (discriminant < 0n) throw new Error("Discriminant < 0");
+
+  // Można użyć bigintSqrt tu, ale spróbuj Math.sqrt:
+  const scaledDisc = Number(discriminant / (ONE * ONE)); // zmniejsz skalę
+  const sqrtDisc = BigInt(Math.floor(Math.sqrt(scaledDisc))) * ONE; // wróć do wei
+
+  const numerator = -b + sqrtDisc;
+  const denominator = 2n * a;
+
+  const amount = numerator / denominator;
+
+  if (amount <= 0n) throw new Error("Token amount zero or negative");
+  return Number(amount)/1e18 // w wei
+}
+
+
+
+
+
+
 
 
 

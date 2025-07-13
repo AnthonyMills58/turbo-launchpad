@@ -8,8 +8,10 @@ import { validateTokenForm, TokenForm } from '@/lib/validateTokenForm'
 import TurboToken from '@/lib/abi/TurboToken.json'
 import { ethers } from 'ethers'
 import { useRouter } from 'next/navigation'
+import { useSync } from '@/lib/SyncContext'
 
 export default function CreateTokenForm() {
+  const { triggerSync } = useSync()
   const router = useRouter()
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
@@ -145,7 +147,7 @@ export default function CreateTokenForm() {
               chainId,
             }),
           })
-
+          triggerSync() // 🔁 frontendowy refresh TokenDetailsView
           if (!chainId) {
             console.warn('Missing chainId — skipping sync')
             return

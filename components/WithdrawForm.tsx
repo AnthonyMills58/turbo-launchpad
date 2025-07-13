@@ -5,6 +5,7 @@ import { usePublicClient, useWriteContract } from 'wagmi'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { Token } from '@/types/token'
+import { useSync } from '@/lib/SyncContext'
 
 export default function WithdrawForm({
   token,
@@ -13,6 +14,7 @@ export default function WithdrawForm({
   token: Token
   onSuccess: () => void
 }) {
+  const { triggerSync } = useSync()
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
@@ -51,7 +53,7 @@ export default function WithdrawForm({
         }),
       })
 
-
+      triggerSync() // 🔁 frontendowy refresh TokenDetailsView
       onSuccess()
     } catch (err) {
       console.error('❌ Withdraw failed:', err)
