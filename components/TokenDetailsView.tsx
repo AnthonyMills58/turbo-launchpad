@@ -17,16 +17,20 @@ import { useSync } from '@/lib/SyncContext'
 
 
 
+type TokenDetailsViewProps = {
+  token: Token
+  usdPrice: number | null
+  onBack: () => void
+  onRefresh: () => void
+}
 
 export default function TokenDetailsView({
   token,
+  usdPrice,
   onBack,
   onRefresh,
-}: {
-  token: Token
-  onBack: () => void
-  onRefresh: () => void
-}) {
+}: TokenDetailsViewProps) {
+
   const { triggerSync } = useSync()
   const { address } = useAccount()
   const publicClient = usePublicClient()
@@ -352,6 +356,9 @@ useEffect(() => {
                 <span className="font-semibold text-white">Market Cap</span>
                 <p className="text-sm text-white">
                   {Number(token.market_cap).toFixed(6).replace(/\.?0+$/, '')} ETH
+                  {usdPrice && (
+                    <span className="text-gray-400"> (${(token.market_cap * usdPrice).toFixed(2)})</span>
+                  )}
                 </p>
               </div>
             )}

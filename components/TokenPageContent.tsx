@@ -8,8 +8,11 @@ import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
 import { chainNamesById } from '@/lib/chains'
 import { useSync } from '@/lib/SyncContext' // ✅ NEW
+import { getUsdPrice } from '@/lib/getUsdPrice';
+
 
 export default function TokenPageContent() {
+  const [usdPrice, setUsdPrice] = useState<number | null>(null)
   const searchParams = useSearchParams()
   const router = useRouter()
   const selectedParam = searchParams.get('selected')
@@ -49,6 +52,10 @@ export default function TokenPageContent() {
       setTokens([])
     }
   }, [search, creatorFilter, statusFilter, sortFilter, selectedIndex, address, chain])
+
+  useEffect(() => {
+    getUsdPrice().then(setUsdPrice)
+  }, [])
 
   useEffect(() => {
     fetchTokens()
@@ -94,12 +101,13 @@ export default function TokenPageContent() {
 
     return (
       <div className="min-h-screen bg-[#0d0f1a] p-6">
-        <TokenDetailsView
-          key={refreshKey} // 🔁 wymusza pełny rerender na sync
-          token={selectedToken}
-          onBack={backToList}
-          onRefresh={fetchTokens}
-        />
+       <TokenDetailsView
+        key={refreshKey}
+        token={selectedToken}
+        usdPrice={usdPrice} // ✅ added
+        onBack={backToList}
+        onRefresh={fetchTokens}
+      />
       </div>
     )
 
@@ -179,9 +187,13 @@ export default function TokenPageContent() {
                 Market Cap:{' '}
                 <span className="text-white">
                   {Number(token.market_cap).toFixed(6).replace(/\.?0+$/, '')} ETH
+                  {usdPrice && (
+                    <span className="text-gray-400"> (${(token.market_cap * usdPrice).toFixed(2)})</span>
+                  )}
                 </span>
               </div>
             )}
+
 
             {token.chain_id && (
               <div className="text-sm text-gray-400 mb-1">
