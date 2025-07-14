@@ -320,26 +320,34 @@ useEffect(() => {
               </button>
               {copiedCreator && <span className="text-green-400 ml-2 text-xs">Copied!</span>}
             </div>
-
+            
+           {token.created_at && (
+              <div className="text-sm text-gray-400 mb-1">
+                Created:
+                <div className="text-white">
+                  {new Date(token.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            )}
 
             <div>
-            <span className="font-semibold text-white">Status</span>
-            <p
-              className={`font-semibold ${
-                token.on_dex
-                  ? 'text-blue-400'
+              <span className="font-semibold text-white">Status</span>
+              <p
+                className={`font-semibold ${
+                  token.on_dex
+                    ? 'text-blue-400'
+                    : isGraduated
+                    ? 'text-green-400'
+                    : 'text-yellow-400'
+                }`}
+              >
+                {token.on_dex
+                  ? `Listed on ${token.dex ?? 'DEX'}`
                   : isGraduated
-                  ? 'text-green-400'
-                  : 'text-yellow-400'
-              }`}
-            >
-              {token.on_dex
-                ? `Listed on ${token.dex ?? 'DEX'}`
-                : isGraduated
-                ? 'Graduated'
-                : 'In Progress'}
-            </p>
-          </div>
+                  ? 'Graduated'
+                  : 'In Progress'}
+              </p>
+            </div>
 
            <div className="flex items-center gap-4 mt-0">
               <div className="w-14 h-14">
@@ -395,7 +403,7 @@ useEffect(() => {
               <span className="font-semibold text-white">FDV</span>
               <p>
                 {token.fdv !== undefined
-                  ? `${Number(token.fdv).toFixed(6).replace(/\.?0+$/, '')} ETH`
+                  ? `${Number(token.fdv).toFixed(2).replace(/\.?0+$/, '')} ETH`
                   : '–'}
               </p>
             </div>

@@ -34,6 +34,8 @@ export type Token = {
   base_price: number
   slope: number
 
+  created_at?: string //
+
   
 }
 

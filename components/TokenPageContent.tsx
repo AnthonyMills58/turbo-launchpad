@@ -211,7 +211,7 @@ export default function TokenPageContent() {
                 FDV:{' '}
                 <span className="text-white">
                   {Number(token.fdv)
-                    .toFixed(6)
+                    .toFixed(2)
                     .replace(/\.?0+$/, '')}{' '}
                   ETH
                 </span>
@@ -242,6 +242,15 @@ export default function TokenPageContent() {
                 <span className="text-white">
                   {chainNamesById[token.chain_id] ??
                     `Chain ID ${token.chain_id}`}
+                </span>
+              </div>
+            )}
+
+            {token.created_at && (
+              <div className="text-sm text-gray-400 mb-1">
+                Created:{' '}
+                <span className="text-white">
+                  {new Date(token.created_at).toLocaleDateString()}
                 </span>
               </div>
             )}
