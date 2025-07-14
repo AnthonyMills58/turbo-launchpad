@@ -15,6 +15,7 @@ type SyncFields = {
   total_raised: number
   base_price: number
   slope: number
+  graduated: boolean
 }
 
 // ✅ Map chain IDs to their RPC URLs
@@ -62,6 +63,8 @@ export async function syncTokenState(
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
     const basePrice = Number(tokenInfoRaw._basePrice)
     const slope = Number(tokenInfoRaw._slope)
+    const graduated = tokenInfoRaw._graduated as boolean
+
 
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}
 
@@ -94,7 +97,8 @@ export async function syncTokenState(
       last_synced_at: new Date().toISOString(),
       total_raised: totalRaised,
       base_price: basePrice,
-      slope
+      slope,
+      graduated
     }
 
     await db.query(
@@ -109,8 +113,9 @@ export async function syncTokenState(
         last_synced_at = $8,
         eth_raised = $9,
         base_price = $10,
-        slope = $11
-       WHERE id = $12`,
+        slope = $11,
+        is_graduated = $12
+       WHERE id = $13`,
       [
         syncFields.current_price,
         syncFields.fdv,
@@ -123,6 +128,7 @@ export async function syncTokenState(
         syncFields.total_raised,
         syncFields.base_price,
         syncFields.slope,
+        syncFields.graduated,
         tokenId
       ]
     )

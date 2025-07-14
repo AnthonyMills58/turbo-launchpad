@@ -35,12 +35,6 @@ export default function WithdrawForm({
 
       if (refreshWallet) refreshWallet()
 
-      // 1. Fast DB update
-      await fetch('/api/update-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contractAddress: token.contract_address }),
-      })
 
       // 2. Full sync from on-chain state
       await fetch('/api/sync', {

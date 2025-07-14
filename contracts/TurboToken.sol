@@ -277,8 +277,7 @@ contract TurboToken is ERC20, Ownable {
         require(sent, "Platform withdrawal failed");
 
         payable(creator).transfer(creatorCut);
-
-        totalRaised = 0;
+        
     }
 
     receive() external payable {}

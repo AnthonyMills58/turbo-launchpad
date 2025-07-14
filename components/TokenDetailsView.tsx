@@ -1,7 +1,7 @@
 'use client'
 import { ethers } from 'ethers'
 import { Token } from '@/types/token'
-import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
+import { useAccount, useChainId, usePublicClient, useWriteContract , useBalance} from 'wagmi'
 import { useState, useEffect } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
@@ -33,6 +33,12 @@ export default function TokenDetailsView({
   onRefresh,
 }: TokenDetailsViewProps) {
 
+  const { data: contractBalance, refetch: refetchContractBalance } = useBalance({
+    address: token.contract_address as `0x${string}`,
+    chainId: token.chain_id,
+  })
+  const contractEthBalance = contractBalance?.value ?? 0n
+
   const { triggerSync } = useSync()
   const { address } = useAccount()
   const publicClient = usePublicClient()
@@ -48,6 +54,7 @@ export default function TokenDetailsView({
   const [isSubmittingDex, setIsSubmittingDex] = useState(false)
   const [dexSubmitSuccess, setDexSubmitSuccess] = useState(false)
   const [dexSubmitError, setDexSubmitError] = useState(false)
+  const [copiedCreator, setCopiedCreator] = useState(false);
 
   const isCreator = address?.toLowerCase() === token.creator_wallet.toLowerCase()
   const isGraduated = token.is_graduated
@@ -95,12 +102,7 @@ export default function TokenDetailsView({
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
-      // 1. Update token fast fields
-      await fetch('/api/update-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contractAddress: token.contract_address }),
-      })
+     
 
       // 2. Sync full on-chain state to DB
       await fetch('/api/sync', {
@@ -114,7 +116,7 @@ export default function TokenDetailsView({
       })
       triggerSync() // 🔁 frontendowy refresh TokenDetailsView
 
-      onBack()
+      //onBack()
     } catch (err) {
       console.error('❌ Graduation failed:', err)
     } finally {
@@ -136,13 +138,15 @@ export default function TokenDetailsView({
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
+      /*
       // 1. Fast update
       await fetch('/api/update-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contractAddress: token.contract_address }),
       })
-
+      */
+     
       // 2. Sync on-chain state into DB
       await fetch('/api/sync', {
         method: 'POST',
@@ -155,7 +159,7 @@ export default function TokenDetailsView({
       })
       triggerSync() // 🔁 frontendowy refresh TokenDetailsView
 
-      onBack()
+      //onBack()
     } catch (err) {
       console.error('❌ Unlock failed:', err)
     } finally {
@@ -169,6 +173,12 @@ export default function TokenDetailsView({
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
+
+  const handleCopyCreator = () => {
+    navigator.clipboard.writeText(token.creator_wallet);
+    setCopiedCreator(true);
+    setTimeout(() => setCopiedCreator(false), 1500);
+  };
 
   const handleCopyJSON = () => {
     navigator.clipboard.writeText(JSON.stringify(dexMetadata, null, 2))
@@ -234,7 +244,7 @@ useEffect(() => {
 
 
   return (
-    <div className="max-w-4xl mx-auto mt-6 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
+    <div className="max-w-4xl mx-auto mt-0 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
       <button
         onClick={onBack}
         className="text-sm text-gray-400 hover:text-white transition mb-6"
@@ -300,30 +310,36 @@ useEffect(() => {
           
         {/* Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-300 mb-6">
+
+           {/* Creator Address */}
+            <div className="flex items-center flex-wrap mb-4 space-x-2 font-mono text-sm text-gray-400 select-all">
+              <span>Creator:</span>
+              <span>{token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}</span>
+              <button onClick={handleCopyCreator} className="text-gray-400 hover:text-white transition">
+                <Copy size={16} />
+              </button>
+              {copiedCreator && <span className="text-green-400 ml-2 text-xs">Copied!</span>}
+            </div>
+
+
             <div>
-              <span className="font-semibold text-white">Creator</span>
-              <p className="font-mono">
-                {token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}
-              </p>
-            </div>
-              <div>
-              <span className="font-semibold text-white">Status</span>
-              <p
-                className={`font-semibold ${
-                  token.on_dex
-                    ? 'text-blue-400'
-                    : isGraduated
-                    ? 'text-green-400'
-                    : 'text-yellow-400'
-                }`}
-              >
-                {token.on_dex
-                  ? `Listed on ${token.dex ?? 'DEX'}`
+            <span className="font-semibold text-white">Status</span>
+            <p
+              className={`font-semibold ${
+                token.on_dex
+                  ? 'text-blue-400'
                   : isGraduated
-                  ? 'Graduated'
-                  : 'In Progress'}
-              </p>
-            </div>
+                  ? 'text-green-400'
+                  : 'text-yellow-400'
+              }`}
+            >
+              {token.on_dex
+                ? `Listed on ${token.dex ?? 'DEX'}`
+                : isGraduated
+                ? 'Graduated'
+                : 'In Progress'}
+            </p>
+          </div>
 
            <div className="flex items-center gap-4 mt-0">
               <div className="w-14 h-14">
@@ -439,9 +455,16 @@ useEffect(() => {
               )}
 
               {/* Withdraw Form */}
-              {isGraduated && Number(raised) > 0 && (
-                <WithdrawForm token={token} onSuccess={onRefresh} />
+              {isGraduated && contractEthBalance > 0n && (
+                <WithdrawForm
+                  token={token}
+                  onSuccess={() => {
+                    //onRefresh()
+                    refetchContractBalance()
+                  }}
+                />
               )}
+
 
             {/* ✏️ Edit Token Info */}
               <button
