@@ -14,6 +14,8 @@ import { Copy } from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 import PublicSellSection from './PublicSellSection'
 import { useSync } from '@/lib/SyncContext'
+import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
+import 'react-circular-progressbar/dist/styles.css'
 
 
 
@@ -323,10 +325,39 @@ useEffect(() => {
               </p>
             </div>
 
-            <div>
-              <span className="font-semibold text-white">Raised</span>
-              <p>{Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH</p>
+           <div className="flex items-center gap-4 mt-0">
+              <div className="w-14 h-14">
+                <CircularProgressbar
+                  value={
+                    Number(cap) > 0
+                      ? Math.min((Number(raised) / Number(cap)) * 100, 999)
+                      : 0
+                  }
+                  text={
+                    Number(cap) > 0
+                      ? ((Number(raised) / Number(cap)) * 100) < 1
+                        ? '<1%'
+                        : `${Math.round((Number(raised) / Number(cap)) * 100)}%`
+                      : '0%'
+                  }
+                  styles={buildStyles({
+                    textSize: '1.8rem',       // ✅ responsive unit
+                    textColor: '#ffffff',
+                    pathColor: '#10B981',
+                    trailColor: '#374151',
+                  })}
+                />
+              </div>
+
+              <div>
+                <span className="font-semibold text-white">Raised</span>
+                <p>
+                  {Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH
+                </p>
+              </div>
             </div>
+
+
             <div>
               <span className="font-semibold text-white">Current Price</span>
               <p>
