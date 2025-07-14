@@ -39,6 +39,7 @@ export default function PublicBuySection({
     if (val < 1) val = 1
     else if (val > maxAvailableAmount) val = maxAvailableAmount
     setAmount(val)
+    setPrice('0')
     setShowSuccess(false)
   }
 
@@ -138,7 +139,7 @@ export default function PublicBuySection({
 
       {/* ETH-based preset buttons */}
       <div className="flex flex-wrap gap-2 mb-3">
-        {[1 / 10000, 1 / 1000, 1 / 100, 1 / 10].map((fraction) => {
+        {[1 / 1000, 1 / 100, 1 / 10, 1].map((fraction) => {
           const ethAmount = token.raise_target * fraction
           return (
             <button
@@ -165,7 +166,7 @@ export default function PublicBuySection({
                   )
 
                   const rounded = Math.min(calculated2, maxAvailableAmount)
-                  const precise = parseFloat(rounded.toFixed(6))
+                  const precise = parseFloat(rounded.toFixed(2))
 
                   setAmount(precise)
                   setPrice('0')

@@ -56,6 +56,7 @@ export default function PublicSellSection({
     setAmount(val)
     setShowSuccess(false)
     setErrorMessage(null)
+    setEthReceived('0')
   }
 
   const fetchSellPrice = async () => {
@@ -162,7 +163,7 @@ export default function PublicSellSection({
 
           if (onSuccess) onSuccess()
         } else {
-          setErrorMessage('❌ Sell transaction failed. Possibly due to not enough ETH in the contract.')
+          setErrorMessage('❌ Contract has low ETH. Sell less or try later.')
           setTxHash(null)
         }
       } catch (err) {
@@ -193,10 +194,10 @@ export default function PublicSellSection({
               key={fraction}
               type="button"
               onClick={() => {
-                const value = parseFloat(sellAmount.toFixed(6))
+                const value = parseFloat(sellAmount.toFixed(2))
                 setAmount(value)
                 setShowSuccess(false)
-                setEthReceived('')
+                setEthReceived('0')
                 setErrorMessage(null)
               }}
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
@@ -208,10 +209,10 @@ export default function PublicSellSection({
         <button
           type="button"
           onClick={() => {
-            const value = parseFloat(maxSellable.toFixed(6))
+            const value = parseFloat(maxSellable.toString())
             setAmount(value)
             setShowSuccess(false)
-            setEthReceived('')
+            setEthReceived('0')
             setErrorMessage(null)
           }}
           className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"

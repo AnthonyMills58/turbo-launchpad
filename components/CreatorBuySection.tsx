@@ -39,6 +39,7 @@ export default function CreatorBuySection({
     if (val < 1) val = 1
     else if (val > maxAllowedAmount) val = maxAllowedAmount
     setAmount(val)
+    setPrice('0')
     setShowSuccess(false)
   }
 
@@ -130,7 +131,7 @@ export default function CreatorBuySection({
       </h3>
 
       <div className="flex flex-wrap gap-2 mb-3">
-        {[1 / 10000, 1 / 1000, 1 / 100, 1 / 10 ].map((fraction) => {
+        {[ 1 / 1000, 1 / 100, 1 / 10 , 1].map((fraction) => {
           const ethAmount = token.raise_target * fraction
           return (
             <button
@@ -157,7 +158,7 @@ export default function CreatorBuySection({
                 )
 
                 const rounded = Math.min(calculated, maxAllowedAmount)
-                const precise = parseFloat(rounded.toFixed(6))
+                const precise = parseFloat(rounded.toFixed(2))
 
                 setAmount(precise)
                 setPrice('0')
