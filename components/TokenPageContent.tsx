@@ -117,7 +117,7 @@ export default function TokenPageContent() {
   }
 
   return (
-  <>
+
     <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {tokens.map((token, index) => (
@@ -257,14 +257,8 @@ export default function TokenPageContent() {
       </div>
     </div>
 
-    {/* ✅ Shift CircularProgressbar text slightly left to prevent overflow */}
-    <style jsx global>{`
-      .CircularProgressbar text {
-        transform: translate(-35%,10%);
-       
-      }
-    `}</style>
-  </>
+    
+  
 )
 
  
