@@ -20,8 +20,8 @@ export function validateTokenForm(form: TokenForm, proMode: boolean): string | n
   if (!/^[a-zA-Z0-9\- ]+$/.test(form.name))
     return 'Token name can only include letters, numbers, spaces, and dashes.'
 
-  if (!form.description || form.description.length > 256)
-    return 'Description is required and must be under 256 characters.'
+ if (form.description && form.description.length > 256)
+    return 'Description must be under 256 characters.';
 
   if (form.image && !isValidUrl(form.image))
     return 'Image URL must be a valid link.'

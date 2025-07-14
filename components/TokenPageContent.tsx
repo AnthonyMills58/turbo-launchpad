@@ -9,6 +9,9 @@ import { useFilters } from '@/lib/FiltersContext'
 import { chainNamesById } from '@/lib/chains'
 import { useSync } from '@/lib/SyncContext' // ✅ NEW
 import { getUsdPrice } from '@/lib/getUsdPrice';
+import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
+import 'react-circular-progressbar/dist/styles.css'
+
 
 
 export default function TokenPageContent() {
@@ -114,6 +117,7 @@ export default function TokenPageContent() {
   }
 
   return (
+  <>
     <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {tokens.map((token, index) => (
@@ -147,25 +151,51 @@ export default function TokenPageContent() {
                   {token.name} ({token.symbol})
                 </h2>
                 <p className="text-xs text-gray-400 break-all">
-                  {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
+                  {token.contract_address.slice(0, 6)}...
+                  {token.contract_address.slice(-4)}
                 </p>
               </div>
             </div>
 
-            <p className="text-sm text-gray-300 mb-2 line-clamp-3">{token.description}</p>
+            <p className="text-sm text-gray-300 mb-2 line-clamp-3">
+              {token.description}
+            </p>
 
-            <div className="text-sm text-gray-400 mb-1">
-              Raised:{' '}
-              <span className="text-white">
-                {Number(token.eth_raised).toFixed(6).replace(/\.?0+$/, '')} ETH
-              </span>{' '}
-              / {token.raise_target} ETH
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-12 h-12">
+                  <CircularProgressbar
+                  value={
+                    Number(token.raise_target) > 0
+                      ? Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 999)
+                      : 0
+                  }
+                  text={
+                    (Number(token.eth_raised) / Number(token.raise_target)) * 100 < 1
+                      ? '<1%'
+                      : `${Math.round((Number(token.eth_raised) / Number(token.raise_target)) * 100)}%`
+                  }
+                  styles={buildStyles({
+                    textSize: '1.8rem',
+                    textColor: '#ffffff',
+                    pathColor: '#10B981',
+                    trailColor: '#374151'
+                  })}
+                />
+              </div>
+              <div className="text-sm text-gray-400 leading-tight">
+                Raised:{' '}
+                <span className="text-white">
+                  {Number(token.eth_raised).toFixed(6).replace(/\.?0+$/, '')} ETH
+                </span>{' '}
+                / {token.raise_target} ETH
+              </div>
             </div>
 
             <div className="text-sm text-gray-400 mb-1">
               Creator:{' '}
               <span className="text-white">
-                {token.creator_wallet.slice(0, 6)}...{token.creator_wallet.slice(-4)}
+                {token.creator_wallet.slice(0, 6)}...
+                {token.creator_wallet.slice(-4)}
               </span>
             </div>
 
@@ -177,7 +207,10 @@ export default function TokenPageContent() {
               <div className="text-sm text-gray-400 mb-1">
                 FDV:{' '}
                 <span className="text-white">
-                  {Number(token.fdv).toFixed(6).replace(/\.?0+$/, '')} ETH
+                  {Number(token.fdv)
+                    .toFixed(6)
+                    .replace(/\.?0+$/, '')}{' '}
+                  ETH
                 </span>
               </div>
             )}
@@ -186,20 +219,26 @@ export default function TokenPageContent() {
               <div className="text-sm text-gray-400 mb-1">
                 Market Cap:{' '}
                 <span className="text-white">
-                  {Number(token.market_cap).toFixed(6).replace(/\.?0+$/, '')} ETH
+                  {Number(token.market_cap)
+                    .toFixed(6)
+                    .replace(/\.?0+$/, '')}{' '}
+                  ETH
                   {usdPrice && (
-                    <span className="text-gray-400"> (${(token.market_cap * usdPrice).toFixed(2)})</span>
+                    <span className="text-gray-400">
+                      {' '}
+                      (${(token.market_cap * usdPrice).toFixed(2)})
+                    </span>
                   )}
                 </span>
               </div>
             )}
 
-
             {token.chain_id && (
               <div className="text-sm text-gray-400 mb-1">
                 Chain:{' '}
                 <span className="text-white">
-                  {chainNamesById[token.chain_id] ?? `Chain ID ${token.chain_id}`}
+                  {chainNamesById[token.chain_id] ??
+                    `Chain ID ${token.chain_id}`}
                 </span>
               </div>
             )}
@@ -217,7 +256,18 @@ export default function TokenPageContent() {
         ))}
       </div>
     </div>
-  )
+
+    {/* ✅ Shift CircularProgressbar text slightly left to prevent overflow */}
+    <style jsx global>{`
+      .CircularProgressbar text {
+        transform: translate(-35%,10%);
+       
+      }
+    `}</style>
+  </>
+)
+
+ 
 }
 
 

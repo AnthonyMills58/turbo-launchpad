@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 
+interface CreateTokenRequest {
+  name: string
+  symbol: string
+  description?: string
+  image?: string
+  twitter?: string
+  telegram?: string
+  website?: string
+  supply: number
+  raiseTarget: string
+  dex: string
+  curveType: string
+  creatorAddress: string
+  contractAddress: string
+  chainId: number
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
+    const body = await req.json() as CreateTokenRequest
 
     const {
       name,
@@ -12,19 +29,19 @@ export async function POST(req: NextRequest) {
       image,
       twitter,
       telegram,
-      website, // optional
+      website,
       supply,
       raiseTarget,
       dex,
       curveType,
       creatorAddress,
       contractAddress,
-      chainId, // ✅ NEW: must be passed from frontend
+      chainId,
     } = body
 
-    // ✅ Basic validation
+    // ✅ Basic validation — allow optional description
     if (
-      !name || !symbol || !description || !raiseTarget || !dex || !curveType ||
+      !name || !symbol || !raiseTarget || !dex || !curveType ||
       !creatorAddress || !contractAddress || !chainId
     ) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -42,10 +59,10 @@ export async function POST(req: NextRequest) {
       [
         name,
         symbol,
-        description,
-        image,
-        twitter,
-        telegram,
+        description ?? null,
+        image ?? null,
+        twitter ?? null,
+        telegram ?? null,
         website ?? null,
         supply,
         raiseTarget,
@@ -53,7 +70,7 @@ export async function POST(req: NextRequest) {
         curveType,
         creatorAddress.toLowerCase(),
         contractAddress,
-        chainId, // ✅ Store chain ID in DB
+        chainId,
       ]
     )
 
@@ -63,6 +80,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+
 
 
 
