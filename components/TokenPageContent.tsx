@@ -163,24 +163,27 @@ export default function TokenPageContent() {
 
             <div className="flex items-center gap-4 mb-2">
               <div className="w-12 h-12">
-                  <CircularProgressbar
-                  value={
-                    Number(token.raise_target) > 0
-                      ? Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 999)
-                      : 0
-                  }
-                  text={
-                    (Number(token.eth_raised) / Number(token.raise_target)) * 100 < 1
-                      ? '<1%'
-                      : `${Math.round((Number(token.eth_raised) / Number(token.raise_target)) * 100)}%`
-                  }
-                  styles={buildStyles({
-                    textSize: '1.8rem',
-                    textColor: '#ffffff',
-                    pathColor: '#10B981',
-                    trailColor: '#374151'
-                  })}
-                />
+                 <CircularProgressbar
+                    value={
+                      Number(token.raise_target) > 0
+                        ? Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 999)
+                        : 0
+                    }
+                    text={
+                      Number(token.raise_target) === 0 || Number(token.eth_raised) === 0
+                        ? '0%'
+                        : (Number(token.eth_raised) / Number(token.raise_target)) * 100 < 1
+                          ? '<1%'
+                          : `${Math.round((Number(token.eth_raised) / Number(token.raise_target)) * 100)}%`
+                    }
+                    styles={buildStyles({
+                      textSize: '1.8rem',
+                      textColor: '#ffffff',
+                      pathColor: '#10B981',
+                      trailColor: '#374151',
+                    })}
+                  />
+
               </div>
               <div className="text-sm text-gray-400 leading-tight">
                 Raised:{' '}

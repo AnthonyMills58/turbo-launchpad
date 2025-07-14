@@ -350,19 +350,20 @@ useEffect(() => {
                       : 0
                   }
                   text={
-                    Number(cap) > 0
-                      ? ((Number(raised) / Number(cap)) * 100) < 1
+                    Number(cap) === 0 || Number(raised) === 0
+                      ? '0%'
+                      : (Number(raised) / Number(cap)) * 100 < 1
                         ? '<1%'
                         : `${Math.round((Number(raised) / Number(cap)) * 100)}%`
-                      : '0%'
                   }
                   styles={buildStyles({
-                    textSize: '1.8rem',       // ✅ responsive unit
+                    textSize: '1.8rem',
                     textColor: '#ffffff',
                     pathColor: '#10B981',
                     trailColor: '#374151',
                   })}
                 />
+
               </div>
 
               <div>
