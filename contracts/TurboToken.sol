@@ -44,16 +44,15 @@ contract TurboToken is ERC20, Ownable {
         maxSupply = maxSupply_;
         platformFeeRecipient = platformFeeRecipient_;
 
-        // Calculate bonding curve
-        uint256 baseRaiseTarget = 5 ether;
-         // 0.005 USD in ETH (wei), assuming ETH = $2600 and maxSupply is 1000000000
-        uint256 basePriceFloor = (5e15 * 1e27) / (2600 * maxSupply);
-        uint256 graduateThreshold = (4 * maxSupply) / 1000;
-        uint256 priceFloor = (raiseTarget * basePriceFloor) / baseRaiseTarget;
+        // Bonding curve assumptions
+        uint256 graduateSupply = (maxSupply_ * 80) / 100; // 80% of max supply
+        uint256 c = 5; // Graduation price = c × base price
 
-        basePrice = (2e18 * raiseTarget) / graduateThreshold - priceFloor;
-        slope = (1e18 * (priceFloor - basePrice)) / graduateThreshold;
+        // Calculate basePrice and slope
+        basePrice = (2 * raiseTarget_ * 1e18) / (graduateSupply * (1 + c));
+        slope = ((c - 1) * basePrice * 1e18) / graduateSupply;
     }
+
 
     // ==== Modifiers ====
     modifier onlyCreator() {
