@@ -95,14 +95,24 @@ export default function CreateTokenForm() {
       const totalSupply = ethers.parseUnits(form.supply.toString(), 18)
       const platformFeeRecipient = process.env.NEXT_PUBLIC_PLATFORM_FEE_RECIPIENT as string
 
+
+
+      const isMegaEthTestnet = chainId === 6342;
+
+      const deployOverrides = isMegaEthTestnet
+        ? { gasLimit: 7_000_000n }
+        : undefined;
+
       const contract = await factory.deploy(
         tokenName,
         tokenSymbol,
         raiseTarget,
         address,
         totalSupply,
-        platformFeeRecipient
-      )
+        platformFeeRecipient,
+        deployOverrides
+      );
+
 
       await contract.waitForDeployment()
       const contractAddress = await contract.getAddress()
@@ -166,9 +176,18 @@ export default function CreateTokenForm() {
         alert('❌ Backend error: ' + data.error)
       }
     } catch (err) {
-      console.error(err)
-      alert('❌ Failed to deploy token contract.')
-    } finally {
+  console.error('Deployment error:', err)
+
+  const errorMsg =
+    err instanceof Error ? err.message : String(err)
+
+  if (errorMsg.toLowerCase().includes('gas')) {
+    alert('⚠️ Deployment failed due to gas estimation. Try again or check your ETH balance.')
+  } else {
+    alert('❌ Failed to deploy token contract.')
+  }
+}
+ finally {
       setIsSubmitting(false)
     }
   }
