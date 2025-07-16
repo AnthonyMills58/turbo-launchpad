@@ -95,14 +95,22 @@ export default function CreateTokenForm() {
       const totalSupply = ethers.parseUnits(form.supply.toString(), 18)
       const platformFeeRecipient = process.env.NEXT_PUBLIC_PLATFORM_FEE_RECIPIENT as string
 
+      const isMegaEthTestnet = chainId === 6342;
+
+      const deployOverrides = isMegaEthTestnet
+        ? { gasLimit: 7_000_000n }
+        : {}; // 👈 not undefined!
+
       const contract = await factory.deploy(
         tokenName,
         tokenSymbol,
         raiseTarget,
         address,
         totalSupply,
-        platformFeeRecipient
+        platformFeeRecipient,
+        deployOverrides // always an object
       )
+
 
       await contract.waitForDeployment()
       const contractAddress = await contract.getAddress()
