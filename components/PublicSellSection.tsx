@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { useSync } from '@/lib/SyncContext'
+import { formatValue } from '@/lib/displayFormats'
 
 export default function PublicSellSection({
   token,
@@ -176,14 +177,17 @@ export default function PublicSellSection({
     waitForTx()
   }, [txHash, publicClient, refreshWallet, fetchBalance, onSuccess, token, triggerSync])
 
-  const displayPrice = parseFloat(ethReceived).toFixed(8)
+  //const displayPrice = parseFloat(ethReceived).toFixed(8)
+  const displayPrice = formatValue(Number(ethReceived))
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#2b2e3c] p-4 rounded-lg shadow border border-[#2a2d3a] mt-0 gap-1">
       <h3 className="text-white text-sm font-semibold mb-2">
         Public Sell
         <br />
-        <span className="text-xs text-gray-400">Balance: {maxSellable}</span>
+        <span className="text-sm text-gray-400">
+          Your Balance: <span className="text-green-500">{maxSellable.toLocaleString()}</span>
+        </span>
       </h3>
 
       <div className="flex flex-wrap gap-2 mb-3">
@@ -223,7 +227,7 @@ export default function PublicSellSection({
 
       <Input
         type="number"
-        label={`Amount to Sell (0 - ${maxSellable})`}
+        label={`Amount to Sell `}
         name="sellAmount"
         value={amount}
         onChange={handleAmountChange}

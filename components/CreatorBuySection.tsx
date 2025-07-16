@@ -9,6 +9,7 @@ import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
+import {formatValue } from '@/lib/displayFormats'
 
 export default function CreatorBuySection({
   token,
@@ -18,7 +19,7 @@ export default function CreatorBuySection({
   onSuccess?: () => void
 }) {
   const maxAllowedAmount = Math.max(
-    Math.floor(token.supply * 0.2) - (token.lockedAmount ? parseFloat(token.lockedAmount) : 0),
+    Math.floor(token.supply * 0.2) - (token.creator_lock_amount ? token.creator_lock_amount : 0),
     1
   )
   const { triggerSync } = useSync()
@@ -119,7 +120,9 @@ export default function CreatorBuySection({
     waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token, triggerSync])
 
-  const displayPrice = parseFloat(price).toFixed(8)
+  const displayPrice = formatValue(Number(price));
+
+
   const isBusy = loadingPrice || isPending
 
   return (
@@ -127,11 +130,14 @@ export default function CreatorBuySection({
       <h3 className="text-white text-sm font-semibold mb-2">
         Creator Buy & Lock
         <br />
-        <span className="text-xs text-gray-400">max {maxAllowedAmount} (20% of maxSupply)</span>
+        <span className="text-sm text-gray-400">
+          max <span className="text-green-500">{maxAllowedAmount.toLocaleString()}</span>
+        </span>
+
       </h3>
 
       <div className="flex flex-wrap gap-2 mb-3">
-        {[ 1 / 1000, 1 / 100, 1 / 10 , 1].map((fraction) => {
+        {[ 1 / 10000, 1 / 1000, 1 / 100 , 1/10].map((fraction) => {
           const ethAmount = token.raise_target * fraction
           return (
             <button
@@ -178,7 +184,7 @@ export default function CreatorBuySection({
 
       <Input
         type="number"
-        label={`Amount to Buy & Lock (1 - ${maxAllowedAmount})`}
+        label={`Amount to Buy & Lock`}
         name="amount"
         value={amount}
         onChange={handleAmountChange}

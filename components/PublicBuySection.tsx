@@ -9,6 +9,7 @@ import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
+import {formatValue } from '@/lib/displayFormats'
 
 
 export default function PublicBuySection({
@@ -30,7 +31,7 @@ export default function PublicBuySection({
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
 
-  const maxAvailableAmount = token.supply - parseFloat(token.lockedAmount ?? '0') || 1
+  const maxAvailableAmount = 0.8 * token.supply - (token.total_supply || 0) +(token.creator_lock_amount || 0)/1e18
   const isBusy = loadingPrice || isPending
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,14 +128,17 @@ export default function PublicBuySection({
     waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token, triggerSync])
 
-  const displayPrice = parseFloat(price).toFixed(8)
+  const displayPrice = formatValue(Number(price));
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">
       <h3 className="text-white text-sm font-semibold mb-2">
         Public Buy
         <br />
-        <span className="text-xs text-gray-400">max {maxAvailableAmount}</span>
+        <span className="text-sm text-gray-400">
+          max <span className="text-green-500">{maxAvailableAmount.toLocaleString()}</span>
+        </span>
+
       </h3>
 
       {/* ETH-based preset buttons */}
@@ -185,7 +189,7 @@ export default function PublicBuySection({
 
       <Input
         type="number"
-        label={`Amount to Buy (1 - ${maxAvailableAmount})`}
+        label={`Amount to Buy `}
         name="amount"
         value={amount}
         onChange={handleAmountChange}

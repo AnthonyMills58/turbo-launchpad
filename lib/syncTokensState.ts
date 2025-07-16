@@ -59,11 +59,17 @@ export async function syncTokenState(
     const maxSupply = Number(tokenInfoRaw._maxSupply) / 1e18
     const currentPrice = Number(ethers.formatEther(currentPriceRaw))
     const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
-    const fdv = maxSupply * currentPrice
+    
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
     const basePrice = Number(tokenInfoRaw._basePrice)
     const slope = Number(tokenInfoRaw._slope)
     const graduated = tokenInfoRaw._graduated as boolean
+
+    //const fdv = maxSupply * currentPrice
+    const maxPrice  = basePrice + (slope * maxSupply)
+    const fdv = maxSupply *  (maxPrice+basePrice)/2e18
+
+
 
 
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}

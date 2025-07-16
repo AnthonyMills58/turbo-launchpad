@@ -16,8 +16,7 @@ import PublicSellSection from './PublicSellSection'
 import { useSync } from '@/lib/SyncContext'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
-
-
+import { formatValue } from '@/lib/displayFormats'
 
 type TokenDetailsViewProps = {
   token: Token
@@ -377,7 +376,7 @@ useEffect(() => {
               <div>
                 <span className="font-semibold text-white">Raised</span>
                 <p>
-                  {Number(raised).toFixed(6).replace(/\.?0+$/, '')} / {cap} ETH
+                  {formatValue(Number(raised))} / {cap} ETH
                 </p>
               </div>
             </div>
@@ -385,11 +384,18 @@ useEffect(() => {
 
             <div>
               <span className="font-semibold text-white">Current Price</span>
-              <p>
-                {token.current_price !== undefined
-                  ? `${Number(token.current_price).toFixed(10).replace(/\.?0+$/, '')} ETH`
-                  : '–'}
-              </p>
+             <div className="text-sm text-white">
+                <p>
+                  {token.current_price !== undefined
+                    ? `${formatValue(Number(token.current_price))} ETH`
+                    : '–'}
+                </p>
+                {usdPrice && token.current_price !== undefined && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    (${formatValue(Number(token.current_price) * usdPrice)})
+                  </p>
+                )}
+              </div>
             </div>
             <div>
               <span className="font-semibold text-white">Max Supply</span>
@@ -397,13 +403,13 @@ useEffect(() => {
             </div>
             <div>
               <span className="font-semibold text-white">Locked by Creator</span>
-              <p>{token.creator_lock_amount ? Number(token.creator_lock_amount).toFixed(0) : '0'}</p>
+              <p>{token.creator_lock_amount ? Number(token.creator_lock_amount).toLocaleString() : '0'}</p>
             </div>
             <div>
               <span className="font-semibold text-white">FDV</span>
               <p>
                 {token.fdv !== undefined
-                  ? `${Number(token.fdv).toFixed(2).replace(/\.?0+$/, '')} ETH`
+                  ? `${formatValue(Number(token.fdv))} ETH`
                   : '–'}
               </p>
             </div>
@@ -411,7 +417,7 @@ useEffect(() => {
               <div>
                 <span className="font-semibold text-white">Market Cap</span>
                 <p className="text-sm text-white">
-                  {Number(token.market_cap).toFixed(6).replace(/\.?0+$/, '')} ETH
+                  {formatValue(Number(token.market_cap))} ETH
                   {usdPrice && (
                     <span className="text-gray-400"> (${(token.market_cap * usdPrice).toFixed(2)})</span>
                   )}

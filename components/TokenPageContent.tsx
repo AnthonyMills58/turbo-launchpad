@@ -11,6 +11,7 @@ import { useSync } from '@/lib/SyncContext' // ✅ NEW
 import { getUsdPrice } from '@/lib/getUsdPrice';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
+import { formatValue } from '@/lib/displayFormats'
 
 
 
@@ -203,7 +204,7 @@ export default function TokenPageContent() {
             </div>
 
             <div className="text-sm text-gray-400 mb-1">
-              Max Supply: <span className="text-white">{token.supply}</span>
+              Max Supply: <span className="text-white">{Number(token.supply).toLocaleString()}</span>
             </div>
 
             {token.fdv && (
@@ -222,9 +223,7 @@ export default function TokenPageContent() {
               <div className="text-sm text-gray-400 mb-1">
                 Market Cap:{' '}
                 <span className="text-white">
-                  {Number(token.market_cap)
-                    .toFixed(6)
-                    .replace(/\.?0+$/, '')}{' '}
+                  {formatValue(Number(token.market_cap))}
                   ETH
                   {usdPrice && (
                     <span className="text-gray-400">

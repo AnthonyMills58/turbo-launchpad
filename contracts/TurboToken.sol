@@ -46,7 +46,7 @@ contract TurboToken is ERC20, Ownable {
 
         // Bonding curve assumptions
         uint256 graduateSupply = (maxSupply_ * 80) / 100; // 80% of max supply
-        uint256 c = 5; // Graduation price = c × base price
+        uint256 c = 1249; // Graduation price = c × base price
 
         // Calculate basePrice and slope
         basePrice = (2 * raiseTarget_ * 1e18) / (graduateSupply * (1 + c));
