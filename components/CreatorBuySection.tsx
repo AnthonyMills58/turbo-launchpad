@@ -149,7 +149,8 @@ export default function CreatorBuySection({
                   TurboTokenABI.abi,
                   signer
                 )
-                const currentPriceWei = await contract.getCurrentPrice()
+               const currentPriceWei = await contract.getCurrentPrice({ gasLimit: 7_000_000n })
+               
 
                 const calculated = calculateBuyAmountFromETH(
                   ethWei,                         // ETH in wei

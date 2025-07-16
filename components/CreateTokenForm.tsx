@@ -101,7 +101,7 @@ export default function CreateTokenForm() {
 
       const deployOverrides = isMegaEthTestnet
         ? { gasLimit: 7_000_000n }
-        : undefined;
+        : {}; // 👈 not undefined!
 
       const contract = await factory.deploy(
         tokenName,
@@ -110,9 +110,8 @@ export default function CreateTokenForm() {
         address,
         totalSupply,
         platformFeeRecipient,
-        deployOverrides
-      );
-
+        deployOverrides // always an object
+      )
 
       await contract.waitForDeployment()
       const contractAddress = await contract.getAddress()
