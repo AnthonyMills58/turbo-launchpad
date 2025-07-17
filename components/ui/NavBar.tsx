@@ -6,7 +6,12 @@ import { useAccount, useBalance } from 'wagmi'
 import { useRef, useEffect, useState } from 'react'
 import { FiSliders } from 'react-icons/fi'
 import { FaSearch } from 'react-icons/fa'
+import { MdOutlineFolderOpen } from 'react-icons/md'
+import { AiFillHome } from 'react-icons/ai'
 import { useFilters } from '@/lib/FiltersContext'
+import { HiOutlinePlusCircle } from 'react-icons/hi'
+
+
 
 export default function NavBar() {
   const router = useRouter()
@@ -55,14 +60,30 @@ export default function NavBar() {
   return (
     <nav className="w-full bg-[#151827] text-white shadow-md p-4 flex flex-wrap items-center justify-between sticky top-0 z-50">
       {/* Left Nav */}
-      <div className="flex items-center space-x-4">
-        <button onClick={() => router.push('/')} className="font-bold text-lg hover:text-purple-400">
-          Turbo Launchpad
-        </button>
-        <button onClick={() => router.push('/create')} className="hover:text-purple-300">
-          Create Token
-        </button>
-      </div>
+     <div className="flex items-center space-x-4">
+      <button
+        onClick={() => router.push('/')}
+        className="hover:text-purple-400 flex items-center space-x-1"
+      >
+        <AiFillHome className="text-xl" />
+        <span>Turbo Launch</span>
+      </button>
+      <button
+        onClick={() => router.push('/create')}
+        className="hover:text-purple-300 flex items-center space-x-1"
+      >
+        <HiOutlinePlusCircle className="text-lg" />
+        <span>Create Token</span>
+      </button>
+      <button
+        onClick={() => router.push('/portfolio')}
+        className="hover:text-purple-300 flex items-center space-x-1"
+      >
+        <MdOutlineFolderOpen className="text-lg" />
+        <span>Your Portfolio</span>
+      </button>
+  </div>
+
 
       {/* Search + Filter */}
       <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2 mt-2 sm:mt-0 relative">

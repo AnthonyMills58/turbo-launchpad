@@ -1,0 +1,160 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useAccount } from 'wagmi'
+import { PortfolioData } from '@/types/portfolio'
+import { chainNamesById } from '@/lib/chains'
+import { formatValue } from '@/lib/displayFormats'
+import { getUsdPrice } from '@/lib/getUsdPrice'
+
+export default function PortfolioView() {
+  const { address, isConnected } = useAccount()
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [ethPriceUsd, setEthPriceUsd] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!address) return
+
+    const fetchPortfolio = async () => {
+      try {
+        setLoading(true)
+
+        const [portfolioRes, usdPrice] = await Promise.all([
+          fetch('/api/portfolio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wallet: address }),
+          }),
+          getUsdPrice(),
+        ])
+
+        if (!portfolioRes.ok) throw new Error(`API error: ${portfolioRes.status}`)
+        const data: PortfolioData = await portfolioRes.json()
+        setPortfolio(data)
+        setEthPriceUsd(usdPrice)
+      } catch (error) {
+        console.error('Failed to fetch portfolio:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPortfolio()
+  }, [address])
+
+  const renderTableHeaders = (balanceLabel: string) => (
+    <thead>
+      <tr className="border-b border-gray-600 text-left">
+        <th className="py-2 px-2 w-1/6">Symbol</th>
+        <th className="py-2 px-2 w-1/5">Chain</th>
+        <th className="py-2 px-2 w-1/6">{balanceLabel}</th>
+        <th className="py-2 px-2 w-1/6 text-right">ETH Value</th>
+      </tr>
+    </thead>
+  )
+
+  const formatEthWithUsd = (ethValue: number): string => {
+    const ethFormatted = `${formatValue(ethValue)} ETH`
+    if (ethPriceUsd && ethValue > 0) {
+      const usd = ethValue * ethPriceUsd
+      return `${ethFormatted} ($${formatValue(usd)})`
+    }
+    return ethFormatted
+  }
+
+  return (
+    <div className="w-full flex justify-center">
+      <div className="max-w-[580px] w-full bg-[#151827] p-6 rounded-lg shadow-lg">
+        <h1 className="text-2xl mb-6 text-center">Your Portfolio</h1>
+
+        {!isConnected ? (
+          <p className="text-center text-gray-400">Please connect your wallet to view your portfolio.</p>
+        ) : loading ? (
+          <p className="text-center text-gray-400">Loading portfolio...</p>
+        ) : !portfolio ? (
+          <p className="text-center text-red-400">Failed to load portfolio.</p>
+        ) : (
+          <>
+            {/* Created Tokens Table */}
+            {portfolio.createdTokens.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-lg text-blue-300 mb-2">Created Tokens</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed text-sm text-green-200">
+                    {renderTableHeaders('Others Hold')}
+                    <tbody>
+                      {portfolio.createdTokens.map((token, i) => (
+                        <tr key={`created-${i}`} className="border-b border-gray-700">
+                          <td className="py-2 px-2 w-1/6">{token.symbol}</td>
+                          <td className="py-2 px-2 w-1/5">{chainNamesById[token.chainId] || token.chainId}</td>
+                          <td className="py-2 px-2 w-1/6">{Number(token.othersHoldRaw).toLocaleString()}</td>
+                          <td className="py-2 px-2 w-1/6 text-right">
+                            {formatEthWithUsd(Number(token.contractEthBalance))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Held Tokens Table */}
+            {portfolio.heldTokens.length > 0 && (
+              <div className="mb-2">
+                <h2 className="text-lg text-yellow-300 mb-2">Held Tokens</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed text-sm text-green-200">
+                    {renderTableHeaders('You Hold')}
+                    <tbody>
+                      {portfolio.heldTokens.map((token, i) => (
+                        <tr key={`held-${i}`} className="border-b border-gray-700">
+                          <td className="py-2 px-2 w-1/6">{token.symbol}</td>
+                          <td className="py-2 px-2 w-1/5">{chainNamesById[token.chainId] || token.chainId}</td>
+                          <td className="py-2 px-2 w-1/6">{Number(token.balanceRaw).toLocaleString()}</td>
+                          <td className="py-2 px-2 w-1/6 text-right">
+                            {formatEthWithUsd(Number(token.tokensValueEth))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  <tfoot>
+  <tr>
+    <td colSpan={3}></td>
+    <td className="py-3 px-2 text-right text-white border-t border-gray-600">
+      {(() => {
+        const totalCreated = portfolio.createdTokens.reduce((sum, token) => sum + Number(token.contractEthBalance || 0), 0)
+        const totalHeld = portfolio.heldTokens.reduce((sum, token) => sum + Number(token.tokensValueEth || 0), 0)
+        const totalCombined = totalCreated + totalHeld
+        const totalUsd = ethPriceUsd ? totalCombined * ethPriceUsd : null
+        return (
+          <>
+            Total: {formatValue(totalCombined)} ETH
+            {totalUsd !== null && ` ($${formatValue(totalUsd)})`}
+          </>
+        )
+      })()}
+    </td>
+  </tr>
+</tfoot>
+
+
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+
+
+
+
+
+
