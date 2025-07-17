@@ -21,13 +21,16 @@ export default function PortfolioView() {
         setLoading(true)
 
         const [portfolioRes, usdPrice] = await Promise.all([
-          fetch('/api/portfolio', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wallet: address }),
-          }),
-          getUsdPrice(),
-        ])
+            fetch('/api/portfolio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wallet: address }),
+            }),
+            getUsdPrice(),
+            ]);
+
+            console.log('[PortfolioView] getUsdPrice() returned:', usdPrice);
+
 
         if (!portfolioRes.ok) throw new Error(`API error: ${portfolioRes.status}`)
         const data: PortfolioData = await portfolioRes.json()
@@ -120,24 +123,24 @@ export default function PortfolioView() {
                       ))}
                     </tbody>
                   <tfoot>
-  <tr>
-    <td colSpan={3}></td>
-    <td className="py-3 px-2 text-right text-white border-t border-gray-600">
-      {(() => {
-        const totalCreated = portfolio.createdTokens.reduce((sum, token) => sum + Number(token.contractEthBalance || 0), 0)
-        const totalHeld = portfolio.heldTokens.reduce((sum, token) => sum + Number(token.tokensValueEth || 0), 0)
-        const totalCombined = totalCreated + totalHeld
-        const totalUsd = ethPriceUsd ? totalCombined * ethPriceUsd : null
-        return (
-          <>
-            Total: {formatValue(totalCombined)} ETH
-            {totalUsd !== null && ` ($${formatValue(totalUsd)})`}
-          </>
-        )
-      })()}
-    </td>
-  </tr>
-</tfoot>
+                        <tr>
+                            <td colSpan={3}></td>
+                            <td className="py-3 px-2 text-right text-white border-t border-gray-600">
+                            {(() => {
+                                const totalCreated = portfolio.createdTokens.reduce((sum, token) => sum + Number(token.contractEthBalance || 0), 0)
+                                const totalHeld = portfolio.heldTokens.reduce((sum, token) => sum + Number(token.tokensValueEth || 0), 0)
+                                const totalCombined = totalCreated + totalHeld
+                                const totalUsd = ethPriceUsd ? totalCombined * ethPriceUsd : null
+                                return (
+                                <>
+                                    Total: {formatValue(totalCombined)} ETH
+                                    {totalUsd !== null && ` ($${formatValue(totalUsd)})`}
+                                </>
+                                )
+                            })()}
+                            </td>
+                        </tr>
+                    </tfoot>
 
 
                   </table>

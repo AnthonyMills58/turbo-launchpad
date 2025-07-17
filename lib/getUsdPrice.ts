@@ -1,47 +1,63 @@
 // /lib/getUsdPrice.ts
-
-let cachedPrice: number | null = null
-let lastFetched = 0
-const CACHE_DURATION_MS = 60 * 1000 // 1 minute
-
 export async function getUsdPrice(): Promise<number | null> {
-  const now = Date.now()
-
-  if (cachedPrice !== null && now - lastFetched < CACHE_DURATION_MS) {
-    return cachedPrice
-  }
-
   try {
+    console.log('[getUsdPrice] Fetching ETH price from CoinGecko...');
+
     const res = await fetch(
       'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd',
       {
         method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
+        headers: { Accept: 'application/json' },
         cache: 'no-store',
       }
-    )
+    );
 
-    if (!res.ok) {
-      console.error('Failed to fetch ETH price:', res.statusText)
-      return cachedPrice // fallback to last good value
-    }
+    if (!res.ok) throw new Error('CoinGecko fetch failed');
 
-    const data = await res.json()
-    const price = data?.ethereum?.usd
+    const data = await res.json();
+    const price = data?.ethereum?.usd;
+
+    console.log('[getUsdPrice] CoinGecko returned:', price);
 
     if (typeof price === 'number') {
-      cachedPrice = price
-      lastFetched = now
-      return price
+      const saveRes = await fetch('/api/eth-price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price }),
+      });
+
+      console.log('[getUsdPrice] Saved price to DB. Response status:', saveRes.status);
+      return price;
+    } else {
+      //console.warn('[getUsdPrice] CoinGecko price was not a number:', price);
     }
 
-    return cachedPrice
+    return null;
   } catch (err) {
-    console.error('Error fetching ETH price from CoinGecko:', err)
-    return cachedPrice // fallback again
+    console.warn('[getUsdPrice] CoinGecko fetch failed:', err);
+    //console.log('[getUsdPrice] Trying fallback from DB...');
+  }
+
+  // Fallback: Load from DB
+  try {
+    const fallback = await fetch('/api/eth-price', { method: 'GET' });
+    if (!fallback.ok) throw new Error(`DB fallback response status ${fallback.status}`);
+
+    const json = await fallback.json();
+    //console.log('[getUsdPrice] Raw fallback response from DB:', json);
+
+    const priceFromDb = Number(json?.price);
+    //console.log('[getUsdPrice] Parsed fallback price as number:', priceFromDb);
+
+    const result = !isNaN(priceFromDb) ? priceFromDb : null;
+    //console.log('[getUsdPrice] Returning fallback result:', result);
+    return result;
+  } catch  {
+    //console.error('[getUsdPrice] Fallback fetch failed:', e);
+    return null;
   }
 }
+
+
 
 
