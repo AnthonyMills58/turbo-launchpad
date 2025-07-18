@@ -21,16 +21,15 @@ export default function PortfolioView() {
         setLoading(true)
 
         const [portfolioRes, usdPrice] = await Promise.all([
-            fetch('/api/portfolio', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ wallet: address }),
-            }),
-            getUsdPrice(),
-            ]);
+          fetch('/api/portfolio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wallet: address }),
+          }),
+          getUsdPrice(),
+        ])
 
-            console.log('[PortfolioView] getUsdPrice() returned:', usdPrice);
-
+        console.log('[PortfolioView] getUsdPrice() returned:', usdPrice)
 
         if (!portfolioRes.ok) throw new Error(`API error: ${portfolioRes.status}`)
         const data: PortfolioData = await portfolioRes.json()
@@ -79,6 +78,13 @@ export default function PortfolioView() {
           <p className="text-center text-red-400">Failed to load portfolio.</p>
         ) : (
           <>
+            {/* Empty Portfolio Message */}
+            {portfolio.createdTokens.length === 0 && portfolio.heldTokens.length === 0 && (
+              <p className="text-center text-gray-400">
+                You don’t have any tokens yet. Create a token or buy one to get started!
+              </p>
+            )}
+
             {/* Created Tokens Table */}
             {portfolio.createdTokens.length > 0 && (
               <div className="mb-8">
@@ -105,7 +111,7 @@ export default function PortfolioView() {
 
             {/* Held Tokens Table */}
             {portfolio.heldTokens.length > 0 && (
-              <div className="mb-2">
+              <div className="mb-4">
                 <h2 className="text-green-600 mb-2">Held Tokens</h2>
                 <div className="overflow-x-auto">
                   <table className="w-full table-fixed text-sm text-gray-300">
@@ -122,29 +128,32 @@ export default function PortfolioView() {
                         </tr>
                       ))}
                     </tbody>
-                  <tfoot>
-                        <tr>
-                            <td colSpan={3}></td>
-                            <td className="py-3 px-2 text-right text-green-600 border-t border-gray-600">
-                            {(() => {
-                                const totalCreated = portfolio.createdTokens.reduce((sum, token) => sum + Number(token.contractEthBalance || 0), 0)
-                                const totalHeld = portfolio.heldTokens.reduce((sum, token) => sum + Number(token.tokensValueEth || 0), 0)
-                                const totalCombined = totalCreated + totalHeld
-                                const totalUsd = ethPriceUsd ? totalCombined * ethPriceUsd : null
-                                return (
-                                <>
-                                    Total: {formatValue(totalCombined)} ETH
-                                    {totalUsd !== null && ` ($${formatValue(totalUsd)})`}
-                                </>
-                                )
-                            })()}
-                            </td>
-                        </tr>
-                    </tfoot>
-
-
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Total Summary */}
+            {(portfolio.createdTokens.length > 0 || portfolio.heldTokens.length > 0) && (
+              <div className="mt-2 text-right text-green-600 text-sm border-t border-gray-700 pt-3">
+                {(() => {
+                  const totalCreated = portfolio.createdTokens.reduce(
+                    (sum, token) => sum + Number(token.contractEthBalance || 0),
+                    0
+                  )
+                  const totalHeld = portfolio.heldTokens.reduce(
+                    (sum, token) => sum + Number(token.tokensValueEth || 0),
+                    0
+                  )
+                  const totalCombined = totalCreated + totalHeld
+                  const totalUsd = ethPriceUsd ? totalCombined * ethPriceUsd : null
+                  return (
+                    <>
+                      Total: {formatValue(totalCombined)} ETH
+                      {totalUsd !== null && ` ($${formatValue(totalUsd)})`}
+                    </>
+                  )
+                })()}
               </div>
             )}
           </>
@@ -153,6 +162,7 @@ export default function PortfolioView() {
     </div>
   )
 }
+
 
 
 
