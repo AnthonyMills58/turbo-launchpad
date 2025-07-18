@@ -49,7 +49,7 @@ export default function PortfolioView() {
   const renderTableHeaders = (balanceLabel: string) => (
     <thead>
       <tr className="border-b border-gray-600 text-left">
-        <th className="py-2 px-2 w-1/6">Symbol</th>
+        <th className="py-2 px-2 w-1/8">Symbol</th>
         <th className="py-2 px-2 w-1/5">Chain</th>
         <th className="py-2 px-2 w-1/6">{balanceLabel}</th>
         <th className="py-2 px-2 w-1/6 text-right">ETH Value</th>
@@ -69,12 +69,12 @@ export default function PortfolioView() {
   return (
     <div className="w-full flex justify-center">
       <div className="max-w-[580px] w-full bg-[#151827] p-6 rounded-lg shadow-lg">
-        <h1 className="text-2xl mb-6 text-center">Your Portfolio</h1>
+        <h1 className="text-2xl mb-6 text-gray-300 text-center">Your Portfolio</h1>
 
         {!isConnected ? (
-          <p className="text-center text-gray-400">Please connect your wallet to view your portfolio.</p>
+          <p className="text-center text-gray-300">Please connect your wallet to view your portfolio.</p>
         ) : loading ? (
-          <p className="text-center text-gray-400">Loading portfolio...</p>
+          <p className="text-center text-gray-300">Loading portfolio...</p>
         ) : !portfolio ? (
           <p className="text-center text-red-400">Failed to load portfolio.</p>
         ) : (
@@ -82,14 +82,14 @@ export default function PortfolioView() {
             {/* Created Tokens Table */}
             {portfolio.createdTokens.length > 0 && (
               <div className="mb-8">
-                <h2 className="text-lg text-blue-300 mb-2">Created Tokens</h2>
+                <h2 className="text-green-600 mb-2">Your Tokens</h2>
                 <div className="overflow-x-auto">
-                  <table className="w-full table-fixed text-sm text-green-200">
+                  <table className="w-full table-fixed text-sm text-gray-300">
                     {renderTableHeaders('Others Hold')}
                     <tbody>
                       {portfolio.createdTokens.map((token, i) => (
                         <tr key={`created-${i}`} className="border-b border-gray-700">
-                          <td className="py-2 px-2 w-1/6">{token.symbol}</td>
+                          <td className="py-2 px-2 w-1/8">{token.symbol}</td>
                           <td className="py-2 px-2 w-1/5">{chainNamesById[token.chainId] || token.chainId}</td>
                           <td className="py-2 px-2 w-1/6">{Number(token.othersHoldRaw).toLocaleString()}</td>
                           <td className="py-2 px-2 w-1/6 text-right">
@@ -106,14 +106,14 @@ export default function PortfolioView() {
             {/* Held Tokens Table */}
             {portfolio.heldTokens.length > 0 && (
               <div className="mb-2">
-                <h2 className="text-lg text-yellow-300 mb-2">Held Tokens</h2>
+                <h2 className="text-green-600 mb-2">Held Tokens</h2>
                 <div className="overflow-x-auto">
-                  <table className="w-full table-fixed text-sm text-green-200">
+                  <table className="w-full table-fixed text-sm text-gray-300">
                     {renderTableHeaders('You Hold')}
                     <tbody>
                       {portfolio.heldTokens.map((token, i) => (
                         <tr key={`held-${i}`} className="border-b border-gray-700">
-                          <td className="py-2 px-2 w-1/6">{token.symbol}</td>
+                          <td className="py-2 px-2 w-1/8">{token.symbol}</td>
                           <td className="py-2 px-2 w-1/5">{chainNamesById[token.chainId] || token.chainId}</td>
                           <td className="py-2 px-2 w-1/6">{Number(token.balanceRaw).toLocaleString()}</td>
                           <td className="py-2 px-2 w-1/6 text-right">
@@ -125,7 +125,7 @@ export default function PortfolioView() {
                   <tfoot>
                         <tr>
                             <td colSpan={3}></td>
-                            <td className="py-3 px-2 text-right text-white border-t border-gray-600">
+                            <td className="py-3 px-2 text-right text-green-600 border-t border-gray-600">
                             {(() => {
                                 const totalCreated = portfolio.createdTokens.reduce((sum, token) => sum + Number(token.contractEthBalance || 0), 0)
                                 const totalHeld = portfolio.heldTokens.reduce((sum, token) => sum + Number(token.tokensValueEth || 0), 0)
