@@ -175,7 +175,7 @@ export default function TokenPageContent() {
                         ? '0%'
                         : (Number(token.eth_raised) / Number(token.raise_target)) * 100 < 1
                           ? '<1%'
-                          : `${Math.round((Number(token.eth_raised) / Number(token.raise_target)) * 100)}%`
+                          : `${Math.floor((Number(token.eth_raised) / Number(token.raise_target)) * 100)}%`
                     }
                     styles={buildStyles({
                       textSize: '1.8rem',

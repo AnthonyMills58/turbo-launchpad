@@ -407,7 +407,7 @@ useEffect(() => {
                       ? '0%'
                       : (Number(raised) / Number(cap)) * 100 < 1
                         ? '<1%'
-                        : `${Math.round((Number(raised) / Number(cap)) * 100)}%`
+                        : `${Math.floor((Number(raised) / Number(cap)) * 100)}%`
                   }
                   styles={buildStyles({
                     textSize: '1.8rem',
