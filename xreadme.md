@@ -18,6 +18,10 @@ https://cryptologos.cc/
 this is a site with a list and images of crypto tokens logos
 
 
+0x000000000000000000000000000000000000dEaD
+burn tokens sending it from wallet to this address
+
+
 <a href="https://ibb.co/HTmY75WJ"><img src="https://i.ibb.co/HTmY75WJ/eos-eos-logo.png" alt="eos-eos-logo" border="0"></a> 
 <a href="https://ibb.co/Mx5v9ddF"><img src="https://i.ibb.co/Mx5v9ddF/sats-ordinals-sats-logo.png" alt="sats-ordinals-sats-logo" border="0"></a> 
 <a href="https://ibb.co/BHThZH25"><img src="https://i.ibb.co/BHThZH25/pancakeswap-cake-logo.png" alt="pancakeswap-cake-logo" border="0"></a>
@@ -34,3 +38,10 @@ https://i.ibb.co/qYj4H2FF/osmosis-osmo-logo.png
 https://i.ibb.co/wFbvLrtr/floki-inu-floki-logo.png
 https://i.ibb.co/F2Sq235/origin-dollar-ousd-logo.png
 https://i.ibb.co/Wv169LJC/storj-storj-logo.png
+
+
+Text o GTE 
+
+There’s currently no way to automatically create a pool for Turbo tokens on GTE — no API or integration is available (at least for now). Maybe they’ll add it in the future. With Bronto, it’s even more limited.
+So for now, I’ve prepared a short step-by-step guide showing how to do it manually in GTE.
+It’s very simple.

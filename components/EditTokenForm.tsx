@@ -24,6 +24,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
 
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const on_dex = token.on_dex
 
   useEffect(() => {
     if (!image) {
@@ -110,6 +111,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
         disabled={isSaving}
       />
 
+      {!on_dex && (
       <div className="mb-4">
         <label className="block text-sm font-medium text-white mb-1">DEX Name</label>
         <select
@@ -122,6 +124,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
           <option value="GTE">GTE</option>
         </select>
       </div>
+      )}
 
       <TextArea
         label="Token Description"

@@ -17,6 +17,8 @@ import { useSync } from '@/lib/SyncContext'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
+import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi } from '@/lib/dex'
+
 
 type TokenDetailsViewProps = {
   token: Token
@@ -70,6 +72,7 @@ export default function TokenDetailsView({
   }
 
   const chain = chainMap[chainId]
+  
   const explorerBaseUrl = chain?.blockExplorers?.default.url ?? ''
 
 
@@ -240,6 +243,49 @@ useEffect(() => {
 
   fetchTokenBalance()
 }, [token.contract_address])
+
+
+useEffect(() => {
+  const checkDexPool = async () => {
+    try {
+      if (token.on_dex || !token.contract_address) return
+
+      const provider = new ethers.JsonRpcProvider(chain.rpcUrls.default.http[0])
+      const routerAddress = DEX_ROUTER_BY_CHAIN[chainId]
+      const router = new ethers.Contract(routerAddress, routerAbi, provider)
+
+      const factoryAddress = await router.factory()
+      const wethAddress = await router.WETH()
+      const factory = new ethers.Contract(factoryAddress, factoryAbi, provider)
+      const pair = await factory.getPair(token.contract_address, wethAddress)
+
+      if (pair && pair !== ethers.ZeroAddress) {
+      const dexUrl =
+  chainId === 6342
+    ? `https://testnet.gte.xyz/trade/spot/${token.contract_address}/${pair}`
+    : `https://sepolia.etherscan.io/address/${pair}` 
+
+
+        await fetch('/api/mark-dex-listing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractAddress: token.contract_address,
+            dexUrl,
+          }),
+        })
+
+        setDexUrl(dexUrl)
+        onRefresh()
+      }
+    } catch (err) {
+      console.error('❌ DEX detection failed:', err)
+    }
+  }
+
+  checkDexPool()
+}, [token.contract_address])
+
 
 
   return (
@@ -429,7 +475,25 @@ useEffect(() => {
 
 
           {/* Creator Actions */}
-          {isCreator && (
+
+          {/* If token is already deployed, optionally show a link */}
+          {token.on_dex && token.dex_listing_url && (
+            <div className="mt-6">
+              <h2 className="text-white font-semibold text-lg mb-2">✅ Token is Deployed to DEX</h2>
+              <a
+                href={token.dex_listing_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:underline text-sm"
+              >
+                View Listing on DEX ↗
+              </a>
+            </div>
+          )}
+
+
+
+          {isCreator && !token.on_dex && (
             <div className="flex flex-col space-y-4">
               {/* Buy & Airdrop in one row on desktop */}
               {!isGraduated && (
@@ -504,7 +568,7 @@ useEffect(() => {
           )}
 
 
-          {!isCreator && (
+          {!isCreator && !token.on_dex && (
             <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
               {!isGraduated && (
                 <>
@@ -586,20 +650,7 @@ useEffect(() => {
             </>
           )}
 
-          {/* If token is already deployed, optionally show a link */}
-          {isCreator && isGraduated && token.on_dex && token.dex_listing_url && (
-            <div className="mt-6">
-              <h2 className="text-white font-semibold text-lg mb-2">✅ Token is Deployed to DEX</h2>
-              <a
-                href={token.dex_listing_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:underline text-sm"
-              >
-                View Listing on DEX ↗
-              </a>
-            </div>
-          )}
+          
 
         </div>
       </div>
