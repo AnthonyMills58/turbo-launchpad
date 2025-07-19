@@ -17,7 +17,7 @@ import { useSync } from '@/lib/SyncContext'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
-import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi } from '@/lib/dex'
+import { syncDexState } from '@/lib/syncDexState'
 
 
 type TokenDetailsViewProps = {
@@ -62,6 +62,7 @@ export default function TokenDetailsView({
   const raised = token.eth_raised
   const cap = token.raise_target
   const canGraduate = isCreator && !isGraduated && raised >= cap
+  const contract_address= token.contract_address
 
 
 
@@ -246,46 +247,9 @@ useEffect(() => {
 
 
 useEffect(() => {
-  const checkDexPool = async () => {
-    try {
-      if (token.on_dex || !token.contract_address) return
-
-      const provider = new ethers.JsonRpcProvider(chain.rpcUrls.default.http[0])
-      const routerAddress = DEX_ROUTER_BY_CHAIN[chainId]
-      const router = new ethers.Contract(routerAddress, routerAbi, provider)
-
-      const factoryAddress = await router.factory()
-      const wethAddress = await router.WETH()
-      const factory = new ethers.Contract(factoryAddress, factoryAbi, provider)
-      const pair = await factory.getPair(token.contract_address, wethAddress)
-
-      if (pair && pair !== ethers.ZeroAddress) {
-      const dexUrl =
-  chainId === 6342
-    ? `https://testnet.gte.xyz/trade/spot/${token.contract_address}/${pair}`
-    : `https://sepolia.etherscan.io/address/${pair}` 
-
-
-        await fetch('/api/mark-dex-listing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contractAddress: token.contract_address,
-            dexUrl,
-          }),
-        })
-
-        setDexUrl(dexUrl)
-        onRefresh()
-      }
-    } catch (err) {
-      console.error('❌ DEX detection failed:', err)
-    }
-  }
-
-  checkDexPool()
-}, [token.contract_address])
-
+  if (!contract_address || !chainId) return
+  syncDexState(token, chainId, onRefresh)
+}, [contract_address, chainId, onRefresh])
 
 
   return (

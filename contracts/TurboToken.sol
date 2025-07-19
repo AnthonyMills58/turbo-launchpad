@@ -157,11 +157,16 @@ contract TurboToken is ERC20, Ownable {
         (bool sentUser, ) = payable(msg.sender).call{value: payout}("");
         require(sentUser, "ETH payout failed");
 
+        // ✅ Lower totalRaised (excluding platform fee)
+        require(totalRaised >= payout, "totalRaised underflow");
+        totalRaised -= payout;
+
         // === Send fee to platform ===
         emit FeeAttempt(platformFeeRecipient, platformFee);
         (bool sentFee, ) = payable(platformFeeRecipient).call{value: platformFee}("");
         require(sentFee, "Platform fee transfer failed");
     }
+
 
 
     // ==== Graduation Logic ====

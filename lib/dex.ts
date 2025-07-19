@@ -20,3 +20,8 @@ export const factoryAbi = [
   'function getPair(address tokenA, address tokenB) external view returns (address)',
 ]
 
+export const pairAbi = [
+  'function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)',
+  'function token0() external view returns (address)',
+]
+
