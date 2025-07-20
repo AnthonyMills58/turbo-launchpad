@@ -423,7 +423,7 @@ useEffect(() => {
                   : '–'}
               </p>
             </div>
-            {token.market_cap !== undefined && (
+            {token.on_dex && token.market_cap !== undefined && (
               <div>
                 <span className="font-semibold text-white">Market Cap</span>
                 <p className="text-sm text-white">

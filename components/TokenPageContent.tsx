@@ -211,15 +211,13 @@ export default function TokenPageContent() {
               <div className="text-sm text-gray-400 mb-1">
                 FDV:{' '}
                 <span className="text-white">
-                  {Number(token.fdv)
-                    .toFixed(2)
-                    .replace(/\.?0+$/, '')}{' '}
+                   {formatValue(Number(token.fdv))}
                   ETH
                 </span>
               </div>
             )}
 
-            {token.market_cap && (
+            {token.on_dex && token.market_cap && (
               <div className="text-sm text-gray-400 mb-1">
                 Market Cap:{' '}
                 <span className="text-white">

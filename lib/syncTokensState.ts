@@ -1,5 +1,6 @@
 import { ethers, formatUnits } from 'ethers'
 import TurboTokenABI from './abi/TurboToken.json'
+//import db from './dbs'
 import db from './db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from './chains'
 
@@ -56,7 +57,7 @@ export async function syncTokenState(
     ])
 
     const totalSupply = Number(totalSupplyRaw) / 1e18
-    const maxSupply = Number(tokenInfoRaw._maxSupply) / 1e18
+    //const maxSupply = Number(tokenInfoRaw._maxSupply) / 1e18
     const currentPrice = Number(ethers.formatEther(currentPriceRaw))
     const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
     
@@ -66,8 +67,8 @@ export async function syncTokenState(
     const graduated = tokenInfoRaw._graduated as boolean
 
     //const fdv = maxSupply * currentPrice
-    const maxPrice  = basePrice + (slope * maxSupply)
-    const fdv = maxSupply *  (maxPrice+basePrice)/2e18
+    //const maxPrice  = basePrice + (slope * maxSupply)
+    const fdv = totalSupply * currentPrice
 
 
 
