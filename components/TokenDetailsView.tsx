@@ -18,6 +18,7 @@ import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
 import { syncDexState } from '@/lib/syncDexState'
+import CreatePool from './CreatePool'
 
 
 type TokenDetailsViewProps = {
@@ -48,13 +49,11 @@ export default function TokenDetailsView({
 
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [copiedJSON, setCopiedJSON] = useState(false)
+ 
   const [isGraduating, setIsGraduating] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
-  const [dexUrl, setDexUrl] = useState(token.dex_listing_url || '')
-  const [isSubmittingDex, setIsSubmittingDex] = useState(false)
-  const [dexSubmitSuccess, setDexSubmitSuccess] = useState(false)
-  const [dexSubmitError, setDexSubmitError] = useState(false)
+ 
+  
   const [copiedCreator, setCopiedCreator] = useState(false);
 
   const isCreator = address?.toLowerCase() === token.creator_wallet.toLowerCase()
@@ -63,7 +62,6 @@ export default function TokenDetailsView({
   const cap = token.raise_target
   const canGraduate = isCreator && !isGraduated && raised >= cap
   const contract_address= token.contract_address
-
 
 
   const chainMap = {
@@ -79,18 +77,7 @@ export default function TokenDetailsView({
 
   const explorerLink = `${explorerBaseUrl}/address/${token.contract_address}`
 
-  const dexMetadata = {
-    name: token.name,
-    symbol: token.symbol,
-    address: token.contract_address,
-    decimals: 18,
-    chainId,
-    logoURI: token.image || '',
-    website: token.website || '',
-    description: token.description || '',
-    creator: token.creator_wallet,
-    tags: ['launchpad', isGraduated ? 'graduated' : 'in-progress'],
-  }
+
 
   const handleGraduate = async () => {
     try {
@@ -183,62 +170,28 @@ export default function TokenDetailsView({
     setTimeout(() => setCopiedCreator(false), 1500);
   };
 
-  const handleCopyJSON = () => {
-    navigator.clipboard.writeText(JSON.stringify(dexMetadata, null, 2))
-    setCopiedJSON(true)
-    setTimeout(() => setCopiedJSON(false), 1500)
-  }
+ 
+ 
 
-  const handleDownloadJSON = () => {
-    const blob = new Blob([JSON.stringify(dexMetadata, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${token.symbol}_metadata.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const handleMarkDexListing = async () => {
-    try {
-      if (!dexUrl) return
-      setIsSubmittingDex(true)
-      setDexSubmitError(false)
-      const res = await fetch('/api/mark-dex-listing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contractAddress: token.contract_address,
-          dexUrl,
-        }),
-      })
-      if (!res.ok) throw new Error('Failed to update DEX status')
-      setDexSubmitSuccess(true)
-      onRefresh()
-    } catch (err) {
-      console.error('❌ Failed to mark DEX listing:', err)
-      setDexSubmitError(true)
-    } finally {
-      setIsSubmittingDex(false)
-      setTimeout(() => setDexSubmitSuccess(false), 2000)
-    }
-  }
+  
 
  const [userTokenBalance, setUserTokenBalance] = useState<number | null>(null)
+ const [userEthBalance, setUserEthBalance] = useState<number | null>(null)
 
 useEffect(() => {
   const fetchTokenBalance = async () => {
     try {
       if (!window.ethereum || !token?.contract_address) return
 
-      const provider = new ethers.BrowserProvider(window.ethereum)
+     const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
+      const eth = await provider.getBalance(await signer.getAddress())
+      setUserEthBalance(parseFloat(ethers.formatEther(eth)))
       const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
-      const balance = await contract.balanceOf(await signer.getAddress())
-      const formatted = parseFloat(ethers.formatUnits(balance, 18))
-      setUserTokenBalance(formatted)
+      const tokenBal = await contract.balanceOf(await signer.getAddress())
+      setUserTokenBalance(parseFloat(ethers.formatUnits(tokenBal, 18)))
     } catch (err) {
-      console.error('Failed to fetch user token balance:', err)
+      console.error('Failed to fetch user balances:', err)
     }
   }
 
@@ -553,66 +506,16 @@ useEffect(() => {
             </div>
           )}
 
-
-
-
-
-          {/* DEX JSON + Deployment Form */}
-          {isCreator && isGraduated && !token.on_dex && (
-            <>
-              {/* JSON Metadata Section */}
-              <div className="mb-6">
-                <h2 className="text-white font-semibold text-lg mb-2">DEX Metadata</h2>
-                <pre className="bg-black text-green-400 text-xs p-4 rounded overflow-auto max-h-60 border border-gray-700">
-                  {JSON.stringify(dexMetadata, null, 2)}
-                </pre>
-                <div className="flex gap-4 mt-2">
-                  <button
-                    onClick={handleCopyJSON}
-                    className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-sm"
-                  >
-                    📋 Copy JSON
-                  </button>
-                  <button
-                    onClick={handleDownloadJSON}
-                    className="bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 text-sm"
-                  >
-                    💾 Download JSON
-                  </button>
-                  {copiedJSON && <span className="text-green-400 text-xs mt-2">Copied!</span>}
-                </div>
-              </div>
-
-              {/* DEX Deployment Form */}
-              <div className="mt-6">
-                <h2 className="text-white font-semibold text-lg mb-2">Mark Token as Deployed to DEX</h2>
-                <input
-                  type="url"
-                  placeholder="Enter DEX listing URL (e.g. https://...)"
-                  className="w-full px-4 py-2 text-sm bg-gray-800 text-white rounded border border-gray-600 focus:outline-none"
-                  value={dexUrl}
-                  onChange={(e) => setDexUrl(e.target.value)}
-                />
-                <button
-                  onClick={handleMarkDexListing}
-                  disabled={isSubmittingDex || !dexUrl}
-                  className={`mt-2 w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                    isSubmittingDex || !dexUrl
-                      ? 'bg-neutral-700 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-yellow-500 to-pink-500 hover:brightness-110'
-                  }`}
-                >
-                  {isSubmittingDex ? 'Submitting...' : '📡 Mark as Deployed to DEX'}
-                </button>
-                {dexSubmitSuccess && (
-                  <p className="text-green-400 text-sm mt-2">✅ Token marked as deployed!</p>
-                )}
-                {dexSubmitError && (
-                  <p className="text-red-400 text-sm mt-2">❌ Failed to mark deployment. Try again.</p>
-                )}
-              </div>
-            </>
+          {/* Deployment Form */}
+          {isCreator && isGraduated && !token.on_dex && (userEthBalance ||0) > 0 && (userTokenBalance || 0) > 0 && (
+             <CreatePool
+              token={token}
+              onSuccess={onRefresh}
+              userEthBalance={userEthBalance ?? 0}
+              userTokenBalance={userTokenBalance ?? 0}
+            />
           )}
+
 
           
 

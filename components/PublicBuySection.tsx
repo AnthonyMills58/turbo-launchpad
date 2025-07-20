@@ -31,7 +31,7 @@ export default function PublicBuySection({
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
 
-  const maxAvailableAmount = 0.8 * token.supply - (token.total_supply || 0) +(token.creator_lock_amount || 0)/1e18
+  const maxAvailableAmount = token.supply - (token.total_supply || 0) +(token.creator_lock_amount || 0)/1e18 - (token.airdrop_allocations_sum)
   const isBusy = loadingPrice || isPending
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {

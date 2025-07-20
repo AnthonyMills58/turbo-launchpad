@@ -237,9 +237,19 @@ contract TurboToken is ERC20, Ownable {
         return airdropRecipients.length > 0;
     }
 
+    function unclaimedAirdropAmount() public view returns (uint256 total) {
+        for (uint256 i = 0; i < airdropRecipients.length; i++) {
+            address user = airdropRecipients[i];
+            if (!airdropClaimed[user]) {
+                total += airdropAllocations[user];
+            }
+        }
+    }   
+
     function maxSupplyForSale() public view returns (uint256) {
-        return (maxSupply * (100 - LP_AND_AIRDROP_PERCENT)) / 100;
+        return maxSupply - unclaimedAirdropAmount();
     }
+
 
     function reservedForAirdrop() public view returns (uint256) {
         return (maxSupply * LP_AND_AIRDROP_PERCENT) / 100;

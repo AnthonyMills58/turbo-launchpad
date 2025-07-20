@@ -10,9 +10,11 @@ export const DEX_ROUTER_BY_CHAIN: Record<number, string> = {
 }
 
 // ✅ Minimal ABI for UniswapV2-style Router
+// ✅ Minimal ABI for UniswapV2-style Router
 export const routerAbi = [
   'function factory() external view returns (address)',
   'function WETH() external pure returns (address)',
+  'function addLiquidityETH(address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin, address to, uint deadline) external payable returns (uint amountToken, uint amountETH, uint liquidity)'
 ]
 
 // ✅ Minimal ABI for UniswapV2-style Factory

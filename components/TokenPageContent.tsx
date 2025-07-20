@@ -7,27 +7,24 @@ import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
 import { chainNamesById } from '@/lib/chains'
-import { useSync } from '@/lib/SyncContext' // ✅ NEW
-import { getUsdPrice } from '@/lib/getUsdPrice';
+import { useSync } from '@/lib/SyncContext'
+import { getUsdPrice } from '@/lib/getUsdPrice'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
-
-
 
 export default function TokenPageContent() {
   const [usdPrice, setUsdPrice] = useState<number | null>(null)
   const searchParams = useSearchParams()
   const router = useRouter()
-  const selectedParam = searchParams.get('selected')
-  const selectedIndex = selectedParam ? Number(selectedParam) : null
+  const selectedSymbol = searchParams.get('selected') // 🔁 now using symbol instead of index
 
   const [tokens, setTokens] = useState<Token[]>([])
-  const [selectedToken, setSelectedToken] = useState<Token | null>(null)
+  const [activeToken, setActiveToken] = useState<Token | null>(null)
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount()
-  const { refreshKey } = useSync() // ✅ NEW
+  const { refreshKey } = useSync()
 
   const fetchTokens = useCallback(async () => {
     const params = new URLSearchParams({
@@ -48,14 +45,16 @@ export default function TokenPageContent() {
     try {
       const res = await fetch(`/api/all-tokens?${params.toString()}`)
       const baseTokens: Token[] = await res.json()
-
       setTokens(baseTokens)
-      setSelectedToken(selectedIndex !== null ? baseTokens[selectedIndex] : null)
+
+      const found = baseTokens.find(t => t.symbol === selectedSymbol)
+      setActiveToken(found ?? null)
     } catch (error) {
       console.error('Failed to fetch tokens:', error)
       setTokens([])
+      setActiveToken(null)
     }
-  }, [search, creatorFilter, statusFilter, sortFilter, selectedIndex, address, chain])
+  }, [search, creatorFilter, statusFilter, sortFilter, address, chain, selectedSymbol])
 
   useEffect(() => {
     getUsdPrice().then(setUsdPrice)
@@ -63,10 +62,10 @@ export default function TokenPageContent() {
 
   useEffect(() => {
     fetchTokens()
-  }, [fetchTokens, refreshKey]) // ✅ add refreshKey dependency
+  }, [fetchTokens, refreshKey])
 
-  const selectToken = (index: number) => {
-    router.push(`/?selected=${index}`)
+  const selectToken = (symbol: string) => {
+    router.push(`/?selected=${symbol}`)
   }
 
   const backToList = () => {
@@ -75,24 +74,26 @@ export default function TokenPageContent() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!tokens.length || selectedToken) return
+      if (!tokens.length || activeToken) return
+
+      const currentIndex = tokens.findIndex(t => t.symbol === selectedSymbol)
 
       if (e.key === 'ArrowDown') {
-        const nextIndex = selectedIndex === null ? 0 : Math.min(selectedIndex + 1, tokens.length - 1)
-        router.push(`/?selected=${nextIndex}`)
+        const next = currentIndex === -1 ? 0 : Math.min(currentIndex + 1, tokens.length - 1)
+        router.push(`/?selected=${tokens[next].symbol}`)
       } else if (e.key === 'ArrowUp') {
-        const prevIndex = selectedIndex === null ? tokens.length - 1 : Math.max(selectedIndex - 1, 0)
-        router.push(`/?selected=${prevIndex}`)
-      } else if (e.key === 'Enter' && selectedIndex !== null) {
-        router.push(`/?selected=${selectedIndex}`)
+        const prev = currentIndex === -1 ? tokens.length - 1 : Math.max(currentIndex - 1, 0)
+        router.push(`/?selected=${tokens[prev].symbol}`)
+      } else if (e.key === 'Enter' && currentIndex !== -1) {
+        router.push(`/?selected=${tokens[currentIndex].symbol}`)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [tokens, selectedIndex, selectedToken, router])
+  }, [tokens, selectedSymbol, activeToken, router])
 
-  if (selectedToken) {
+  if (activeToken) {
     if (!address) {
       return (
         <div className="min-h-screen bg-[#0d0f1a] p-6 text-white">
@@ -105,33 +106,32 @@ export default function TokenPageContent() {
 
     return (
       <div className="min-h-screen bg-[#0d0f1a] p-6">
-       <TokenDetailsView
-        key={refreshKey}
-        token={selectedToken}
-        usdPrice={usdPrice} // ✅ added
-        onBack={backToList}
-        onRefresh={fetchTokens}
-      />
+        <TokenDetailsView
+          key={refreshKey}
+          token={activeToken}
+          usdPrice={usdPrice}
+          onBack={backToList}
+          onRefresh={fetchTokens}
+        />
       </div>
     )
-
   }
 
   return (
 
     <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {tokens.map((token, index) => (
+        {tokens.map((token) => (
           <div
             key={token.id}
-            onClick={() => selectToken(index)}
+            onClick={() => selectToken(token.symbol)}
             tabIndex={0}
             role="button"
             onKeyDown={(e) => {
-              if (e.key === 'Enter') selectToken(index)
+              if (e.key === 'Enter') selectToken(token.symbol)
             }}
             className={`cursor-pointer rounded-xl p-4 shadow-lg border ${
-              selectedIndex === index
+             selectedSymbol === token.symbol
                 ? 'bg-[#23263a] ring-2 ring-purple-400 border-purple-500'
                 : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a]'
             }`}

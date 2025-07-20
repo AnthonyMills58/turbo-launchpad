@@ -28,6 +28,7 @@ export type Token = {
   creator_lock_amount?: number
   airdrop_finalized?: boolean
   airdrop_allocations?: Record<string, number>
+  airdrop_allocations_sum: number
   chain_id?: number
 
   // basePrice and slope (from db)

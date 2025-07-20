@@ -12,6 +12,7 @@ type SyncFields = {
   creator_lock_amount: number
   airdrop_finalized: boolean
   airdrop_allocations: Record<string, { amount: number; claimed: boolean }>
+  airdrop_allocations_sum: number
   last_synced_at: string
   total_raised: number
   base_price: number
@@ -48,12 +49,14 @@ export async function syncTokenState(
       tokenInfoRaw,
       currentPriceRaw,
       airdropFinalized,
-      totalSupplyRaw
+      totalSupplyRaw,
+      unclaimedAirdropAmountRaw
     ] = await Promise.all([
       contract.tokenInfo(),
       contract.getCurrentPrice(),
       contract.airdropFinalized(),
-      contract.totalSupply()
+      contract.totalSupply(),
+      contract.unclaimedAirdropAmount()
     ])
 
     const totalSupply = Number(totalSupplyRaw) / 1e18
@@ -65,6 +68,7 @@ export async function syncTokenState(
     const basePrice = Number(tokenInfoRaw._basePrice)
     const slope = Number(tokenInfoRaw._slope)
     const graduated = tokenInfoRaw._graduated as boolean
+    const airdrop_allocations_sum = parseFloat(ethers.formatUnits(unclaimedAirdropAmountRaw, 18))
 
     //const fdv = maxSupply * currentPrice
     //const maxPrice  = basePrice + (slope * maxSupply)
@@ -79,16 +83,16 @@ export async function syncTokenState(
       const [recipients, amounts]: [string[], bigint[]] = await contract.getAirdropAllocations()
 
       for (let i = 0; i < recipients.length; i++) {
-  const address = recipients[i]
-  const raw = amounts[i]
-  const readable = parseFloat(formatUnits(raw, 18)) // ✅ accurate
+        const address = recipients[i]
+        const raw = amounts[i]
+        const readable = parseFloat(formatUnits(raw, 18)) // ✅ accurate
 
-  const claimed = await contract.airdropClaimed(address)
+        const claimed = await contract.airdropClaimed(address)
 
-  console.log(`🔍 SYNC - ${address}: raw=${raw.toString()}, readable=${readable}, claimed=${claimed}`)
+        console.log(`🔍 SYNC - ${address}: raw=${raw.toString()}, readable=${readable}, claimed=${claimed}`)
 
-  airdropAllocations[address] = { amount: readable, claimed }
-}
+        airdropAllocations[address] = { amount: readable, claimed }
+      }
     }
 
     const marketCap = (totalSupply - creatorLockAmount) * currentPrice
@@ -105,7 +109,8 @@ export async function syncTokenState(
       total_raised: totalRaised,
       base_price: basePrice,
       slope,
-      graduated
+      graduated,
+      airdrop_allocations_sum
     }
 
     await db.query(
@@ -121,8 +126,9 @@ export async function syncTokenState(
         eth_raised = $9,
         base_price = $10,
         slope = $11,
-        is_graduated = $12
-       WHERE id = $13`,
+        is_graduated = $12,
+        airdrop_allocations_sum = $13
+       WHERE id = $14`,
       [
         syncFields.current_price,
         syncFields.fdv,
@@ -136,6 +142,7 @@ export async function syncTokenState(
         syncFields.base_price,
         syncFields.slope,
         syncFields.graduated,
+        syncFields.airdrop_allocations_sum,
         tokenId
       ]
     )
