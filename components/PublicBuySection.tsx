@@ -3,14 +3,16 @@
 import { useState, useEffect } from 'react'
 import { usePublicClient, useWriteContract } from 'wagmi'
 import { ethers } from 'ethers'
+import type { InterfaceAbi } from 'ethers'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
-import {formatValue } from '@/lib/displayFormats'
+import { formatValue } from '@/lib/displayFormats'
 
+const TURBO_ABI_ETHERS = TurboTokenABI.abi as InterfaceAbi
 
 export default function PublicBuySection({
   token,
@@ -26,12 +28,37 @@ export default function PublicBuySection({
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [maxAvailableAmount, setMaxAvailableAmount] = useState<number>(0)
 
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
 
-  const maxAvailableAmount = token.supply - (token.total_supply || 0) +(token.creator_lock_amount || 0)/1e18 - (token.airdrop_allocations_sum)
+  // ✅ Load real sale cap from chain: maxSaleSupply - totalSupply
+  useEffect(() => {
+    const loadSaleRemaining = async () => {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum)
+        const signer = await provider.getSigner()
+        const contract = new ethers.Contract(token.contract_address, TURBO_ABI_ETHERS, signer)
+
+        const [maxSaleSupplyWei, totalSupplyWei] = await Promise.all([
+          contract.maxSaleSupply(),
+          contract.totalSupply(),
+        ])
+
+        const remaining = Number(ethers.formatUnits(maxSaleSupplyWei - totalSupplyWei, 18))
+        const safe = Math.max(0, remaining)
+        setMaxAvailableAmount(safe)
+        setAmount(a => Math.min(a, safe || 0))
+      } catch (e) {
+        console.error('[PublicBuy] loadSaleRemaining failed', e)
+        setMaxAvailableAmount(0)
+      }
+    }
+    if (token?.contract_address) loadSaleRemaining()
+  }, [token?.contract_address])
+
   const isBusy = loadingPrice || isPending
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +80,7 @@ export default function PublicBuySection({
     try {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const signer = await provider.getSigner()
-      const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
+      const contract = new ethers.Contract(token.contract_address, TURBO_ABI_ETHERS, signer)
       const amountInt = ethers.parseUnits(amount.toString(), 18)
       const priceBigInt = await contract.getPrice(amountInt)
       setPrice(ethers.formatEther(priceBigInt))
@@ -74,7 +101,7 @@ export default function PublicBuySection({
       const amountWei = ethers.parseUnits(amount.toString(), 18)
       const hash = await writeContractAsync({
         address: token.contract_address as `0x${string}`,
-        abi: TurboTokenABI.abi,
+        abi: TurboTokenABI.abi, // wagmi accepts this fine
         functionName: 'buy',
         args: [amountWei],
         value: ethers.parseEther(price),
@@ -112,7 +139,7 @@ export default function PublicBuySection({
               chainId: publicClient?.chain.id,
             }),
           })
-          triggerSync() // 🔁 frontendowy refresh TokenDetailsView
+          triggerSync()
         } catch (err) {
           console.error('Failed to update or sync token:', err)
         }
@@ -128,7 +155,7 @@ export default function PublicBuySection({
     waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token, triggerSync])
 
-  const displayPrice = formatValue(Number(price));
+  const displayPrice = formatValue(Number(price))
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">
@@ -138,7 +165,6 @@ export default function PublicBuySection({
         <span className="text-sm text-gray-400">
           max <span className="text-green-500">{maxAvailableAmount.toLocaleString()}</span>
         </span>
-
       </h3>
 
       {/* ETH-based preset buttons */}
@@ -158,14 +184,14 @@ export default function PublicBuySection({
                   const signer = await provider.getSigner()
                   const contract = new ethers.Contract(
                     token.contract_address,
-                    TurboTokenABI.abi,
+                    TURBO_ABI_ETHERS,
                     signer
                   )
                   const currentPriceWei = await contract.getCurrentPrice()
 
                   const calculated2 = calculateBuyAmountFromETH(
                     ethWei,
-                    BigInt(currentPriceWei.toString()), // make sure it's bigint
+                    BigInt(currentPriceWei.toString()),
                     BigInt(Math.floor(token.slope))
                   )
 
@@ -178,7 +204,6 @@ export default function PublicBuySection({
                   console.error('Curve calc error:', err)
                 }
               }}
-
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
               {parseFloat(ethAmount.toFixed(6)).toString()} ETH
@@ -231,6 +256,7 @@ export default function PublicBuySection({
     </div>
   )
 }
+
 
 
 

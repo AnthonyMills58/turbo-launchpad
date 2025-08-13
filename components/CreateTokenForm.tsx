@@ -9,6 +9,8 @@ import TurboToken from '@/lib/abi/TurboToken.json'
 import { ethers } from 'ethers'
 import { useRouter } from 'next/navigation'
 import { useSync } from '@/lib/SyncContext'
+import { DEX_ROUTER_BY_CHAIN } from '@/lib/dex'
+
 
 export default function CreateTokenForm() {
   const { triggerSync } = useSync()
@@ -83,6 +85,16 @@ export default function CreateTokenForm() {
       const ethersProvider = new ethers.BrowserProvider(walletClient)
       const signer = await ethersProvider.getSigner()
 
+      // Resolve active chain id *now* (fallback to provider if walletClient undefined)
+      const activeChainId = walletClient?.chain?.id ?? Number((await signer.provider!.getNetwork()).chainId)
+
+      const dexRouter = DEX_ROUTER_BY_CHAIN[activeChainId]
+      if (!dexRouter) {
+        alert(`Unsupported chainId ${activeChainId}`)
+        setIsSubmitting(false)
+        return
+      }
+
       const factory = new ethers.ContractFactory(
         TurboToken.abi,
         TurboToken.bytecode,
@@ -110,7 +122,8 @@ export default function CreateTokenForm() {
         address,
         totalSupply,
         platformFeeRecipient,
-        deployOverrides // always an object
+        dexRouter,
+        deployOverrides
       )
 
       await contract.waitForDeployment()
@@ -295,7 +308,7 @@ export default function CreateTokenForm() {
             value={form.raiseTarget}
             onChange={handleChange}
             options={[
-              { label: '0.01 (test)', value: '0.01' },
+              { label: '0.001 (test)', value: '0.001' },
               { label: '5', value: '5' },
               { label: '12', value: '12' },
               { label: '25', value: '25' },
@@ -309,7 +322,6 @@ export default function CreateTokenForm() {
             onChange={handleChange}
             options={[
               { label: 'GTE', value: 'GTE' },
-              { label: 'Bronto', value: 'Bronto' },
             ]}
           />
           <Select

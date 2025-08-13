@@ -9,7 +9,7 @@ import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
-import {formatValue } from '@/lib/displayFormats'
+import { formatValue } from '@/lib/displayFormats'
 
 export default function CreatorBuySection({
   token,
@@ -18,10 +18,6 @@ export default function CreatorBuySection({
   token: Token
   onSuccess?: () => void
 }) {
-  const maxAllowedAmount = Math.max(
-    Math.floor(token.supply * 0.2) - (token.creator_lock_amount ? token.creator_lock_amount : 0),
-    1
-  )
   const { triggerSync } = useSync()
   const [amount, setAmount] = useState<number>(1.0)
   const [price, setPrice] = useState<string>('0')
@@ -29,10 +25,59 @@ export default function CreatorBuySection({
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [maxAllowedAmount, setMaxAllowedAmount] = useState<number>(0)
 
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
+
+  // ✅ Load real on-chain caps:
+  // maxAllowed = min( maxSaleSupply - totalSupply, maxCreatorLock - lockedBalances(creator) )
+  useEffect(() => {
+    const loadCaps = async () => {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum)
+        const signer = await provider.getSigner()
+        const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
+
+        // read creator addr from contract (or use token.creator_wallet if you store it)
+        const info = await contract.tokenInfo()
+        const creatorAddr: string = info._creator
+
+        // ensure connected wallet is the creator; if not, cap = 0
+        const signerAddr = await signer.getAddress()
+        if (creatorAddr.toLowerCase() !== signerAddr.toLowerCase()) {
+          setMaxAllowedAmount(0)
+          setAmount(0)
+          return
+        }
+
+        const [totalSupplyWei, maxSaleWei, maxCreatorLockWei, lockedWei] = await Promise.all([
+          contract.totalSupply(),
+          contract.maxSaleSupply(),
+          contract.maxCreatorLock(),
+          contract.lockedBalances(creatorAddr),
+        ])
+
+        const saleRemaining = Number(
+          ethers.formatUnits(maxSaleWei - totalSupplyWei, 18)
+        )
+        const creatorRemaining = Number(
+          ethers.formatUnits(maxCreatorLockWei - lockedWei, 18)
+        )
+
+        const remaining = Math.max(0, Math.min(saleRemaining, creatorRemaining))
+        setMaxAllowedAmount(remaining)
+        setAmount(a => Math.min(a, remaining || 0))
+      } catch (e) {
+        console.error('[CreatorBuy] loadCaps failed', e)
+        setMaxAllowedAmount(0)
+        setAmount(0)
+      }
+    }
+
+    if (token?.contract_address) loadCaps()
+  }, [token?.contract_address])
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = parseFloat(e.target.value)
@@ -104,7 +149,7 @@ export default function CreatorBuySection({
               chainId: publicClient?.chain.id,
             }),
           })
-          triggerSync() // 🔁 frontendowy refresh TokenDetailsView
+          triggerSync()
         } catch (err) {
           console.error('Failed to sync token state:', err)
         }
@@ -120,9 +165,7 @@ export default function CreatorBuySection({
     waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token, triggerSync])
 
-  const displayPrice = formatValue(Number(price));
-
-
+  const displayPrice = formatValue(Number(price))
   const isBusy = loadingPrice || isPending
 
   return (
@@ -133,47 +176,44 @@ export default function CreatorBuySection({
         <span className="text-sm text-gray-400">
           max <span className="text-green-500">{maxAllowedAmount.toLocaleString()}</span>
         </span>
-
       </h3>
 
       <div className="flex flex-wrap gap-2 mb-3">
-        {[ 1 / 10000, 1 / 1000, 1 / 100 , 1/10].map((fraction) => {
+        {[1 / 10000, 1 / 1000, 1 / 100, 1 / 10].map((fraction) => {
           const ethAmount = token.raise_target * fraction
           return (
             <button
               key={fraction}
               type="button"
               onClick={async () => {
-              setShowSuccess(false)
-              try {
-                const ethWei = BigInt(Math.floor(ethAmount * 1e18))
+                setShowSuccess(false)
+                try {
+                  const ethWei = BigInt(Math.floor(ethAmount * 1e18))
 
-                const provider = new ethers.BrowserProvider(window.ethereum)
-                const signer = await provider.getSigner()
-                const contract = new ethers.Contract(
-                  token.contract_address,
-                  TurboTokenABI.abi,
-                  signer
-                )
-               const currentPriceWei = await contract.getCurrentPrice()
-               
+                  const provider = new ethers.BrowserProvider(window.ethereum)
+                  const signer = await provider.getSigner()
+                  const contract = new ethers.Contract(
+                    token.contract_address,
+                    TurboTokenABI.abi,
+                    signer
+                  )
+                  const currentPriceWei = await contract.getCurrentPrice()
 
-                const calculated = calculateBuyAmountFromETH(
-                  ethWei,                         // ETH in wei
-                  BigInt(currentPriceWei.toString()), // on-chain current price in wei
-                  BigInt(Math.floor(token.slope))     // slope in wei
-                )
+                  const calculated = calculateBuyAmountFromETH(
+                    ethWei,                             // ETH in wei
+                    BigInt(currentPriceWei.toString()), // on-chain current price in wei
+                    BigInt(Math.floor(token.slope))     // slope in wei
+                  )
 
-                const rounded = Math.min(calculated, maxAllowedAmount)
-                const precise = parseFloat(rounded.toFixed(2))
+                  const rounded = Math.min(calculated, maxAllowedAmount)
+                  const precise = parseFloat(rounded.toFixed(2))
 
-                setAmount(precise)
-                setPrice('0')
-              } catch (err) {
-                console.error('Curve calc error:', err)
-              }
-            }}
-
+                  setAmount(precise)
+                  setPrice('0')
+                } catch (err) {
+                  console.error('Curve calc error:', err)
+                }
+              }}
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
               {parseFloat(ethAmount.toFixed(6)).toString()} ETH
@@ -196,7 +236,7 @@ export default function CreatorBuySection({
 
       <button
         onClick={fetchPrice}
-        disabled={!amount || isBusy}
+        disabled={!amount || isBusy || maxAllowedAmount <= 0}
         className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
       >
         {loadingPrice ? 'Checking price…' : 'Check Price'}
@@ -210,7 +250,7 @@ export default function CreatorBuySection({
 
           <button
             onClick={handleBuy}
-            disabled={isPending}
+            disabled={isPending || maxAllowedAmount <= 0}
             className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
           >
             {isPending ? 'Processing...' : 'Buy & Lock'}
@@ -226,6 +266,8 @@ export default function CreatorBuySection({
     </div>
   )
 }
+
+
 
 
 
