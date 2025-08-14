@@ -47,6 +47,10 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
 
     mapping(address => uint256) public lockedBalances;
 
+    // NEW — cooldown / early-unlock
+    uint64 public creatorUnlockTime;                 // absolute timestamp when early unlock is allowed
+    uint32 public minTokenAgeForUnlockSeconds;       // for UI/analytics
+
     // ==== Airdrop allocations ====
     mapping(address => uint256) public airdropAllocations; // 1e18-scaled amounts
     mapping(address => bool) public airdropClaimed;
@@ -61,6 +65,8 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
     event Graduated(address indexed by, uint256 ethAddedToLP, uint256 tokensAddedToLP);
     event PoolCreated(address indexed pair, uint256 liquidity);
     event LPSplit(address indexed pair, uint256 creatorLP, uint256 platformLP);
+     // NEW — event (nice for UI/sync)
+    event CreatorUnlocked(uint256 amount);
 
     // ==== Internal helpers ====
     function _divUp(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -75,17 +81,27 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
         address creator_,
         uint256 maxSupply_,
         address platformFeeRecipient_,
-        address dexRouter_
+        address dexRouter_,
+        uint16  minUnlockDays_              // NEW: UI passes days (e.g., 2, 3, 7...)
+
     ) ERC20(name_, symbol_) Ownable(creator_) {
         require(creator_ != address(0), "creator=0");
         require(platformFeeRecipient_ != address(0), "platform=0");
         require(dexRouter_ != address(0), "router=0");
+
+        // NEW: bounds (tune as you like)
+        require(minUnlockDays_ >= 2 && minUnlockDays_ <= 30, "bad minUnlockDays");
 
         raiseTarget = raiseTarget_;
         creator = creator_;
         maxSupply = maxSupply_;
         platformFeeRecipient = platformFeeRecipient_;
         dexRouter = dexRouter_;
+
+         // NEW: store seconds + compute absolute unlock time
+        uint32 seconds_ = uint32(minUnlockDays_) * uint32(1 days);
+        minTokenAgeForUnlockSeconds = seconds_;
+        creatorUnlockTime = uint64(block.timestamp) + seconds_;
 
         // Bonding curve assumptions with 70% sale cap
         uint256 graduateSupply = (maxSupply_ * MAX_SALE_BPS) / 10000; // 70% of max supply
@@ -179,6 +195,7 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
     // ==== Token Purchase Logic (fees accrued & frozen until graduation) ====
     function buy(uint256 amount) external payable onlyBeforeGraduate nonReentrant {
         require(amount > 0, "amount=0");
+        require(msg.sender != creator, "CREATOR_MUST_USE_BUYLOCK"); // NEW
         uint256 cost = getPrice(amount);
         require(msg.value >= cost, "Insufficient ETH sent");
 
@@ -338,15 +355,31 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
     }
 
     // ==== Unlock (post-graduation) ====
-    function unlockCreatorTokens() external onlyCreator {
-        require(graduated, "Not graduated yet");
+   function unlockCreatorTokens() external onlyCreator nonReentrant { // MOD: added nonReentrant
         require(lockedBalances[creator] > 0, "No locked tokens");
 
+        // NEW: allow either post-graduation or after cooldown age
+        require(
+            graduated || block.timestamp >= creatorUnlockTime,
+            "Lock active"
+        );
+
         uint256 amount = lockedBalances[creator];
+
+        // effects
         lockedBalances[creator] = 0;
-        creatorLockAmount = 0;
+        // safer accounting than hard-zeroing:
+        if (creatorLockAmount >= amount) {
+            creatorLockAmount -= amount;
+        } else {
+            creatorLockAmount = 0;
+        }
+
+        // interactions
         _transfer(address(this), creator, amount);
+        emit CreatorUnlocked(amount); // NEW
     }
+
 
     // ==== Airdrop Logic ====
     function setAirdropAllocations(

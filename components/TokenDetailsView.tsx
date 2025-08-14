@@ -2,7 +2,7 @@
 import { ethers } from 'ethers'
 import { Token } from '@/types/token'
 import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
 import PublicBuySection from './PublicBuySection'
@@ -42,7 +42,8 @@ export default function TokenDetailsView({
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [copiedCreator, setCopiedCreator] = useState(false)
 
-  const isCreator = address?.toLowerCase() === token.creator_wallet.toLowerCase()
+  const isCreator =
+    !!address && address.toLowerCase() === token.creator_wallet.toLowerCase()
   const isGraduated = token.is_graduated
   const raised = token.eth_raised
   const cap = token.raise_target
@@ -58,26 +59,44 @@ export default function TokenDetailsView({
   const explorerBaseUrl = chain?.blockExplorers?.default.url ?? ''
   const explorerLink = `${explorerBaseUrl}/address/${token.contract_address}`
 
-  // ======== NEW: unified graduation flag + guards for visibility ========
+  // ======== NEW: unified graduation flag ========
   const graduated = token.on_dex || isGraduated
-  const canUnlock =
-    isCreator &&
-    graduated &&
-    Number(token.creator_lock_amount ?? 0) > 0
+
+  // ======== NEW: compute unlock time and canUnlock ========
+  const unlockTime: number | null = useMemo(() => {
+    if (token.creator_unlock_time && token.creator_unlock_time > 0) {
+      return token.creator_unlock_time
+    }
+    if (token.created_at && token.min_token_age_for_unlock_seconds) {
+      const created = Math.floor(new Date(token.created_at).getTime() / 1000)
+      return created + token.min_token_age_for_unlock_seconds
+    }
+    return null
+  }, [token])
+
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  useEffect(() => {
+    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const hasLocked = Number(token.creator_lock_amount ?? 0) > 0
+  const cooldownReached = unlockTime !== null && now >= unlockTime
+  const canUnlock = isCreator && hasLocked && (graduated || cooldownReached)
+  // ========================================================
 
   // Detect whether airdrops exist (array or map supported)
   type AirdropAllocations =
-  | string[] // array of addresses
-  | Record<string, string | number>; // map of address -> amount
+    | string[] // array of addresses
+    | Record<string, string | number> // map of address -> amount
 
-  const allocations = token.airdrop_allocations as AirdropAllocations | undefined;
+  const allocations = token.airdrop_allocations as AirdropAllocations | undefined
 
   const hasAirdrops =
     (Array.isArray(allocations) && allocations.length > 0) ||
     (!!allocations &&
       !Array.isArray(allocations) &&
-      Object.keys(allocations).length > 0);
-  // ======================================================================
+      Object.keys(allocations).length > 0)
 
   const handleUnlock = async () => {
     try {
@@ -103,6 +122,7 @@ export default function TokenDetailsView({
         }),
       })
       triggerSync()
+      onRefresh?.()
     } catch (err) {
       console.error('❌ Unlock failed:', err)
     } finally {
@@ -134,7 +154,11 @@ export default function TokenDetailsView({
         const signer = await provider.getSigner()
         const eth = await provider.getBalance(await signer.getAddress())
         setUserEthBalance(parseFloat(ethers.formatEther(eth)))
-        const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
+        const contract = new ethers.Contract(
+          token.contract_address,
+          TurboTokenABI.abi,
+          signer
+        )
         const tokenBal = await contract.balanceOf(await signer.getAddress())
         setUserTokenBalance(parseFloat(ethers.formatUnits(tokenBal, 18)))
       } catch (err) {
@@ -305,8 +329,8 @@ export default function TokenDetailsView({
                     Number(cap) === 0 || Number(raised) === 0
                       ? '0%'
                       : (Number(raised) / Number(cap)) * 100 < 1
-                        ? '<1%'
-                        : `${Math.floor((Number(raised) / Number(cap)) * 100)}%`
+                      ? '<1%'
+                      : `${Math.floor((Number(raised) / Number(cap)) * 100)}%`
                   }
                   styles={buildStyles({
                     textSize: '1.8rem',
@@ -353,6 +377,13 @@ export default function TokenDetailsView({
                   ? Number(token.creator_lock_amount).toLocaleString()
                   : '0'}
               </p>
+              {/* (Optional) show ETA pre-grad */}
+              {!graduated && unlockTime && (
+                <p className="text-xs text-gray-500">
+                  Early unlock {cooldownReached ? 'available now' : 'at'}{' '}
+                  {new Date(unlockTime * 1000).toLocaleString()}
+                </p>
+              )}
             </div>
 
             <div>
@@ -397,9 +428,24 @@ export default function TokenDetailsView({
             </div>
           )}
 
-          {/* ====== CREATOR ACTIONS (fixed visibility) ====== */}
+          {/* ====== CREATOR ACTIONS ====== */}
           {isCreator && (
             <div className="flex flex-col space-y-4">
+              {/* Show Unlock when allowed (pre- or post-graduation) */}
+              {canUnlock && (
+                <button
+                  onClick={handleUnlock}
+                  disabled={isUnlocking}
+                  className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+                    isUnlocking
+                      ? 'bg-neutral-700 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
+                  }`}
+                >
+                  {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
+                </button>
+              )}
+
               {/* Buy & Airdrop before graduation */}
               {!graduated && (
                 <div className="flex flex-col md:flex-row md:items-start gap-4">
@@ -408,27 +454,16 @@ export default function TokenDetailsView({
                 </div>
               )}
 
-              {/* Post‑graduation: Unlock + (optional) keep AirdropForm only if airdrops exist */}
-              {graduated && (
-                <>
-                  {canUnlock && (
-                    <button
-                      onClick={handleUnlock}
-                      disabled={isUnlocking}
-                      className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                        isUnlocking
-                          ? 'bg-neutral-700 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
-                      }`}
-                    >
-                      {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
-                    </button>
-                  )}
+              {/* Creator public sell (pre-grad only if they have balance) */}
+              {!graduated && userTokenBalance !== null && userTokenBalance > 0 && (
+                <div className="w-full md:w-1/2">
+                  <PublicSellSection token={token} onSuccess={onRefresh} />
+                </div>
+              )}
 
-                  {hasAirdrops && (
-                    <AirdropForm token={token} onSuccess={onRefresh} />
-                  )}
-                </>
+              {/* Post-graduation: keep AirdropForm only if airdrops exist */}
+              {graduated && hasAirdrops && (
+                <AirdropForm token={token} onSuccess={onRefresh} />
               )}
 
               {/* ✏️ Edit Token Info */}
@@ -452,10 +487,10 @@ export default function TokenDetailsView({
             </div>
           )}
 
-          {/* ====== PUBLIC / NON‑CREATOR ACTIONS (fixed visibility) ====== */}
+          {/* ====== PUBLIC / NON-CREATOR ACTIONS ====== */}
           {!isCreator && (
             <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
-              {/* Pre‑grad: buy/sell on curve */}
+              {/* Pre-grad: buy/sell on curve */}
               {!graduated && (
                 <>
                   <div className="w-full md:w-3/4">
@@ -470,7 +505,7 @@ export default function TokenDetailsView({
                 </>
               )}
 
-              {/* Post‑grad: claim airdrops */}
+              {/* Post-grad: claim airdrops */}
               {graduated && (
                 <div className="w-full md:w-1/3">
                   <AirdropClaimForm token={token} />
@@ -483,6 +518,7 @@ export default function TokenDetailsView({
     </div>
   )
 }
+
 
 
 

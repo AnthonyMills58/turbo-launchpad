@@ -35,7 +35,12 @@ export type Token = {
   base_price: number
   slope: number
 
-  created_at?: string //
+  created_at?: string 
+  // ✅ Cooldown (store seconds, not days)
+  min_token_age_for_unlock_seconds: number
+  // Optional helpers for UI
+  unlock_at?: string            // server-computed: created_at + seconds
+  creator_unlock_time?: number  // if read from contract (unix seconds)
 
   
 }

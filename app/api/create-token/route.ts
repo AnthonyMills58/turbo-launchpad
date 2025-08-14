@@ -16,11 +16,13 @@ interface CreateTokenRequest {
   creatorAddress: string
   contractAddress: string
   chainId: number
+  // NEW:
+  minTokenAgeForUnlockSeconds?: number
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as CreateTokenRequest
+    const body = (await req.json()) as CreateTokenRequest
 
     const {
       name,
@@ -37,25 +39,45 @@ export async function POST(req: NextRequest) {
       creatorAddress,
       contractAddress,
       chainId,
+      minTokenAgeForUnlockSeconds,
     } = body
 
-    // ✅ Basic validation — allow optional description
+    // Basic validation
     if (
-      !name || !symbol || !raiseTarget || !dex || !curveType ||
-      !creatorAddress || !contractAddress || !chainId
+      !name ||
+      !symbol ||
+      !raiseTarget ||
+      !dex ||
+      !curveType ||
+      !creatorAddress ||
+      !contractAddress ||
+      typeof chainId !== 'number'
     ) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // NEW: default to 2 days if not provided by client
+    const minAgeSecs =
+      typeof minTokenAgeForUnlockSeconds === 'number' && minTokenAgeForUnlockSeconds > 0
+        ? Math.floor(minTokenAgeForUnlockSeconds)
+        : 172800 // 2 * 24 * 60 * 60
+
     const result = await pool.query(
-      `INSERT INTO tokens (
+      `
+      INSERT INTO tokens (
         name, symbol, description, image, twitter, telegram, website,
         supply, raise_target, dex, curve_type,
-        creator_wallet, contract_address, chain_id
+        creator_wallet, contract_address, chain_id,
+        min_token_age_for_unlock_seconds
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7,
-              $8, $9, $10, $11, $12, $13, $14)
-      RETURNING id`,
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11,
+        $12, $13, $14,
+        $15
+      )
+      RETURNING id
+      `,
       [
         name,
         symbol,
@@ -71,6 +93,7 @@ export async function POST(req: NextRequest) {
         creatorAddress.toLowerCase(),
         contractAddress,
         chainId,
+        minAgeSecs,
       ]
     )
 
@@ -80,6 +103,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+
 
 
 

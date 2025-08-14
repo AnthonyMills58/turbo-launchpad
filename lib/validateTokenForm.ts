@@ -11,6 +11,7 @@ export interface TokenForm {
   raiseTarget: number
   dex: string
   curveType: string
+  minUnlockDays: number
 }
 
 export function validateTokenForm(form: TokenForm, proMode: boolean): string | null {

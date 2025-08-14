@@ -1,6 +1,5 @@
 import { ethers, formatUnits } from 'ethers'
 import TurboTokenABI from './abi/TurboToken.json'
-//import db from './dbs'
 import db from './db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from './chains'
 
@@ -18,6 +17,10 @@ type SyncFields = {
   base_price: number
   slope: number
   graduated: boolean
+
+  // NEW: cooldown-related
+  min_token_age_for_unlock_seconds: number
+  creator_unlock_time: number | null
 }
 
 // ✅ Map chain IDs to their RPC URLs
@@ -50,52 +53,53 @@ export async function syncTokenState(
       currentPriceRaw,
       airdropFinalized,
       totalSupplyRaw,
-      unclaimedAirdropAmountRaw
+      unclaimedAirdropAmountRaw,
+
+      // NEW: read cooldown fields from chain
+      creatorUnlockTimeRaw,
+      minTokenAgeSecsRaw,
     ] = await Promise.all([
       contract.tokenInfo(),
       contract.getCurrentPrice(),
       contract.airdropFinalized(),
       contract.totalSupply(),
-      contract.unclaimedAirdropAmount()
+      contract.unclaimedAirdropAmount(),
+      contract.creatorUnlockTime().catch(() => 0n),
+      contract.minTokenAgeForUnlockSeconds().catch(() => 0n),
     ])
 
     const totalSupply = Number(totalSupplyRaw) / 1e18
-    //const maxSupply = Number(tokenInfoRaw._maxSupply) / 1e18
     const currentPrice = Number(ethers.formatEther(currentPriceRaw))
     const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
-    
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
     const basePrice = Number(tokenInfoRaw._basePrice)
     const slope = Number(tokenInfoRaw._slope)
     const graduated = tokenInfoRaw._graduated as boolean
     const airdrop_allocations_sum = parseFloat(ethers.formatUnits(unclaimedAirdropAmountRaw, 18))
 
-    //const fdv = maxSupply * currentPrice
-    //const maxPrice  = basePrice + (slope * maxSupply)
+    // fdv/marketcap (your current approach)
     const fdv = totalSupply * currentPrice
+    const marketCap = (totalSupply - creatorLockAmount) * currentPrice
 
-
-
-
+    // Airdrop allocations (unchanged)
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}
-
     if (airdropFinalized) {
       const [recipients, amounts]: [string[], bigint[]] = await contract.getAirdropAllocations()
-
       for (let i = 0; i < recipients.length; i++) {
         const address = recipients[i]
         const raw = amounts[i]
-        const readable = parseFloat(formatUnits(raw, 18)) // ✅ accurate
-
+        const readable = parseFloat(formatUnits(raw, 18))
         const claimed = await contract.airdropClaimed(address)
-
-        console.log(`🔍 SYNC - ${address}: raw=${raw.toString()}, readable=${readable}, claimed=${claimed}`)
-
         airdropAllocations[address] = { amount: readable, claimed }
       }
     }
 
-    const marketCap = (totalSupply - creatorLockAmount) * currentPrice
+    // NEW: normalize cooldown fields (handle legacy contracts returning 0)
+    const creatorUnlockTime = creatorUnlockTimeRaw ? Number(creatorUnlockTimeRaw) : null
+    const minAgeSecs =
+      minTokenAgeSecsRaw && Number(minTokenAgeSecsRaw) > 0
+        ? Number(minTokenAgeSecsRaw)
+        : 172800 // fallback 2d if the contract didn't have this yet
 
     const syncFields: SyncFields = {
       current_price: currentPrice,
@@ -110,7 +114,11 @@ export async function syncTokenState(
       base_price: basePrice,
       slope,
       graduated,
-      airdrop_allocations_sum
+      airdrop_allocations_sum,
+
+      // NEW
+      min_token_age_for_unlock_seconds: minAgeSecs,
+      creator_unlock_time: creatorUnlockTime,
     }
 
     await db.query(
@@ -127,8 +135,10 @@ export async function syncTokenState(
         base_price = $10,
         slope = $11,
         is_graduated = $12,
-        airdrop_allocations_sum = $13
-       WHERE id = $14`,
+        airdrop_allocations_sum = $13,
+        min_token_age_for_unlock_seconds = $14,
+        creator_unlock_time = $15
+       WHERE id = $16`,
       [
         syncFields.current_price,
         syncFields.fdv,
@@ -143,7 +153,9 @@ export async function syncTokenState(
         syncFields.slope,
         syncFields.graduated,
         syncFields.airdrop_allocations_sum,
-        tokenId
+        syncFields.min_token_age_for_unlock_seconds,
+        syncFields.creator_unlock_time,
+        tokenId,
       ]
     )
 
@@ -153,6 +165,7 @@ export async function syncTokenState(
     throw error
   }
 }
+
 
 
 

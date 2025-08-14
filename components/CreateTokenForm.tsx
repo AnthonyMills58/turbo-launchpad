@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useAccount, useWalletClient } from 'wagmi'
@@ -11,7 +10,6 @@ import { useRouter } from 'next/navigation'
 import { useSync } from '@/lib/SyncContext'
 import { DEX_ROUTER_BY_CHAIN } from '@/lib/dex'
 
-
 export default function CreateTokenForm() {
   const { triggerSync } = useSync()
   const router = useRouter()
@@ -19,6 +17,8 @@ export default function CreateTokenForm() {
   const { data: walletClient } = useWalletClient()
   const chainId = walletClient?.chain.id
   const [proMode, setProMode] = useState(false)
+
+  // ✅ NEW: add minUnlockDays with default 2
   const [form, setForm] = useState<TokenForm>({
     name: '',
     symbol: '',
@@ -31,20 +31,35 @@ export default function CreateTokenForm() {
     raiseTarget: 12,
     dex: 'GTE',
     curveType: 'linear',
+    minUnlockDays: 2, // <— NEW (2–30 recommended)
   })
+
   const [error, setError] = useState<string | null>(null)
   const [imageValid, setImageValid] = useState<boolean | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Which fields should be coerced to numbers when changed via <input>/<select>
+  const NUMERIC_FIELDS = new Set<keyof TokenForm>(['supply', 'raiseTarget', 'minUnlockDays'])
+
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) {
-    const value = e.target.type === 'number' ? Number(e.target.value) : e.target.value
-    setForm({ ...form, [e.target.name]: value })
-    setError(null)
-    if (e.target.name === 'image') {
-      setImageValid(null)
+    // Tell TS this name is one of your TokenForm keys
+    const field = e.target.name as keyof TokenForm
+    const raw = e.target.value
+
+    let parsed: unknown = raw
+    if (NUMERIC_FIELDS.has(field)) {
+      parsed = Number(raw)
     }
+
+    setForm(prev => ({
+      ...prev,
+      [field]: parsed as TokenForm[typeof field], // type-safe cast to the specific field type
+    }))
+
+    setError(null)
+    if (field === 'image') setImageValid(null)
   }
 
   const validateImageURL = (url: string) => {
@@ -86,7 +101,9 @@ export default function CreateTokenForm() {
       const signer = await ethersProvider.getSigner()
 
       // Resolve active chain id *now* (fallback to provider if walletClient undefined)
-      const activeChainId = walletClient?.chain?.id ?? Number((await signer.provider!.getNetwork()).chainId)
+      const activeChainId =
+        walletClient?.chain?.id ??
+        Number((await signer.provider!.getNetwork()).chainId)
 
       const dexRouter = DEX_ROUTER_BY_CHAIN[activeChainId]
       if (!dexRouter) {
@@ -103,18 +120,19 @@ export default function CreateTokenForm() {
 
       const tokenName = form.name
       const tokenSymbol = form.symbol.toUpperCase()
-      const raiseTarget = ethers.parseEther(form.raiseTarget.toString())
-      const totalSupply = ethers.parseUnits(form.supply.toString(), 18)
-      const platformFeeRecipient = process.env.NEXT_PUBLIC_PLATFORM_FEE_RECIPIENT as string
+      const raiseTarget = ethers.parseEther(String(form.raiseTarget))
+      const totalSupply = ethers.parseUnits(String(form.supply), 18)
+      const platformFeeRecipient = process.env
+        .NEXT_PUBLIC_PLATFORM_FEE_RECIPIENT as string
 
+      // ✅ NEW: get days for constructor + seconds for DB
+      const minUnlockDays = Number(form.minUnlockDays || 2)
+      const minTokenAgeForUnlockSeconds = minUnlockDays * 24 * 60 * 60
 
+      const isMegaEthTestnet = chainId === 6342
+      const deployOverrides = isMegaEthTestnet ? { gasLimit: 7_000_000n } : {}
 
-      const isMegaEthTestnet = chainId === 6342;
-
-      const deployOverrides = isMegaEthTestnet
-        ? { gasLimit: 7_000_000n }
-        : {}; // 👈 not undefined!
-
+      // ✅ NEW ARG ORDER: pass minUnlockDays (days) before overrides
       const contract = await factory.deploy(
         tokenName,
         tokenSymbol,
@@ -123,6 +141,7 @@ export default function CreateTokenForm() {
         totalSupply,
         platformFeeRecipient,
         dexRouter,
+        minUnlockDays, // <— NEW
         deployOverrides
       )
 
@@ -133,29 +152,28 @@ export default function CreateTokenForm() {
         contract.target as string,
         TurboToken.abi,
         signer
-      );
-
+      )
       try {
-        await typedContract.tokenInfo();
+        await typedContract.tokenInfo()
       } catch (err) {
-        console.error("❌ Failed to call tokenInfo():", err)
+        console.error('❌ Failed to call tokenInfo():', err)
       }
 
+      // ✅ include seconds in payload for DB
       const payload = {
         ...form,
+        minTokenAgeForUnlockSeconds, // <— NEW (seconds)
         symbol: tokenSymbol,
         creatorAddress: address,
         contractAddress,
-        chainId, // ✅ pass chainId here
+        chainId,
       }
-
 
       const res = await fetch('/api/create-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-
       const data = await res.json()
 
       if (data.success && data.tokenId) {
@@ -169,37 +187,41 @@ export default function CreateTokenForm() {
               chainId,
             }),
           })
-          triggerSync() // 🔁 frontendowy refresh TokenDetailsView
+          triggerSync()
           if (!chainId) {
             console.warn('Missing chainId — skipping sync')
-            return
-          }
-
-          const syncData = await syncRes.json()
-          if (!syncData.success) {
-            console.warn('⚠️ Sync failed:', syncData.error)
+          } else {
+            const syncData = await syncRes.json()
+            if (!syncData.success) {
+              console.warn('⚠️ Sync failed:', syncData.error)
+            }
           }
         } catch (syncErr) {
           console.error('❌ Error during token sync:', syncErr)
         }
 
-        router.push('/')
+        // ✅ Redirect straight to TokenDetailsView as our “Step 2”
+        // (Adjust the route if your token page path differs)
+        try {
+          const selectionKey = tokenSymbol; // you already set tokenSymbol = form.symbol.toUpperCase()
+          router.push(`/?selected=${encodeURIComponent(selectionKey)}&new=1`)
+        } catch {
+          router.push('/') // fallback
+        }
       } else {
         alert('❌ Backend error: ' + data.error)
       }
     } catch (err) {
-  console.error('Deployment error:', err)
-
-  const errorMsg =
-    err instanceof Error ? err.message : String(err)
-
-  if (errorMsg.toLowerCase().includes('gas')) {
-    alert('⚠️ Deployment failed due to gas estimation. Try again or check your ETH balance.')
-  } else {
-    alert('❌ Failed to deploy token contract.')
-  }
-}
- finally {
+      console.error('Deployment error:', err)
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      if (errorMsg.toLowerCase().includes('gas')) {
+        alert(
+          '⚠️ Deployment failed due to gas estimation. Try again or check your ETH balance.'
+        )
+      } else {
+        alert('❌ Failed to deploy token contract.')
+      }
+    } finally {
       setIsSubmitting(false)
     }
   }
@@ -315,15 +337,15 @@ export default function CreateTokenForm() {
             ]}
             suffix="ETH"
           />
+
           <Select
             label="Target DEX"
             name="dex"
             value={form.dex}
             onChange={handleChange}
-            options={[
-              { label: 'GTE', value: 'GTE' },
-            ]}
+            options={[{ label: 'GTE', value: 'GTE' }]}
           />
+
           <Select
             label="Bonding Curve Model"
             name="curveType"
@@ -339,6 +361,26 @@ export default function CreateTokenForm() {
             Controls how the price increases as users buy. Most creators choose linear.
             ⚠️ For MVP, all tokens use linear pricing under the hood.
           </p>
+
+          {/* ✅ NEW: Min Token Age for Unlock (days) */}
+          <Select
+            label="Min Token Age for Creator Unlock"
+            name="minUnlockDays"
+            value={form.minUnlockDays}
+            onChange={handleChange}
+            options={[
+              { label: '2 days (default)', value: '2' },
+              { label: '3 days', value: '3' },
+              { label: '5 days', value: '5' },
+              { label: '7 days', value: '7' },
+              { label: '14 days', value: '14' },
+              { label: '30 days', value: '30' },
+            ]}
+            suffix="days"
+          />
+          <p className="text-xs text-gray-500">
+            Creator can unlock locked tokens after this time if the token hasn’t graduated yet.
+          </p>
         </>
       )}
 
@@ -351,8 +393,8 @@ export default function CreateTokenForm() {
       </button>
     </form>
   )
-
 }
+
 
 
 
