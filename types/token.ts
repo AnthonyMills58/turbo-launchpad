@@ -42,6 +42,9 @@ export type Token = {
   unlock_at?: string            // server-computed: created_at + seconds
   creator_unlock_time?: number  // if read from contract (unix seconds)
 
+  creator_locking_closed?: boolean
+  creator_lock_cumulative?: number
+
   
 }
 

@@ -2,84 +2,99 @@ import { ethers } from 'ethers'
 import db from './db'
 import TurboTokenABI from './abi/TurboToken.json'
 import { PortfolioData, CreatedTokenInfo, HeldTokenInfo } from '../types/portfolio'
-import { megaethMainnet, megaethTestnet, sepoliaTestnet} from './chains'
+import { megaethMainnet, megaethTestnet, sepoliaTestnet } from './chains'
 
-// 🔹 Helper for network
+// -------- RPCs per chain (add more/fallbacks here if you have them) --------
 const rpcUrlsByChainId: Record<number, string> = {
   6342: megaethTestnet.rpcUrls.default.http[0],
   9999: megaethMainnet.rpcUrls.default.http[0],
   11155111: sepoliaTestnet.rpcUrls.default.http[0],
 }
 
+// -------- provider cache (module-level, reused) --------
+const providerCache: Map<number, ethers.JsonRpcProvider> = new Map()
 
-// 🔹 Bonding curve sell price formula (off-chain)
-function getSellPrice(
-  amount: bigint,
-  currentPrice: bigint,
-  slope: bigint
-): bigint {
-  if (amount === 0n) return 0n
-  const c2 = currentPrice - (slope * amount) / 10n ** 18n
-  const avgPrice = (currentPrice + c2) / 2n
-  const total = (amount * avgPrice) / 10n ** 18n
-  return total
+function getProvider(chainId: number): ethers.JsonRpcProvider {
+  const cached = providerCache.get(chainId)
+  if (cached) return cached
+
+  const url = rpcUrlsByChainId[chainId]
+  if (!url) throw new Error(`Unsupported chainId ${chainId}`)
+
+  // Provide a "static" network hint to reduce handshake churn
+  const network = { chainId, name: `chain-${chainId}` }
+  const provider = new ethers.JsonRpcProvider(url, network)
+
+  providerCache.set(chainId, provider)
+  return provider
+}
+
+// -------- generic retry with exponential backoff --------
+function sleep(ms: number) { return new Promise(res => setTimeout(res, ms)) }
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 350): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (i < attempts - 1) await sleep(delayMs * Math.pow(2, i)) // backoff
+    }
+  }
+  throw lastErr
 }
 
 export async function calculatePortfolio(wallet: string): Promise<PortfolioData> {
-  const allTokens = await db.query(`SELECT * FROM tokens`)
-
+  const rows = await db.query(`SELECT * FROM tokens`)
   const createdTokens: CreatedTokenInfo[] = []
   const heldTokens: HeldTokenInfo[] = []
 
   let totalValueEth = 0
+  const walletLc = wallet.toLowerCase()
 
-  for (const token of allTokens.rows) {
+  // NOTE: for rate-limit friendliness we keep this loop sequential.
+  for (const token of rows.rows) {
     const {
       creator_wallet,
       contract_address,
       chain_id,
       total_supply,
       creator_lock_amount,
-      current_price,
-      slope,
       symbol,
     } = token
 
-    const rpcUrl = rpcUrlsByChainId[chain_id]
-    if (!rpcUrl) continue
+    if (!chain_id || !rpcUrlsByChainId[chain_id]) continue
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl)
+    const provider = getProvider(chain_id)
     const contract = new ethers.Contract(contract_address, TurboTokenABI.abi, provider)
 
-    const balanceRaw = await contract.balanceOf(wallet)
-    const balance = BigInt(balanceRaw.toString())
+    // wallet’s ERC20 balance (wei) with retry
+    const balanceWei: bigint = await withRetry(() => contract.balanceOf(wallet))
 
-    // 🔹 User is the creator
-    if (creator_wallet && creator_wallet.toLowerCase() === wallet.toLowerCase()) {
-      const othersHold = (total_supply - creator_lock_amount)
+    // If this wallet is the creator, include “created” row
+    if (creator_wallet && String(creator_wallet).toLowerCase() === walletLc) {
+      const othersHold = Number(total_supply ?? 0) - Number(creator_lock_amount ?? 0)
+      const contractEthBalWei = await withRetry(() => provider.getBalance(contract_address))
 
       createdTokens.push({
         chainId: chain_id,
         symbol,
-        othersHoldRaw: othersHold.toString(),
-        contractEthBalance: ethers.formatEther(await provider.getBalance(contract_address)),
+        othersHoldRaw: String(Math.max(othersHold, 0)),
+        contractEthBalance: ethers.formatEther(contractEthBalWei),
       })
     }
 
-    // 🔹 User holds tokens (including if also creator)
-    if (balance > 0n) {
-      const price = getSellPrice(
-        balance,
-        ethers.parseUnits(current_price.toString(), 18),
-        BigInt(slope)
-      )
-      const tokensValueEth = ethers.formatEther(price)
+    // If this wallet holds tokens, estimate curve refund using on-chain math
+    if (balanceWei > 0n) {
+      const refundWei: bigint = await withRetry(() => contract.getSellPrice(balanceWei))
+      const tokensValueEth = ethers.formatEther(refundWei)
 
       heldTokens.push({
         chainId: chain_id,
         symbol,
-        balanceRaw: ethers.formatUnits(balance, 18),
-        tokensValueEth,
+        balanceRaw: ethers.formatUnits(balanceWei, 18),
+        tokensValueEth, // string ETH
       })
 
       totalValueEth += parseFloat(tokensValueEth)
@@ -93,4 +108,6 @@ export async function calculatePortfolio(wallet: string): Promise<PortfolioData>
     heldTokens,
   }
 }
+
+
 

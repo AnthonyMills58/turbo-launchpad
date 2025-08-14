@@ -83,6 +83,16 @@ export default function TokenDetailsView({
   const hasLocked = Number(token.creator_lock_amount ?? 0) > 0
   const cooldownReached = unlockTime !== null && now >= unlockTime
   const canUnlock = isCreator && hasLocked && (graduated || cooldownReached)
+
+  const maxCreatorLock = 0.2 * Number(token.supply)
+  const lifetimeUsed = Number(token.creator_lock_cumulative ?? 0)
+  const lifetimeLeft = Math.max(0, maxCreatorLock - lifetimeUsed)
+
+  const canCreatorBuyLock =
+    isCreator &&
+    !graduated &&
+    !token.creator_locking_closed && // 🔒 respect contract flag
+    lifetimeLeft > 0
   // ========================================================
 
   // Detect whether airdrops exist (array or map supported)
@@ -449,10 +459,23 @@ export default function TokenDetailsView({
               {/* Buy & Airdrop before graduation */}
               {!graduated && (
                 <div className="flex flex-col md:flex-row md:items-start gap-4">
-                  <CreatorBuySection token={token} onSuccess={onRefresh} />
+                  {canCreatorBuyLock ? (
+                   <CreatorBuySection token={token} onSuccess={onRefresh} />
+                 ) : (
+                   <div className="w-full md:w-3/4 text-xs text-gray-400 border border-gray-700 rounded-md p-3">
+                     <div className="font-semibold text-white mb-1">Creator Buy &amp; Lock unavailable</div>
+                     {token.creator_locking_closed ? (
+                      <span>Locking is closed by the contract (e.g., after unlock).</span>
+                     ) : (
+                       <span>
+                         Lifetime 20% cap reached ({lifetimeUsed.toLocaleString()} / {maxCreatorLock.toLocaleString()} {token.symbol}).
+                       </span>                      )}                    </div>
+                  )}
+
                   <AirdropForm token={token} onSuccess={onRefresh} />
                 </div>
               )}
+
 
               {/* Creator public sell (pre-grad only if they have balance) */}
               {!graduated && userTokenBalance !== null && userTokenBalance > 0 && (

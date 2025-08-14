@@ -18,12 +18,16 @@ type SyncFields = {
   slope: number
   graduated: boolean
 
-  // NEW: cooldown-related
+  // Cooldown-related
   min_token_age_for_unlock_seconds: number
   creator_unlock_time: number | null
+
+  // NEW: lifetime lock model
+  creator_locking_closed: boolean
+  creator_lock_cumulative: number | null
 }
 
-// ✅ Map chain IDs to their RPC URLs
+// RPCs by chain
 const rpcUrlsByChainId: Record<number, string> = {
   6342: megaethTestnet.rpcUrls.default.http[0],
   9999: megaethMainnet.rpcUrls.default.http[0],
@@ -32,9 +36,6 @@ const rpcUrlsByChainId: Record<number, string> = {
 
 /**
  * Syncs a token's on-chain state to the database
- * @param contractAddress Contract address of the token
- * @param tokenId Corresponding token ID in the DB
- * @param chainId Network the token lives on
  */
 export async function syncTokenState(
   contractAddress: string,
@@ -55,9 +56,13 @@ export async function syncTokenState(
       totalSupplyRaw,
       unclaimedAirdropAmountRaw,
 
-      // NEW: read cooldown fields from chain
+      // Cooldown-related (guard for legacy)
       creatorUnlockTimeRaw,
       minTokenAgeSecsRaw,
+
+      // NEW lifetime-lock fields (guard for legacy)
+      lockClosedRaw,
+      lockCumRaw,
     ] = await Promise.all([
       contract.tokenInfo(),
       contract.getCurrentPrice(),
@@ -66,6 +71,8 @@ export async function syncTokenState(
       contract.unclaimedAirdropAmount(),
       contract.creatorUnlockTime().catch(() => 0n),
       contract.minTokenAgeForUnlockSeconds().catch(() => 0n),
+      contract.creatorLockingClosed?.().catch?.(() => false) ?? Promise.resolve(false),
+      contract.creatorLockCumulative?.().catch?.(() => 0n) ?? Promise.resolve(0n),
     ])
 
     const totalSupply = Number(totalSupplyRaw) / 1e18
@@ -77,29 +84,33 @@ export async function syncTokenState(
     const graduated = tokenInfoRaw._graduated as boolean
     const airdrop_allocations_sum = parseFloat(ethers.formatUnits(unclaimedAirdropAmountRaw, 18))
 
-    // fdv/marketcap (your current approach)
     const fdv = totalSupply * currentPrice
     const marketCap = (totalSupply - creatorLockAmount) * currentPrice
 
-    // Airdrop allocations (unchanged)
+    // Airdrops
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}
     if (airdropFinalized) {
       const [recipients, amounts]: [string[], bigint[]] = await contract.getAirdropAllocations()
       for (let i = 0; i < recipients.length; i++) {
-        const address = recipients[i]
-        const raw = amounts[i]
-        const readable = parseFloat(formatUnits(raw, 18))
-        const claimed = await contract.airdropClaimed(address)
-        airdropAllocations[address] = { amount: readable, claimed }
+        const addr = recipients[i]
+        const amtReadable = parseFloat(formatUnits(amounts[i], 18))
+        const claimed = await contract.airdropClaimed(addr)
+        airdropAllocations[addr] = { amount: amtReadable, claimed }
       }
     }
 
-    // NEW: normalize cooldown fields (handle legacy contracts returning 0)
+    // Cooldown fields (legacy-safe)
     const creatorUnlockTime = creatorUnlockTimeRaw ? Number(creatorUnlockTimeRaw) : null
     const minAgeSecs =
       minTokenAgeSecsRaw && Number(minTokenAgeSecsRaw) > 0
         ? Number(minTokenAgeSecsRaw)
-        : 172800 // fallback 2d if the contract didn't have this yet
+        : 172800 // default 2 days for legacy
+
+    // NEW: lifetime lock model (legacy-safe)
+    const creatorLockingClosed =
+      typeof lockClosedRaw === 'boolean' ? lockClosedRaw : Boolean(lockClosedRaw)
+    const creatorLockCumulative =
+      typeof lockCumRaw === 'bigint' ? parseFloat(ethers.formatUnits(lockCumRaw, 18)) : null
 
     const syncFields: SyncFields = {
       current_price: currentPrice,
@@ -116,9 +127,11 @@ export async function syncTokenState(
       graduated,
       airdrop_allocations_sum,
 
-      // NEW
       min_token_age_for_unlock_seconds: minAgeSecs,
       creator_unlock_time: creatorUnlockTime,
+
+      creator_locking_closed: creatorLockingClosed,
+      creator_lock_cumulative: creatorLockCumulative,
     }
 
     await db.query(
@@ -137,8 +150,10 @@ export async function syncTokenState(
         is_graduated = $12,
         airdrop_allocations_sum = $13,
         min_token_age_for_unlock_seconds = $14,
-        creator_unlock_time = $15
-       WHERE id = $16`,
+        creator_unlock_time = $15,
+        creator_locking_closed = $16,
+        creator_lock_cumulative = $17
+       WHERE id = $18`,
       [
         syncFields.current_price,
         syncFields.fdv,
@@ -155,6 +170,8 @@ export async function syncTokenState(
         syncFields.airdrop_allocations_sum,
         syncFields.min_token_age_for_unlock_seconds,
         syncFields.creator_unlock_time,
+        syncFields.creator_locking_closed,
+        syncFields.creator_lock_cumulative,
         tokenId,
       ]
     )
@@ -165,6 +182,7 @@ export async function syncTokenState(
     throw error
   }
 }
+
 
 
 

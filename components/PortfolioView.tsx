@@ -29,8 +29,6 @@ export default function PortfolioView() {
           getUsdPrice(),
         ])
 
-        console.log('[PortfolioView] getUsdPrice() returned:', usdPrice)
-
         if (!portfolioRes.ok) throw new Error(`API error: ${portfolioRes.status}`)
         const data: PortfolioData = await portfolioRes.json()
         setPortfolio(data)
@@ -45,13 +43,13 @@ export default function PortfolioView() {
     fetchPortfolio()
   }, [address])
 
-  const renderTableHeaders = (balanceLabel: string) => (
+  const renderTableHeaders = (balanceLabel: string, valueLabel: string) => (
     <thead>
       <tr className="border-b border-gray-600 text-left">
         <th className="py-2 px-2 w-1/8">Symbol</th>
         <th className="py-2 px-2 w-1/5">Chain</th>
         <th className="py-2 px-2 w-1/6">{balanceLabel}</th>
-        <th className="py-2 px-2 w-1/6 text-right">ETH Value</th>
+        <th className="py-2 px-2 w-1/6 text-right">{valueLabel}</th>
       </tr>
     </thead>
   )
@@ -91,7 +89,7 @@ export default function PortfolioView() {
                 <h2 className="text-green-600 mb-2">Your Tokens</h2>
                 <div className="overflow-x-auto">
                   <table className="w-full table-fixed text-sm text-gray-300">
-                    {renderTableHeaders('Others Hold')}
+                    {renderTableHeaders('Others Hold', 'Contract ETH (locked)')}
                     <tbody>
                       {portfolio.createdTokens.map((token, i) => (
                         <tr key={`created-${i}`} className="border-b border-gray-700">
@@ -106,6 +104,10 @@ export default function PortfolioView() {
                     </tbody>
                   </table>
                 </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Note: Contract ETH is held by the token contract pre-graduation and is used to create LP automatically.
+                  It isn’t withdrawable by the creator.
+                </p>
               </div>
             )}
 
@@ -115,7 +117,7 @@ export default function PortfolioView() {
                 <h2 className="text-green-600 mb-2">Held Tokens</h2>
                 <div className="overflow-x-auto">
                   <table className="w-full table-fixed text-sm text-gray-300">
-                    {renderTableHeaders('You Hold')}
+                    {renderTableHeaders('You Hold', 'Est. Value (ETH)')}
                     <tbody>
                       {portfolio.heldTokens.map((token, i) => (
                         <tr key={`held-${i}`} className="border-b border-gray-700">
@@ -133,24 +135,37 @@ export default function PortfolioView() {
               </div>
             )}
 
-            {/* Total Summary */}
+            {/* Totals */}
             {(portfolio.createdTokens.length > 0 || portfolio.heldTokens.length > 0) && (
-              <div className="mt-2 text-right text-green-600 text-sm border-t border-gray-700 pt-3">
+              <div className="mt-2 text-right text-sm border-t border-gray-700 pt-3 space-y-1">
                 {(() => {
-                  const totalCreated = portfolio.createdTokens.reduce(
-                    (sum, token) => sum + Number(token.contractEthBalance || 0),
+                  const totalLocked = portfolio.createdTokens.reduce(
+                    (sum, t) => sum + Number(t.contractEthBalance || 0),
                     0
                   )
                   const totalHeld = portfolio.heldTokens.reduce(
-                    (sum, token) => sum + Number(token.tokensValueEth || 0),
+                    (sum, t) => sum + Number(t.tokensValueEth || 0),
                     0
                   )
-                  const totalCombined = totalCreated + totalHeld
-                  const totalUsd = ethPriceUsd ? totalCombined * ethPriceUsd : null
+                  const totalCombined = totalHeld + totalLocked
+                  const totalHeldUsd = ethPriceUsd ? totalHeld * ethPriceUsd : null
+                  const totalLockedUsd = ethPriceUsd ? totalLocked * ethPriceUsd : null
+                  const totalCombinedUsd = ethPriceUsd ? totalCombined * ethPriceUsd : null
+
                   return (
                     <>
-                      Total: {formatValue(totalCombined)} ETH
-                      {totalUsd !== null && ` ($${formatValue(totalUsd)})`}
+                      <div className="text-green-500">
+                        Held value: {formatValue(totalHeld)} ETH
+                        {totalHeldUsd !== null && ` ($${formatValue(totalHeldUsd)})`}
+                      </div>
+                      <div className="text-yellow-400">
+                        Contract ETH (locked): {formatValue(totalLocked)} ETH
+                        {totalLockedUsd !== null && ` ($${formatValue(totalLockedUsd)})`}
+                      </div>
+                      <div className="text-gray-300">
+                        Combined (info): {formatValue(totalCombined)} ETH
+                        {totalCombinedUsd !== null && ` ($${formatValue(totalCombinedUsd)})`}
+                      </div>
                     </>
                   )
                 })()}

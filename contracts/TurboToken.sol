@@ -44,6 +44,10 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
     uint256 public feesAccruedWei;  // platform fees (buy+sell) accrued & frozen until graduation
     bool public graduated;
     uint256 public creatorLockAmount;
+    // NEW: lifetime cap + close-after-unlock
+    uint256 public creatorLockCumulative;   // total ever minted via creatorBuy
+    bool    public creatorLockingClosed;    // once true, no more creatorBuy
+        
 
     mapping(address => uint256) public lockedBalances;
 
@@ -220,29 +224,42 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
         _maybeGraduateAndCreatePool();
     }
 
-    function creatorBuy(uint256 amount) external payable onlyCreator onlyBeforeGraduate nonReentrant {
+    function creatorBuy(uint256 amount)
+        external
+        payable
+        onlyCreator
+        onlyBeforeGraduate
+        nonReentrant
+    {
+        require(!creatorLockingClosed, "CREATOR_LOCKING_CLOSED"); // NEW
         require(amount > 0, "amount=0");
+
         uint256 cost = getPrice(amount);
         require(msg.value >= cost, "Insufficient ETH sent");
 
-        // Enforce overall sale cap (70%)
+        // 70% sale cap (unchanged)
         require(totalSupply() + amount <= maxSaleSupply(), "Exceeds sale cap (70%)");
-        // Enforce creator lock cap (20%)
-        require(lockedBalances[creator] + amount <= maxCreatorLock(), "Exceeds creator lock cap (20%)");
 
-        // 1% buy fee
+        // NEW: lifetime 20% cap (not just currently locked)
+        require(
+            creatorLockCumulative + amount <= maxCreatorLock(),
+            "Exceeds lifetime creator lock cap (20%)"
+        );
+
+        // 1% buy fee (unchanged)
         uint256 platformFee = (cost * 100) / 10000;
-
-        // gross on buys
         totalRaised += cost;
         feesAccruedWei += platformFee;
 
-        // Lock by minting to contract
+        // Lock by minting to contract (unchanged)
         _mint(address(this), amount);
         lockedBalances[creator] += amount;
         creatorLockAmount += amount;
 
-        // Refund dust if any
+        // NEW: bump lifetime total
+        creatorLockCumulative += amount;
+
+        // Refund dust (unchanged)
         if (msg.value > cost) {
             (bool ok, ) = payable(msg.sender).call{value: msg.value - cost}("");
             require(ok, "Refund failed");
@@ -250,6 +267,7 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
 
         _maybeGraduateAndCreatePool();
     }
+
 
     function sell(uint256 amount) external onlyBeforeGraduate nonReentrant {
         require(amount > 0, "Amount must be > 0");
@@ -355,10 +373,10 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
     }
 
     // ==== Unlock (post-graduation) ====
-   function unlockCreatorTokens() external onlyCreator nonReentrant { // MOD: added nonReentrant
+   function unlockCreatorTokens() external onlyCreator nonReentrant {
         require(lockedBalances[creator] > 0, "No locked tokens");
 
-        // NEW: allow either post-graduation or after cooldown age
+        // allow either post-graduation or after cooldown age
         require(
             graduated || block.timestamp >= creatorUnlockTime,
             "Lock active"
@@ -368,17 +386,20 @@ contract TurboToken is ERC20, Ownable, ReentrancyGuard {
 
         // effects
         lockedBalances[creator] = 0;
-        // safer accounting than hard-zeroing:
         if (creatorLockAmount >= amount) {
             creatorLockAmount -= amount;
         } else {
             creatorLockAmount = 0;
         }
 
+        // NEW: once unlocked, permanently close further Buy&Lock
+        creatorLockingClosed = true;
+
         // interactions
         _transfer(address(this), creator, amount);
-        emit CreatorUnlocked(amount); // NEW
+        emit CreatorUnlocked(amount);
     }
+
 
 
     // ==== Airdrop Logic ====
