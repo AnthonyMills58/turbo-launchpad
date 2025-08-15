@@ -167,7 +167,6 @@ export default function PublicBuySection({
         </span>
       </h3>
 
-      {/* ETH-based preset buttons */}
       <div className="flex flex-wrap gap-2 mb-3">
         {[1 / 1000, 1 / 100, 1 / 10, 1].map((fraction) => {
           const ethAmount = token.raise_target * fraction

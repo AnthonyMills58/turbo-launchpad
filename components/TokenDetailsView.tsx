@@ -462,13 +462,13 @@ export default function TokenDetailsView({
                   {canCreatorBuyLock ? (
                    <CreatorBuySection token={token} onSuccess={onRefresh} />
                  ) : (
-                   <div className="w-full md:w-3/4 text-xs text-gray-400 border border-gray-700 rounded-md p-3">
+                   <div className="w-full md:w-7/16 text-xs text-gray-400 border border-gray-700 rounded-md p-3">
                      <div className="font-semibold text-white mb-1">Creator Buy &amp; Lock unavailable</div>
                      {token.creator_locking_closed ? (
-                      <span>Locking is closed by the contract (e.g., after unlock).</span>
+                      <span>Locking is closed by the contract</span>
                      ) : (
                        <span>
-                         Lifetime 20% cap reached ({lifetimeUsed.toLocaleString()} / {maxCreatorLock.toLocaleString()} {token.symbol}).
+                         Lifetime 20% cap reached ({lifetimeUsed.toLocaleString()}).
                        </span>                      )}                    </div>
                   )}
 

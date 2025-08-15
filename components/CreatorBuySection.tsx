@@ -221,13 +221,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
   const displayPrice = formatValue(Number(price))
   const isBusy = loadingPrice || isPending
 
-  const quickButtons = [
-    { label: '0.0001', fraction: 1 / 10000 },
-    { label: '0.001',  fraction: 1 / 1000  },
-    { label: '0.01',   fraction: 1 / 100   },
-    { label: '0.1',    fraction: 1 / 10    },
-  ] as const
-
+  
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">
       <h3 className="text-white text-sm font-semibold mb-2">
@@ -236,7 +230,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
         <span className="text-sm text-gray-400">
           lifetime left:{' '}
           <span className="text-green-500">
-            {lifetimeLeft.toLocaleString()} {token.symbol}
+            {lifetimeLeft.toLocaleString()} 
           </span>
         </span>
       </h3>
@@ -254,16 +248,15 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
       )}
 
       <div className="flex flex-wrap gap-2 mb-3">
-        {quickButtons.map(({ label, fraction }) => {
+          {[1 / 10000, 1 / 1000, 1 / 100, 1 / 10].map((fraction) => {
           const ethAmount = token.raise_target * fraction
           return (
             <button
-              key={label}
+              key={fraction}
               type="button"
-             onClick={async () => {
+              onClick={async () => {
               setShowSuccess(false);
               if (!isCreatorWallet) return;
-
               try {
                 // 1) Convert preset ETH (number) → wei (bigint)
                 const ethWei = BigInt(Math.floor(ethAmount * 1e18));
@@ -279,14 +272,13 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
 
                 const currentPriceWei = await contract.getCurrentPrice(); // bigint
 
-                // 3) Use the SAME helper + argument types/units as PublicBuySection
                 const calculated = calculateBuyAmountFromETH(
                   ethWei,                                   // ETH in wei (bigint)
                   BigInt(currentPriceWei.toString()),       // price in wei/token (bigint)
                   BigInt(Math.floor(token.slope))           // slope (bigint from DB number)
                 );
 
-                // 4) Clamp and update UI
+               
                 const rounded = Math.min(calculated, maxAllowedAmount);
                 const precise = parseFloat(rounded.toFixed(2));
 
@@ -300,7 +292,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs disabled:opacity-50"
               disabled={!isCreatorWallet || lockingClosed || maxAllowedAmount <= 0}
             >
-              {label} ETH
+              {parseFloat(ethAmount.toFixed(6)).toString()} ETH
             </button>
           )
         })}
