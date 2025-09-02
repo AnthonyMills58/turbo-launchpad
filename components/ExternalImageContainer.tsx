@@ -1,0 +1,61 @@
+'use client'
+
+import { useState } from 'react'
+import Image from 'next/image'
+
+interface ExternalImageContainerProps {
+  src: string
+  alt: string
+  baseWidth: number
+  className?: string
+  draggable?: boolean
+}
+
+export default function ExternalImageContainer({
+  src,
+  alt,
+  baseWidth,
+  className = '',
+  draggable = false
+}: ExternalImageContainerProps) {
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageError, setImageError] = useState(false)
+
+  if (imageError) {
+    return (
+      <div
+        className={`w-12 h-8 bg-gray-700 rounded-lg flex items-center justify-center text-sm font-bold ${className}`}
+        style={{ width: `${baseWidth}px`, height: `${Math.max(baseWidth * 0.5, 32)}px` }}
+      >
+        {alt[0]?.toUpperCase() || '?'}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`overflow-hidden ${className}`}
+      style={{
+        width: `${baseWidth}px`,
+        height: `${Math.max(baseWidth * 0.5, 32)}px`
+      }}
+    >
+      <Image
+        src={src}
+        alt={alt}
+        width={baseWidth}
+        height={Math.max(baseWidth * 0.5, 32)}
+        className="w-full h-full object-contain object-center"
+        draggable={draggable}
+        style={{ display: imageLoaded ? 'block' : 'none' }}
+        onLoad={() => setImageLoaded(true)}
+        onError={() => setImageError(true)}
+      />
+      {!imageLoaded && !imageError && (
+        <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+          <div className="animate-pulse bg-gray-600 w-8 h-8 rounded"></div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -13,6 +13,7 @@ import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
 import LogoContainer from './LogoContainer'
+import ExternalImageContainer from './ExternalImageContainer'
 
 export default function TokenPageContent() {
   const [usdPrice, setUsdPrice] = useState<number | null>(null)
@@ -154,7 +155,7 @@ export default function TokenPageContent() {
                 </>
                               ) : token.image ? (
                   <>
-                    <LogoContainer
+                    <ExternalImageContainer
                       src={token.image}
                       alt={token.name}
                       baseWidth={48}

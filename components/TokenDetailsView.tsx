@@ -18,6 +18,7 @@ import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
 import { syncDexState } from '@/lib/syncDexState'
 import LogoContainer from './LogoContainer'
+import ExternalImageContainer from './ExternalImageContainer'
 
 type TokenDetailsViewProps = {
   token: Token
@@ -212,7 +213,7 @@ export default function TokenDetailsView({
             </>
           ) : token.image ? (
             <>
-              <LogoContainer
+              <ExternalImageContainer
                 src={token.image}
                 alt={token.name}
                 baseWidth={128}
