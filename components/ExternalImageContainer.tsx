@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 
 interface ExternalImageContainerProps {
   src: string
@@ -40,17 +39,15 @@ export default function ExternalImageContainer({
         height: `${Math.max(baseWidth * 0.5, 32)}px`
       }}
     >
-      <Image
-        src={src}
-        alt={alt}
-        width={baseWidth}
-        height={Math.max(baseWidth * 0.5, 32)}
-        className="w-full h-full object-contain object-center"
-        draggable={draggable}
-        style={{ display: imageLoaded ? 'block' : 'none' }}
-        onLoad={() => setImageLoaded(true)}
-        onError={() => setImageError(true)}
-      />
+             <img
+         src={src}
+         alt={alt}
+         className="w-full h-full object-contain object-center"
+         draggable={draggable}
+         style={{ display: imageLoaded ? 'block' : 'none' }}
+         onLoad={() => setImageLoaded(true)}
+         onError={() => setImageError(true)}
+       />
       {!imageLoaded && !imageError && (
         <div className="w-full h-full bg-gray-700 flex items-center justify-center">
           <div className="animate-pulse bg-gray-600 w-8 h-8 rounded"></div>
