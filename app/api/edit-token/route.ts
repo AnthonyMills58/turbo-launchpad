@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       dex,
       description,
       image,
+      logoAssetId,
     } = data
 
     if (!tokenId) {
@@ -28,8 +29,9 @@ export async function POST(req: NextRequest) {
         dex = $4,
         description = $5,
         image = $6,
+        token_logo_asset_id = $7,
         updated_at = NOW()
-      WHERE id = $7
+      WHERE id = $8
     `,
       [
         website || null,
@@ -38,6 +40,7 @@ export async function POST(req: NextRequest) {
         dex || null,
         description || null,
         image || null,
+        logoAssetId || null,
         tokenId,
       ]
     )

@@ -17,6 +17,7 @@ import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
 import { syncDexState } from '@/lib/syncDexState'
+import LogoContainer from './LogoContainer'
 
 type TokenDetailsViewProps = {
   token: Token
@@ -195,18 +196,36 @@ export default function TokenDetailsView({
       <div className="flex flex-col sm:flex-row gap-6">
         {/* Left side: Image + Basic Info */}
         <div className="flex-shrink-0">
-          {token.image ? (
-            <img
-              src={token.image}
-              alt={token.name}
-              className="w-24 h-24 rounded-full object-cover"
-              draggable={false}
-            />
-          ) : (
-            <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center text-2xl font-bold">
-              {token.symbol[0]}
-            </div>
-          )}
+          {token.token_logo_asset_id ? (
+            <>
+              <LogoContainer
+                     src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
+                     alt={token.name}
+                     baseWidth={128}
+                     className="rounded-xl"
+                     draggable={false}
+                     onError={() => {
+                       // Fallback to placeholder if media fails to load
+                       // The LogoContainer will handle the error internally
+                     }}
+                   />
+            </>
+          ) : token.image ? (
+            <>
+              <LogoContainer
+                src={token.image}
+                alt={token.name}
+                baseWidth={128}
+                className="rounded-xl"
+                draggable={false}
+              />
+            </>
+          ) : null}
+          
+          {/* Fallback placeholder */}
+                                               <div className={`w-32 h-20 bg-gray-700 rounded-xl flex items-center justify-center text-2xl font-bold ${token.token_logo_asset_id || token.image ? 'hidden' : ''}`}>
+               {token.symbol[0]}
+             </div>
         </div>
 
         {/* Right side: Details + Buttons */}

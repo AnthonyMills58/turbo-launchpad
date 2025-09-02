@@ -18,6 +18,7 @@ interface CreateTokenRequest {
   chainId: number
   // NEW:
   minTokenAgeForUnlockSeconds?: number
+  logoAssetId?: string
 }
 
 export async function POST(req: NextRequest) {
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
       contractAddress,
       chainId,
       minTokenAgeForUnlockSeconds,
+      logoAssetId,
     } = body
 
     // Basic validation
@@ -68,13 +70,13 @@ export async function POST(req: NextRequest) {
         name, symbol, description, image, twitter, telegram, website,
         supply, raise_target, dex, curve_type,
         creator_wallet, contract_address, chain_id,
-        min_token_age_for_unlock_seconds
+        min_token_age_for_unlock_seconds, token_logo_asset_id
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11,
         $12, $13, $14,
-        $15
+        $15, $16
       )
       RETURNING id
       `,
@@ -94,6 +96,7 @@ export async function POST(req: NextRequest) {
         contractAddress,
         chainId,
         minAgeSecs,
+        logoAssetId ?? null,
       ]
     )
 

@@ -12,6 +12,7 @@ import { getUsdPrice } from '@/lib/getUsdPrice'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
+import LogoContainer from './LogoContainer'
 
 export default function TokenPageContent() {
   const [usdPrice, setUsdPrice] = useState<number | null>(null)
@@ -137,16 +138,37 @@ export default function TokenPageContent() {
             }`}
           >
             <div className="flex items-center gap-3 mb-3">
-              {token.image && (
-                <img
-                  src={token.image}
-                  alt={token.name}
-                  width={40}
-                  height={40}
-                  className="rounded-full object-cover"
-                  draggable={false}
-                />
-              )}
+              {token.token_logo_asset_id ? (
+                <>
+                  <LogoContainer
+                    src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
+                    alt={token.name}
+                    baseWidth={48}
+                    className="rounded-lg"
+                    draggable={false}
+                    onError={() => {
+                      // Fallback to placeholder if media fails to load
+                      // The LogoContainer will handle the error internally
+                    }}
+                  />
+                </>
+                              ) : token.image ? (
+                  <>
+                    <LogoContainer
+                      src={token.image}
+                      alt={token.name}
+                      baseWidth={48}
+                      className="rounded-lg"
+                      draggable={false}
+                    />
+                  </>
+                ) : null}
+              
+              {/* Fallback placeholder */}
+                                                       <div className={`w-12 h-8 bg-gray-700 rounded-lg flex items-center justify-center text-sm font-bold ${token.token_logo_asset_id || token.image ? 'hidden' : ''}`}>
+                {token.symbol[0]}
+              </div>
+              
               <div>
                 <h2 className="font-semibold text-lg text-white">
                   {token.name} ({token.symbol})

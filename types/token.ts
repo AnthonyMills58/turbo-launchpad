@@ -14,6 +14,7 @@ export type Token = {
   supply: number
   is_graduated: boolean
   lockedAmount?: string // Only for creator
+  token_logo_asset_id?: string // NEW: media asset ID for logo
 
   // DEX deployment tracking
   dex?: string
