@@ -46,15 +46,13 @@ export function sha256Hex(buffer: Buffer): string {
 
 // Build-time safe media functions
 // These will be replaced with actual implementations at runtime
-export async function normalizeOriginal(_buffer: Buffer): Promise<{ buffer: Buffer; width: number; height: number }> {
+export async function normalizeOriginal(): Promise<{ buffer: Buffer; width: number; height: number }> {
   // This function will be dynamically imported at runtime
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   throw new Error('Media functions not available during build')
 }
 
-export async function makeThumbnail(_buffer: Buffer): Promise<{ buffer: Buffer; width: number; height: number }> {
+export async function makeThumbnail(): Promise<{ buffer: Buffer; width: number; height: number }> {
   // This function will be dynamically imported at runtime
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   throw new Error('Media functions not available during build')
 }
 
