@@ -84,35 +84,23 @@ export async function makeThumbnail(buffer: Buffer): Promise<{ buffer: Buffer; w
   // Get original image metadata to preserve aspect ratio
   const originalMetadata = await sharp(buffer).metadata()
   
-  console.log('🔍 makeThumbnail: Original dimensions:', originalMetadata.width, 'x', originalMetadata.height)
-  console.log('🔍 makeThumbnail: Original format:', originalMetadata.format)
-  console.log('🔍 makeThumbnail: Original channels:', originalMetadata.channels)
-  console.log('🔍 makeThumbnail: Original space:', originalMetadata.space)
-  console.log('🔍 makeThumbnail: Original depth:', originalMetadata.depth)
-  console.log('🔍 makeThumbnail: Buffer size:', buffer.length, 'bytes')
-  
   // Calculate thumbnail dimensions while preserving aspect ratio
   let thumbWidth: number = MEDIA_CONSTANTS.THUMBNAIL_SIZE
   let thumbHeight: number = MEDIA_CONSTANTS.THUMBNAIL_SIZE
   
   if (originalMetadata.width && originalMetadata.height) {
     const aspectRatio = originalMetadata.width / originalMetadata.height
-    console.log('🔍 makeThumbnail: Aspect ratio:', aspectRatio)
     
     if (aspectRatio > 1) {
       // Landscape image - fit to width
       thumbWidth = MEDIA_CONSTANTS.THUMBNAIL_SIZE
       thumbHeight = Math.round(MEDIA_CONSTANTS.THUMBNAIL_SIZE / aspectRatio)
-      console.log('🔍 makeThumbnail: Landscape - calculated dimensions:', thumbWidth, 'x', thumbHeight)
     } else {
       // Portrait image - fit to height
       thumbHeight = MEDIA_CONSTANTS.THUMBNAIL_SIZE
       thumbWidth = Math.round(MEDIA_CONSTANTS.THUMBNAIL_SIZE * aspectRatio)
-      console.log('🔍 makeThumbnail: Portrait - calculated dimensions:', thumbWidth, 'x', thumbHeight)
     }
   }
-  
-  console.log('🔍 makeThumbnail: Final dimensions before resize:', thumbWidth, 'x', thumbHeight)
   
   // For landscape images, specify width only
   // For portrait images, specify height only
@@ -120,7 +108,6 @@ export async function makeThumbnail(buffer: Buffer): Promise<{ buffer: Buffer; w
   let thumbnail
   if (thumbWidth > thumbHeight) {
     // Landscape - specify width only
-    console.log('🔍 makeThumbnail: Resizing landscape image to width:', thumbWidth, 'height: auto')
     thumbnail = await sharp(buffer)
       .resize(thumbWidth, null, {
         fit: 'inside',
@@ -130,7 +117,6 @@ export async function makeThumbnail(buffer: Buffer): Promise<{ buffer: Buffer; w
       .toBuffer()
   } else {
     // Portrait - specify height only
-    console.log('🔍 makeThumbnail: Resizing portrait image to height:', thumbHeight, 'width: auto')
     thumbnail = await sharp(buffer)
       .resize(null, thumbHeight, {
         fit: 'inside',
@@ -142,13 +128,10 @@ export async function makeThumbnail(buffer: Buffer): Promise<{ buffer: Buffer; w
   
   // Get final thumbnail metadata to verify
   const finalMetadata = await sharp(thumbnail).metadata()
-  console.log('🔍 makeThumbnail: Final thumbnail dimensions:', finalMetadata.width, 'x', finalMetadata.height)
   
   // Use the ACTUAL dimensions that Sharp produced, not our calculated ones
   const actualWidth = finalMetadata.width || thumbWidth
   const actualHeight = finalMetadata.height || thumbHeight
-  
-  console.log('🔍 makeThumbnail: Returning actual dimensions:', actualWidth, 'x', actualHeight)
   
   return {
     buffer: thumbnail,

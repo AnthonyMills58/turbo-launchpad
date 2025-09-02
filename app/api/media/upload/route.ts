@@ -77,15 +77,11 @@ export async function POST(request: NextRequest) {
         [ownerWallet.toLowerCase(), assetId]
       )
     } else {
-      console.log('🔍 Upload: Processing original image...')
-      // Process original image
+            // Process original image
       const { buffer: normalizedBuffer, width, height } = await normalizeOriginal(buffer)
-      console.log('🔍 Upload: Original processed, dimensions:', width, 'x', height)
-      
-      console.log('🔍 Upload: Creating thumbnail...')
+
       // Create thumbnail
       const { buffer: thumbnailBuffer, width: thumbWidth, height: thumbHeight } = await makeThumbnail(normalizedBuffer)
-      console.log('🔍 Upload: Thumbnail created, dimensions:', thumbWidth, 'x', thumbHeight)
       
       // Insert new asset
       const assetResult = await pool.query(

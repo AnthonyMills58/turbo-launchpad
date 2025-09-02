@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { calculateContainerHeight } from '@/lib/ui-utils'
 
 interface LogoContainerProps {
@@ -27,26 +28,21 @@ export default function LogoContainer({
   const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
-    console.log('🔍 LogoContainer: Loading image:', src, 'baseWidth:', baseWidth)
     // Create a temporary image to get dimensions
-    const img = new Image()
-    img.onload = () => {
-      console.log('✅ LogoContainer: Image loaded successfully')
-      console.log('📏 Natural dimensions:', img.naturalWidth, 'x', img.naturalHeight)
-      const height = calculateContainerHeight(img.naturalWidth, img.naturalHeight, baseWidth)
-      console.log('🧮 Calculated height:', height, 'for baseWidth:', baseWidth)
+    const tempImg = new window.Image()
+    tempImg.onload = () => {
+      const height = calculateContainerHeight(tempImg.naturalWidth, tempImg.naturalHeight, baseWidth)
       setContainerHeight(height)
       setImageLoaded(true)
     }
-    img.onerror = () => {
-      console.log('❌ LogoContainer: Image failed to load:', src)
+    tempImg.onerror = () => {
       // Fallback to square if image fails to load
       setContainerHeight(baseWidth)
       setImageLoaded(true)
       setImageError(true)
       if (onError) onError()
     }
-    img.src = src
+    tempImg.src = src
   }, [src, baseWidth, onError])
 
 
@@ -59,9 +55,11 @@ export default function LogoContainer({
       }}
     >
       {!imageError && (
-        <img
+        <Image
           src={src}
           alt={alt}
+          width={baseWidth}
+          height={containerHeight}
           className="w-full h-full object-contain object-center"
           draggable={draggable}
           style={{ display: imageLoaded ? 'block' : 'none' }}
