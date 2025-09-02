@@ -3,8 +3,6 @@ import pool from '@/lib/db'
 import {
   sniffMime,
   sha256Hex,
-  normalizeOriginal,
-  makeThumbnail,
   validateFileSize,
   validateMimeType,
   MEDIA_CONSTANTS,
@@ -15,6 +13,8 @@ export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
+    // Dynamic imports to avoid build-time issues
+    const { normalizeOriginal, makeThumbnail } = await import('@/lib/media-runtime')
     
     const formData = await request.formData()
     const file = formData.get('file') as File
