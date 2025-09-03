@@ -19,6 +19,7 @@ import { formatValue } from '@/lib/displayFormats'
 import { syncDexState } from '@/lib/syncDexState'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
+import UserProfile from './UserProfile'
 
 type TokenDetailsViewProps = {
   token: Token
@@ -302,12 +303,8 @@ export default function TokenDetailsView({
           {/* Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-300 mb-6">
             {/* Creator Address */}
-            <div className="flex items-center flex-wrap mb-4 space-x-2 font-mono text-sm text-gray-400 select-all">
-              <span>Creator:</span>
-              <span>
-                {token.creator_wallet.slice(0, 6)}...
-                {token.creator_wallet.slice(-4)}
-              </span>
+            <div className="flex items-center gap-2">
+              <UserProfile wallet={token.creator_wallet} showAvatar={true} showName={true} showCreatorLabel={true} />
               <button
                 onClick={handleCopyCreator}
                 className="text-gray-400 hover:text-white transition"

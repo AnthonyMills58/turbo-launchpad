@@ -14,6 +14,7 @@ import 'react-circular-progressbar/dist/styles.css'
 import { formatValue } from '@/lib/displayFormats'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
+import UserProfile from './UserProfile'
 
 export default function TokenPageContent() {
   const [usdPrice, setUsdPrice] = useState<number | null>(null)
@@ -185,6 +186,12 @@ export default function TokenPageContent() {
               {token.description}
             </p>
 
+            {/* Creator section */}
+            <div className="mb-2">
+              <UserProfile wallet={token.creator_wallet} showAvatar={true} showName={true} showCreatorLabel={true} />
+            </div>
+
+            {/* Progress and raised section */}
             <div className="flex items-center gap-4 mb-2">
               <div className="w-12 h-12">
                  <CircularProgressbar
@@ -207,7 +214,6 @@ export default function TokenPageContent() {
                       trailColor: '#374151',
                     })}
                   />
-
               </div>
               <div className="text-sm text-gray-400 leading-tight">
                 Raised:{' '}
@@ -218,13 +224,7 @@ export default function TokenPageContent() {
               </div>
             </div>
 
-            <div className="text-sm text-gray-400 mb-1">
-              Creator:{' '}
-              <span className="text-white">
-                {token.creator_wallet.slice(0, 6)}...
-                {token.creator_wallet.slice(-4)}
-              </span>
-            </div>
+            {/* Creator info is now displayed above with UserProfile component */}
 
             <div className="text-sm text-gray-400 mb-1">
               Max Supply: <span className="text-white">{Number(token.supply).toLocaleString()}</span>
