@@ -60,30 +60,30 @@ export default function NavBar() {
   return (
     <nav className="w-full bg-[#151827] text-white shadow-md p-4 flex flex-wrap items-center justify-between sticky top-0 z-50">
       {/* Left Nav */}
-     <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-1">
       <button
         onClick={() => router.push('/')}
-        className="hover:text-purple-400 flex items-center space-x-1"
+        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
         <AiFillHome className="text-xl" />
         <span>Turbo Launch</span>
       </button>
       <button
         onClick={() => router.push('/leaderboard')}
-        className="hover:text-purple-300 flex items-center space-x-1"
+        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
         <span>Leaderboard</span>
       </button>
       
       <button
         onClick={() => router.push('/portfolio')}
-        className="hover:text-purple-300 flex items-center space-x-1"
+        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
         <span>Portfolio</span>
       </button>
       <button
         onClick={() => router.push('/profile')}
-        className="hover:text-purple-300 flex items-center space-x-1"
+        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
         <span>Profile</span>
       </button>
