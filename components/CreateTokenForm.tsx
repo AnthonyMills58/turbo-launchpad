@@ -331,7 +331,7 @@ export default function CreateTokenForm() {
         // ✅ Redirect straight to TokenDetailsView as our “Step 2”
         // (Adjust the route if your token page path differs)
         try {
-          const selectionKey = tokenSymbol; // you already set tokenSymbol = form.symbol.toUpperCase()
+          const selectionKey = data.tokenId; // Use token ID instead of symbol for unique routing
           router.push(`/?selected=${encodeURIComponent(selectionKey)}&new=1`)
         } catch {
           router.push('/') // fallback

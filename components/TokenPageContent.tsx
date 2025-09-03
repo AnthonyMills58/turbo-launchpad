@@ -19,7 +19,7 @@ export default function TokenPageContent() {
   const [usdPrice, setUsdPrice] = useState<number | null>(null)
   const searchParams = useSearchParams()
   const router = useRouter()
-  const selectedSymbol = searchParams.get('selected') // 🔁 now using symbol instead of index
+  const selectedId = searchParams.get('selected') // 🔁 now using token ID instead of symbol
 
   const [tokens, setTokens] = useState<Token[]>([])
   const [activeToken, setActiveToken] = useState<Token | null>(null)
@@ -49,14 +49,14 @@ export default function TokenPageContent() {
       const baseTokens: Token[] = await res.json()
       setTokens(baseTokens)
 
-      const found = baseTokens.find(t => t.symbol === selectedSymbol)
+      const found = baseTokens.find(t => t.id.toString() === selectedId)
       setActiveToken(found ?? null)
     } catch (error) {
       console.error('Failed to fetch tokens:', error)
       setTokens([])
       setActiveToken(null)
     }
-  }, [search, creatorFilter, statusFilter, sortFilter, address, chain, selectedSymbol])
+  }, [search, creatorFilter, statusFilter, sortFilter, address, chain, selectedId])
 
   useEffect(() => {
     getUsdPrice().then(setUsdPrice)
@@ -66,8 +66,8 @@ export default function TokenPageContent() {
     fetchTokens()
   }, [fetchTokens, refreshKey])
 
-  const selectToken = (symbol: string) => {
-    router.push(`/?selected=${symbol}`)
+  const selectToken = (id: string) => {
+    router.push(`/?selected=${id}`)
   }
 
   const backToList = () => {
@@ -78,22 +78,22 @@ export default function TokenPageContent() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!tokens.length || activeToken) return
 
-      const currentIndex = tokens.findIndex(t => t.symbol === selectedSymbol)
+      const currentIndex = tokens.findIndex(t => t.id.toString() === selectedId)
 
       if (e.key === 'ArrowDown') {
         const next = currentIndex === -1 ? 0 : Math.min(currentIndex + 1, tokens.length - 1)
-        router.push(`/?selected=${tokens[next].symbol}`)
+        router.push(`/?selected=${tokens[next].id}`)
       } else if (e.key === 'ArrowUp') {
         const prev = currentIndex === -1 ? tokens.length - 1 : Math.max(currentIndex - 1, 0)
-        router.push(`/?selected=${tokens[prev].symbol}`)
+        router.push(`/?selected=${tokens[prev].id}`)
       } else if (e.key === 'Enter' && currentIndex !== -1) {
-        router.push(`/?selected=${tokens[currentIndex].symbol}`)
+        router.push(`/?selected=${tokens[currentIndex].id}`)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [tokens, selectedSymbol, activeToken, router])
+  }, [tokens, selectedId, activeToken, router])
 
   if (activeToken) {
     if (!address) {
@@ -126,14 +126,14 @@ export default function TokenPageContent() {
         {tokens.map((token) => (
           <div
             key={token.id}
-            onClick={() => selectToken(token.symbol)}
+            onClick={() => selectToken(token.id.toString())}
             tabIndex={0}
             role="button"
             onKeyDown={(e) => {
-              if (e.key === 'Enter') selectToken(token.symbol)
+              if (e.key === 'Enter') selectToken(token.id.toString())
             }}
             className={`cursor-pointer rounded-xl p-4 shadow-lg border ${
-             selectedSymbol === token.symbol
+             selectedId === token.id.toString()
                 ? 'bg-[#23263a] ring-2 ring-purple-400 border-purple-500'
                 : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a]'
             }`}

@@ -288,19 +288,9 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
            {/* Current Logo Display */}
            {currentLogoUrl && !selectedFile && (
              <div className="mb-3 p-3 bg-[#2a2d3a] rounded-md border border-[#3a3d4a]">
-               <p className="text-xs text-gray-400 mb-2">Current logo:</p>
-               <div className="flex items-center space-x-3">
-                                    <LogoContainer
-                     src={currentLogoUrl}
-                     alt="Current Logo"
-                     baseWidth={96}
-                     className="rounded-lg border border-gray-600 bg-[#1b1e2b]"
-                     onError={() => setCurrentLogoUrl(null)}
-                   />
-                 <div className="text-xs text-gray-300">
-                   <p>Logo is currently set</p>
-                   <p className="text-gray-400">Upload a new file to replace it</p>
-                 </div>
+               <div className="text-xs text-gray-300">
+                 <p>Logo is currently set</p>
+                 <p className="text-gray-400">Upload a new file to replace it</p>
                </div>
              </div>
            )}
