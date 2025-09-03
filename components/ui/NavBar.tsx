@@ -6,7 +6,7 @@ import { useAccount, useBalance } from 'wagmi'
 import { useRef, useEffect, useState } from 'react'
 import { FiSliders } from 'react-icons/fi'
 import { FaSearch } from 'react-icons/fa'
-import { MdOutlineFolderOpen } from 'react-icons/md'
+//import { MdOutlineFolderOpen } from 'react-icons/md'
 import { AiFillHome } from 'react-icons/ai'
 import { useFilters } from '@/lib/FiltersContext'
 import { HiOutlinePlusCircle } from 'react-icons/hi'
@@ -69,27 +69,31 @@ export default function NavBar() {
         <span>Turbo Launch</span>
       </button>
       <button
-        onClick={() => router.push('/create')}
+        onClick={() => router.push('/leaderboard')}
         className="hover:text-purple-300 flex items-center space-x-1"
       >
-        <HiOutlinePlusCircle className="text-lg" />
-        <span>Create Token</span>
+        <span>Leaderboard</span>
       </button>
+      
       <button
         onClick={() => router.push('/portfolio')}
         className="hover:text-purple-300 flex items-center space-x-1"
       >
-        <MdOutlineFolderOpen className="text-lg" />
-        <span>Your Portfolio</span>
+        <span>Portfolio</span>
       </button>
       <button
         onClick={() => router.push('/profile')}
         className="hover:text-purple-300 flex items-center space-x-1"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-        <span>Your Profile</span>
+        <span>Profile</span>
+      </button>
+
+      <button
+        onClick={() => router.push('/create')}
+        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+      >
+        <HiOutlinePlusCircle className="text-lg inline mr-2" />
+        <span>Create Token</span>
       </button>
   </div>
 
@@ -112,7 +116,7 @@ export default function NavBar() {
         <button
           type="button"
           onClick={() => setShowFilters(!showFilters)}
-          className="p-2.5 rounded-full bg-white text-black hover:bg-gray-200"
+          className="p-2.5 rounded bg-gray-700 hover:bg-gray-600 text-white"
           title="Filter tokens"
         >
           <FiSliders size={20} />
