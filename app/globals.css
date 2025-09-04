@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Animated stripes for progress bars */
+@keyframes moveStripes {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 20px 0;
+  }
+}
+
 
 /* ✅ Reset spacing and box model */
 html, body {

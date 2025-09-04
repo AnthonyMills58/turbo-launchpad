@@ -1,20 +1,340 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, memo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
-import { chainNamesById } from '@/lib/chains'
 import { useSync } from '@/lib/SyncContext'
 import { getUsdPrice } from '@/lib/getUsdPrice'
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
-import 'react-circular-progressbar/dist/styles.css'
-import { formatValue } from '@/lib/displayFormats'
+import { formatPriceMetaMask } from '@/lib/ui-utils'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
 import UserProfile from './UserProfile'
+
+// Modern Flaunch-style Token Card Component
+const TokenCard = memo(({ 
+  token, 
+  isSelected, 
+  onSelect,
+  usdPrice
+}: { 
+  token: Token
+  isSelected: boolean
+  onSelect: (id: string) => void
+  usdPrice: number | null
+}) => {
+  const getStatusBadge = () => {
+    if (token.on_dex) {
+      return { text: 'On DEX', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' }
+    } else if (token.is_graduated) {
+      return { text: 'Graduated', color: 'bg-green-500/20 text-green-400 border-green-500/30' }
+    } else {
+      return { text: 'In Progress', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
+    }
+  }
+
+  const statusBadge = getStatusBadge()
+
+
+  // Get numeric price value for USD calculation
+  const getNumericPrice = (): number => {
+    if (token.on_dex && token.current_price !== undefined) {
+      return Number(token.current_price)
+    } else {
+      const pricePerTokenWei = Number(token.base_price) || 0
+      return pricePerTokenWei / 1e18
+    }
+  }
+
+  // Get FDV value - for DEX tokens use token.fdv, for In Progress calculate from bonding curve
+  const getFDV = (): number | null => {
+    if (token.on_dex && token.fdv !== undefined) {
+      // On DEX: use synced FDV from DEX data
+      return Number(token.fdv)
+    } else if (!token.on_dex && token.supply) {
+      // In Progress: calculate FDV from bonding curve price and total supply
+      const pricePerToken = getNumericPrice()
+      return pricePerToken * token.supply
+    }
+    return null
+  }
+
+  // Format USD value - always show exactly 2 digits after decimal point
+  const formatUSDValue = (ethValue: number, usdPrice: number | null) => {
+    if (!usdPrice) return '—'
+    const usdValue = ethValue * usdPrice
+    
+    // Always show exactly 2 digits after decimal point
+    return usdValue.toFixed(2)
+  }
+
+  // Format ETH value using MetaMask style
+  const formatETHValue = (ethValue: number) => {
+    const ethInfo = formatPriceMetaMask(ethValue)
+    
+    if (ethInfo.type === 'metamask') {
+      return (
+        <span>
+          {ethInfo.value}<sub className="text-xs font-normal" style={{ fontSize: '0.72em' }}>{ethInfo.zeros}</sub>{ethInfo.digits}
+        </span>
+      )
+    }
+    return ethInfo.value
+  }
+  
+  // 24h% - show "--" for now (will be replaced with real data later)
+  const change24h = null // No mock data
+  const isPositive = false
+  console.log(change24h, isPositive)
+  
+  // Format relative time (e.g., "2 months ago", "3 hours ago")
+  const formatRelativeTime = (dateString: string): string => {
+    const now = new Date()
+    const created = new Date(dateString)
+    const diffMs = now.getTime() - created.getTime()
+    
+    const diffSeconds = Math.floor(diffMs / 1000)
+    const diffMinutes = Math.floor(diffSeconds / 60)
+    const diffHours = Math.floor(diffMinutes / 60)
+    const diffDays = Math.floor(diffHours / 24)
+    const diffMonths = Math.floor(diffDays / 30)
+    const diffYears = Math.floor(diffDays / 365)
+    
+    if (diffYears > 0) {
+      return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`
+    } else if (diffMonths > 0) {
+      return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`
+    } else if (diffDays > 0) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+    } else if (diffHours > 0) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    } else if (diffMinutes > 0) {
+      return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`
+    } else {
+      return 'Just now'
+    }
+  }
+  
+  const createdTime = token.created_at ? formatRelativeTime(token.created_at) : '—'
+  
+  return (
+    <div
+      onClick={() => onSelect(token.id.toString())}
+      tabIndex={0}
+      role="button"
+      aria-label={`View ${token.name} (${token.symbol}) token details`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(token.id.toString())
+        }
+      }}
+      className={`group cursor-pointer rounded-xl p-4 border transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
+        isSelected
+          ? 'bg-[#23263a] ring-2 ring-purple-400 border-purple-500'
+          : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a] hover:border-[#3a3d4a]'
+      }`}
+    >
+      {/* Header with logo, name, and status */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Token Logo */}
+          <div className="flex-shrink-0">
+            {token.token_logo_asset_id ? (
+              <LogoContainer
+                src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
+                alt={token.name}
+                baseWidth={40}
+                className="rounded-lg"
+                draggable={false}
+                onError={() => {}}
+              />
+            ) : token.image ? (
+              <ExternalImageContainer
+                src={token.image}
+                alt={token.name}
+                baseWidth={40}
+                className="rounded-lg"
+                draggable={false}
+              />
+            ) : (
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                {token.symbol[0]}
+              </div>
+            )}
+          </div>
+          
+          {/* Token Name & Symbol */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-white truncate">
+              {token.name}
+            </h3>
+            <p className="text-sm text-gray-400 truncate">
+              {token.symbol}
+            </p>
+          </div>
+        </div>
+        
+        {/* Status Badge */}
+        {token.on_dex && token.dex_listing_url ? (
+          <a
+            href={token.dex_listing_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`px-2 py-1 rounded-full text-xs font-medium border ${statusBadge.color} hover:brightness-110 transition-all cursor-pointer`}
+            title="View on DEX"
+          >
+            {statusBadge.text} ↗
+          </a>
+        ) : (
+          <div className={`px-2 py-1 rounded-full text-xs font-medium border ${statusBadge.color}`}>
+            {statusBadge.text}
+          </div>
+        )}
+      </div>
+
+      {/* Stats Grid - Different layout based on token status */}
+      <div className="mb-3">
+        {/* First row: Price and FDV */}
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          {/* Price */}
+          <div className="bg-[#23263a] rounded-lg p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">Price</span>
+              <div className="text-sm font-semibold text-white text-right">
+                <div>
+                  {formatETHValue(getNumericPrice())} <span className="text-xs text-gray-400">ETH</span>
+                </div>
+                {usdPrice && (
+                  <div className="text-xs text-gray-400">
+                    ${formatUSDValue(getNumericPrice(), usdPrice)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* FDV */}
+          <div className="bg-[#23263a] rounded-lg p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">FDV</span>
+              <div className="text-sm font-semibold text-white text-right">
+                <div>
+                  {getFDV() ? (
+                    <>
+                      {formatETHValue(getFDV()!)} <span className="text-xs text-gray-400">ETH</span>
+                    </>
+                  ) : '—'}
+                </div>
+                {usdPrice && getFDV() && (
+                  <div className="text-xs text-gray-400">
+                    ${formatUSDValue(getFDV()!, usdPrice)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Second row: Status-specific content */}
+        {token.on_dex ? (
+          /* On DEX: Volume, Liquidity, 24h in single line */
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-[#23263a] rounded-lg p-2">
+              <div className="text-xs text-gray-400 mb-1">Volume</div>
+              <div className="text-sm font-semibold text-white">—</div>
+            </div>
+            <div className="bg-[#23263a] rounded-lg p-2">
+              <div className="text-xs text-gray-400 mb-1">Liquidity</div>
+              <div className="text-sm font-semibold text-white">—</div>
+            </div>
+            <div className="bg-[#23263a] rounded-lg p-2">
+              <div className="text-xs text-gray-400 mb-1">24h</div>
+              <div className="text-sm font-semibold text-white">—</div>
+            </div>
+          </div>
+        ) : (
+          /* In Progress: Flaunch-style progress bar */
+          <div className="bg-[#23263a] rounded-lg p-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                {/* Rocket Icon */}
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-purple-400">
+                    <path fill="currentColor" d="M12 2.5L8 7h8l-4-4.5zM8 8v6l4 4 4-4V8H8zM10 10h4v2h-4v-2z"/>
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-white">Token Launch Progress</span>
+              </div>
+              
+              {/* Progress percentage on the right */}
+              <span className="text-sm font-semibold text-orange-400">
+                {token.raise_target && token.eth_raised 
+                  ? `${Math.min(Math.floor((Number(token.eth_raised) / Number(token.raise_target)) * 100), 100)}%`
+                  : '0%'
+                }
+              </span>
+            </div>
+            
+            {/* Flaunch-style progress bar with animated stripes */}
+            <div className="relative">
+              <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden relative">
+                {/* Animated stripes background - covers entire bar */}
+                <div 
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage: `repeating-linear-gradient(
+                      -45deg,
+                      rgba(100,100,100,0.3) 0px,
+                      rgba(100,100,100,0.3) 12px,
+                      rgba(255,255,255,0.2) 12px,
+                      rgba(255,255,255,0.2) 20px
+                    )`,
+                    backgroundSize: '20px 20px',
+                    animation: 'moveStripes 1.28s linear infinite'
+                  }}
+                ></div>
+                
+                {/* Progress fill with gradient */}
+                <div 
+                  className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
+                  style={{ 
+                    width: token.raise_target && token.eth_raised 
+                      ? `${Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 100)}%` 
+                      : '0%' 
+                  }}
+                >
+                  {/* Solid gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+
+      {/* Footer with creator and created time */}
+      <div className="flex items-center justify-between text-xs text-gray-400">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <UserProfile 
+            wallet={token.creator_wallet} 
+            showAvatar={true} 
+            showName={true} 
+            showCreatorLabel={false}
+          />
+        </div>
+        <div className="flex-shrink-0 ml-2">
+          {createdTime}
+        </div>
+      </div>
+    </div>
+  )
+})
+
+TokenCard.displayName = 'TokenCard'
 
 export default function TokenPageContent() {
   const [usdPrice, setUsdPrice] = useState<number | null>(null)
@@ -24,12 +344,14 @@ export default function TokenPageContent() {
 
   const [tokens, setTokens] = useState<Token[]>([])
   const [activeToken, setActiveToken] = useState<Token | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount()
   const { refreshKey } = useSync()
 
   const fetchTokens = useCallback(async () => {
+    setIsLoading(true)
     const params = new URLSearchParams({
       search,
       creator: creatorFilter,
@@ -56,6 +378,8 @@ export default function TokenPageContent() {
       console.error('Failed to fetch tokens:', error)
       setTokens([])
       setActiveToken(null)
+    } finally {
+      setIsLoading(false)
     }
   }, [search, creatorFilter, statusFilter, sortFilter, address, chain, selectedId])
 
@@ -120,181 +444,80 @@ export default function TokenPageContent() {
     )
   }
 
-  return (
-
-    <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {tokens.map((token) => (
-          <div
-            key={token.id}
-            onClick={() => selectToken(token.id.toString())}
-            tabIndex={0}
-            role="button"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') selectToken(token.id.toString())
-            }}
-            className={`cursor-pointer rounded-xl p-4 shadow-lg border ${
-             selectedId === token.id.toString()
-                ? 'bg-[#23263a] ring-2 ring-purple-400 border-purple-500'
-                : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a]'
-            }`}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              {token.token_logo_asset_id ? (
-                <>
-                  <LogoContainer
-                    src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
-                    alt={token.name}
-                    baseWidth={48}
-                    className="rounded-lg"
-                    draggable={false}
-                    onError={() => {
-                      // Fallback to placeholder if media fails to load
-                      // The LogoContainer will handle the error internally
-                    }}
-                  />
-                </>
-                              ) : token.image ? (
-                  <>
-                    <ExternalImageContainer
-                      src={token.image}
-                      alt={token.name}
-                      baseWidth={48}
-                      className="rounded-lg"
-                      draggable={false}
-                    />
-                  </>
-                ) : null}
-              
-              {/* Fallback placeholder */}
-                                                       <div className={`w-12 h-8 bg-gray-700 rounded-lg flex items-center justify-center text-sm font-bold ${token.token_logo_asset_id || token.image ? 'hidden' : ''}`}>
-                {token.symbol[0]}
-              </div>
-              
-              <div>
-                <h2 className="font-semibold text-lg text-white">
-                  {token.name} ({token.symbol})
-                </h2>
-                <p className="text-xs text-gray-400 break-all">
-                  {token.contract_address.slice(0, 6)}...
-                  {token.contract_address.slice(-4)}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-300 mb-2 line-clamp-3">
-              {token.description}
-            </p>
-
-            {/* Creator section */}
-            <div className="mb-2">
-              <UserProfile wallet={token.creator_wallet} showAvatar={true} showName={true} showCreatorLabel={true} />
-            </div>
-
-            {/* Progress and raised section */}
-            <div className="flex items-center gap-4 mb-2">
-              <div className="w-12 h-12">
-                 <CircularProgressbar
-                    value={
-                      Number(token.raise_target) > 0
-                        ? Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 999)
-                        : 0
-                    }
-                    text={
-                      Number(token.raise_target) === 0 || Number(token.eth_raised) === 0
-                        ? '0%'
-                        : (Number(token.eth_raised) / Number(token.raise_target)) * 100 < 1
-                          ? '<1%'
-                          : `${Math.floor((Number(token.eth_raised) / Number(token.raise_target)) * 100)}%`
-                    }
-                    styles={buildStyles({
-                      textSize: '1.8rem',
-                      textColor: '#ffffff',
-                      pathColor: '#10B981',
-                      trailColor: '#374151',
-                    })}
-                  />
-              </div>
-              <div className="text-sm text-gray-400 leading-tight">
-                Raised:{' '}
-                <span className="text-white">
-                  {Number(token.eth_raised).toFixed(6).replace(/\.?0+$/, '')} ETH
-                </span>{' '}
-                / {token.raise_target} ETH
-              </div>
-            </div>
-
-            {/* Creator info is now displayed above with UserProfile component */}
-
-            <div className="text-sm text-gray-400 mb-1">
-              Max Supply: <span className="text-white">{Number(token.supply).toLocaleString()}</span>
-            </div>
-
-            {token.fdv && (
-              <div className="text-sm text-gray-400 mb-1">
-                FDV:{' '}
-                <span className="text-white">
-                   {formatValue(Number(token.fdv))}
-                  ETH
-                </span>
-              </div>
-            )}
-
-            {token.on_dex && token.market_cap && (
-              <div className="text-sm text-gray-400 mb-1">
-                Market Cap:{' '}
-                <span className="text-white">
-                  {formatValue(Number(token.market_cap))}
-                  ETH
-                  {usdPrice && (
-                    <span className="text-gray-400">
-                      {' '}
-                      (${(token.market_cap * usdPrice).toFixed(2)})
-                    </span>
-                  )}
-                </span>
-              </div>
-            )}
-
-            {token.chain_id && (
-              <div className="text-sm text-gray-400 mb-1">
-                Chain:{' '}
-                <span className="text-white">
-                  {chainNamesById[token.chain_id] ??
-                    `Chain ID ${token.chain_id}`}
-                </span>
-              </div>
-            )}
-
-            {token.created_at && (
-              <div className="text-sm text-gray-400 mb-1">
-                Created:{' '}
-                <span className="text-white">
-                  {new Date(token.created_at).toLocaleDateString()}
-                </span>
-              </div>
-            )}
-
-            <div className="text-xs font-medium">
-              {token.on_dex ? (
-                <span className="text-blue-400">On DEX</span>
-              ) : token.is_graduated ? (
-                <span className="text-green-400">Graduated</span>
-              ) : (
-                <span className="text-yellow-400">In Progress</span>
-              )}
-            </div>
+  // Skeleton loading component
+  const SkeletonCard = () => (
+    <div className="bg-[#1b1e2b] border border-[#2a2d3a] rounded-xl p-4 animate-pulse">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3 flex-1">
+          <div className="w-10 h-10 bg-gray-700 rounded-lg"></div>
+          <div className="flex-1">
+            <div className="h-4 bg-gray-700 rounded mb-2"></div>
+            <div className="h-3 bg-gray-700 rounded w-2/3"></div>
+          </div>
+        </div>
+        <div className="w-16 h-6 bg-gray-700 rounded-full"></div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-gray-700 rounded-lg p-2">
+            <div className="h-3 bg-gray-600 rounded mb-1"></div>
+            <div className="h-4 bg-gray-600 rounded"></div>
           </div>
         ))}
       </div>
+      <div className="bg-gray-700 rounded-lg p-2 mb-3">
+        <div className="h-3 bg-gray-600 rounded mb-1"></div>
+        <div className="h-4 bg-gray-600 rounded"></div>
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-gray-700 rounded-full"></div>
+          <div className="h-3 bg-gray-700 rounded w-16"></div>
+        </div>
+        <div className="h-3 bg-gray-700 rounded w-12"></div>
+      </div>
     </div>
+  )
 
-    
-  
+  // Empty state component
+  const EmptyState = () => (
+    <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+      <div className="text-6xl mb-4">🔍</div>
+      <h3 className="text-xl font-semibold text-white mb-2">No tokens found</h3>
+      <p className="text-gray-400 max-w-md">
+        No tokens match your filters. Try clearing filters or searching a different term.
+      </p>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {isLoading ? (
+          // Show skeleton cards while loading
+          Array.from({ length: 8 }).map((_, index) => (
+            <SkeletonCard key={index} />
+          ))
+        ) : tokens.length === 0 ? (
+          <EmptyState />
+        ) : (
+          tokens.map((token) => (
+            <TokenCard
+            key={token.id}
+              token={token}
+              isSelected={selectedId === token.id.toString()}
+              onSelect={selectToken}
+              usdPrice={usdPrice}
+            />
+          ))
+        )}
+      </div>
+    </div>
 )
 
  
 }
+
 
 
 
