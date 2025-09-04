@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 
 type TabType = 'live' | 'new' | 'top' | 'volume'
 
-export default function LeaderboardPage() {
+function LeaderboardContent() {
   const [activeTab, setActiveTab] = useState<TabType>('live')
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -138,5 +138,22 @@ export default function LeaderboardPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LeaderboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-white mb-2">Leaderboard</h1>
+            <p className="text-gray-400">Loading...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <LeaderboardContent />
+    </Suspense>
   )
 }
