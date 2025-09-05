@@ -90,26 +90,23 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
     )
   }
 
-  // If no profile data and not loading, show empty div (will be hidden by parent)
-  if (!profile && !isLoading) {
-    return <div className="hidden" />
-  }
+  // If no profile data and not loading, we'll show fallback content below
 
   return (
     <div 
       className={`relative inline-block ${className}`}
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
+      onMouseEnter={() => profile && setShowTooltip(true)}
+      onMouseLeave={() => profile && setShowTooltip(false)}
     >
       <div className="flex items-center space-x-2">
         {showCreatorLabel && (
           <span className="text-xs text-gray-400">Creator:</span>
         )}
                  {showAvatar && (
-                      hasAvatar ? (
+                      hasAvatar && profile ? (
              <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                <img
-                 src={`/api/media/${profile!.avatar_asset_id}?v=thumb`}
+                 src={`/api/media/${profile.avatar_asset_id}?v=thumb`}
                  alt={displayName}
                  className="w-full h-full object-cover object-center"
                  onError={() => {
@@ -189,7 +186,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
        {showTooltip && profile && (
          <div className="absolute z-50 top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-[#1e1f25] border border-[#2a2d3a] rounded-lg shadow-lg text-white text-sm whitespace-nowrap min-w-64">
            <div className="flex items-center space-x-3 mb-2">
-             {hasAvatar ? (
+             {hasAvatar && profile ? (
                <div className="w-24 h-24 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                  <img
                    src={`/api/media/${profile.avatar_asset_id}?v=thumb`}
@@ -204,14 +201,14 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
              )}
              <div className="flex-1">
                <div className="font-semibold text-white">
-                 {profile.display_name || 'Anonymous'}
+                 {profile?.display_name || 'Anonymous'}
                </div>
                <div className="text-xs text-gray-400">
                  {wallet.slice(0, 6)}...{wallet.slice(-4)}
                </div>
              </div>
            </div>
-           {profile.bio && (
+           {profile?.bio && (
              <div className="text-gray-300 text-xs max-w-xs break-words">
                {profile.bio}
              </div>
