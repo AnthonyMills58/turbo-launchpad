@@ -15,7 +15,7 @@ import PublicSellSection from './PublicSellSection'
 import { useSync } from '@/lib/SyncContext'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
-import { formatValue } from '@/lib/displayFormats'
+import { formatLargeNumber } from '@/lib/displayFormats'
 import { syncDexState } from '@/lib/syncDexState'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
@@ -371,7 +371,7 @@ export default function TokenDetailsView({
               <div>
                 <span className="font-semibold text-white">Raised</span>
                 <p>
-                  {formatValue(Number(raised))} / {cap} ETH
+                  {formatLargeNumber(Number(raised))} / {formatLargeNumber(cap)} ETH
                 </p>
               </div>
             </div>
@@ -381,12 +381,12 @@ export default function TokenDetailsView({
               <div className="text-sm text-white">
                 <p>
                   {token.current_price !== undefined
-                    ? `${formatValue(Number(token.current_price))} ETH`
+                    ? `${formatLargeNumber(Number(token.current_price))} ETH`
                     : '–'}
                 </p>
                 {usdPrice && token.current_price !== undefined && (
                   <p className="text-xs text-gray-400 mt-0.5">
-                    (${formatValue(Number(token.current_price) * usdPrice)})
+                    (${formatLargeNumber(Number(token.current_price) * usdPrice)})
                   </p>
                 )}
               </div>
@@ -417,7 +417,7 @@ export default function TokenDetailsView({
               <span className="font-semibold text-white">FDV</span>
               <p>
                 {token.fdv !== undefined
-                  ? `${formatValue(Number(token.fdv))} ETH`
+                  ? `${formatLargeNumber(Number(token.fdv))} ETH`
                   : '–'}
               </p>
             </div>
@@ -426,11 +426,11 @@ export default function TokenDetailsView({
               <div>
                 <span className="font-semibold text-white">Market Cap</span>
                 <p className="text-sm text-white">
-                  {formatValue(Number(token.market_cap))} ETH
+                  {formatLargeNumber(Number(token.market_cap))} ETH
                   {usdPrice && (
                     <span className="text-gray-400">
                       {' '}
-                      (${(token.market_cap * usdPrice).toFixed(2)})
+                      (${formatLargeNumber(token.market_cap * usdPrice)})
                     </span>
                   )}
                 </p>

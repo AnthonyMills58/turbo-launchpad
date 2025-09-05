@@ -45,3 +45,31 @@ export function formatValue(value: number): string {
   return `${intPart}.${result}`;
 }
 
+/**
+ * Format large numbers with K, M, B suffixes
+ * @param value - Number to format
+ * @returns Formatted string with appropriate suffix
+ */
+export function formatLargeNumber(value: number): string {
+  if (value === 0) return '0';
+  
+  const absValue = Math.abs(value);
+  
+  if (absValue >= 1e9) {
+    // Billions
+    const formatted = (value / 1e9).toFixed(3);
+    return `${formatted.replace(/\.?0+$/, '')}B`;
+  } else if (absValue >= 1e6) {
+    // Millions
+    const formatted = (value / 1e6).toFixed(3);
+    return `${formatted.replace(/\.?0+$/, '')}M`;
+  } else if (absValue >= 1e3) {
+    // Thousands
+    const formatted = (value / 1e3).toFixed(3);
+    return `${formatted.replace(/\.?0+$/, '')}K`;
+  } else {
+    // Less than 1000, use original formatting
+    return formatValue(value);
+  }
+}
+

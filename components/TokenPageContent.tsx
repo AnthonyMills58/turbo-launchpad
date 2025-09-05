@@ -10,6 +10,7 @@ import { useFilters } from '@/lib/FiltersContext'
 import { useSync } from '@/lib/SyncContext'
 import { getUsdPrice } from '@/lib/getUsdPrice'
 import { formatPriceMetaMask } from '@/lib/ui-utils'
+import { formatLargeNumber } from '@/lib/displayFormats'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
 import UserProfile from './UserProfile'
@@ -74,7 +75,7 @@ const TokenCard = memo(({
     return null
   }
 
-  // Format USD value using MetaMask style formatting for small values, fixed decimals for larger values
+  // Format USD value using MetaMask style formatting for small values, K/M/B for larger values
   const formatUSDValue = (ethValue: number, usdPrice: number | null) => {
     if (!usdPrice) return '—'
     const usdValue = ethValue * usdPrice
@@ -93,7 +94,12 @@ const TokenCard = memo(({
       return `$${usdInfo.value}`
     }
     
-    // For larger values, use fixed decimal places based on value range
+    // For values >= $1000, use K/M/B formatting
+    if (usdValue >= 1000) {
+      return `$${formatLargeNumber(usdValue)}`
+    }
+    
+    // For smaller values, use fixed decimal places based on value range
     if (usdValue >= 0.1) {
       return `$${usdValue.toFixed(2)}` // 2 decimal places for values >= $0.1
     } else if (usdValue >= 0.01) {
@@ -103,7 +109,7 @@ const TokenCard = memo(({
     }
   }
 
-  // Format ETH value using MetaMask style formatting for small values, fixed decimals for larger values
+  // Format ETH value using MetaMask style formatting for small values, K/M/B for larger values
   const formatETHValue = (ethValue: number) => {
     // For very small values (< 0.001 ETH), use MetaMask formatting
     if (ethValue < 0.001) {
@@ -119,7 +125,12 @@ const TokenCard = memo(({
     return ethInfo.value
     }
     
-    // For larger values, use fixed decimal places based on value range
+    // For values >= 1000 ETH, use K/M/B formatting
+    if (ethValue >= 1000) {
+      return formatLargeNumber(ethValue)
+    }
+    
+    // For smaller values, use fixed decimal places based on value range
     if (ethValue >= 0.1) {
       return ethValue.toFixed(2) // 2 decimal places for values >= 0.1 ETH
     } else if (ethValue >= 0.01) {
