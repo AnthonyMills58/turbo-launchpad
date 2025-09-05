@@ -54,7 +54,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
     }
   }, [wallet, loadProfile])
 
-  const displayName = profile?.display_name || wallet.slice(0, 6) + '...' + wallet.slice(-4)
+  const displayName = profile?.display_name || undefined
   const hasAvatar = profile?.avatar_asset_id
 
   const copyToClipboard = async (text: string) => {
@@ -107,7 +107,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
              <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                <img
                  src={`/api/media/${profile.avatar_asset_id}?v=thumb`}
-                 alt={displayName}
+                 alt={displayName ?? 'User'}
                  className="w-full h-full object-cover object-center"
                  onError={() => {
                    // Fallback to placeholder if avatar fails to load
@@ -127,7 +127,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                  {/* Line 1: Creator name */}
                  <span className="text-white hover:text-white transition-colors cursor-pointer">
                    <span className="text-gray-400">by </span>
-                   <span className="font-semibold">{displayName}</span>
+                   {displayName && <span className="font-semibold">{displayName}</span>}
                  </span>
                  {/* Line 2: Address with copy icon */}
                  <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -154,7 +154,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
              ) : (
                <>
                  <span className="text-sm text-gray-300 hover:text-white transition-colors cursor-pointer">
-                   {displayName}
+                   {displayName || 'by '}
                  </span>
                  {showTime ? (
                    <div className="flex items-center gap-2 text-xs text-gray-400">
