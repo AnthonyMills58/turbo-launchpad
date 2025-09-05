@@ -34,11 +34,13 @@ export default function TokenDetailsView({
   onBack,
   onRefresh,
 }: TokenDetailsViewProps) {
-  const { triggerSync } = useSync()
+  // Debug logging removed - issue fixed
+  
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const chainId = useChainId()
   const { writeContractAsync } = useWriteContract()
+  const { triggerSync } = useSync()
 
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -87,7 +89,7 @@ export default function TokenDetailsView({
   const cooldownReached = unlockTime !== null && now >= unlockTime
   const canUnlock = isCreator && hasLocked && (graduated || cooldownReached)
 
-  const maxCreatorLock = 0.2 * Number(token.supply)
+  const maxCreatorLock = 0.2 * Number(token.supply || 0)
   const lifetimeUsed = Number(token.creator_lock_cumulative ?? 0)
   const lifetimeLeft = Math.max(0, maxCreatorLock - lifetimeUsed)
 
@@ -186,8 +188,10 @@ export default function TokenDetailsView({
     syncDexState(token, chainId, onRefresh)
   }, [contract_address, chainId, onRefresh, token])
 
-  return (
-    <div className="max-w-4xl mx-auto mt-0 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
+  // Add error boundary for production debugging
+  try {
+    return (
+      <div className="max-w-4xl mx-auto mt-0 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
       <button
         onClick={onBack}
         className="text-sm text-gray-400 hover:text-white transition mb-6"
@@ -371,7 +375,7 @@ export default function TokenDetailsView({
               <div>
                 <span className="font-semibold text-white">Raised</span>
                 <p>
-                  {formatLargeNumber(Number(raised))} / {formatLargeNumber(cap)} ETH
+                  {formatLargeNumber(Number(raised || 0))} / {formatLargeNumber(cap || 0)} ETH
                 </p>
               </div>
             </div>
@@ -380,11 +384,11 @@ export default function TokenDetailsView({
               <span className="font-semibold text-white">Current Price</span>
               <div className="text-sm text-white">
                 <p>
-                  {token.current_price !== undefined
+                  {token.current_price !== undefined && token.current_price !== null
                     ? `${formatLargeNumber(Number(token.current_price))} ETH`
                     : '–'}
                 </p>
-                {usdPrice && token.current_price !== undefined && (
+                {usdPrice && token.current_price !== undefined && token.current_price !== null && (
                   <p className="text-xs text-gray-400 mt-0.5">
                     (${formatLargeNumber(Number(token.current_price) * usdPrice)})
                   </p>
@@ -394,7 +398,7 @@ export default function TokenDetailsView({
 
             <div>
               <span className="font-semibold text-white">Max Supply</span>
-              <p>{Number(token.supply).toLocaleString()}</p>
+              <p>{Number(token.supply || 0).toLocaleString()}</p>
             </div>
 
             <div>
@@ -416,13 +420,13 @@ export default function TokenDetailsView({
             <div>
               <span className="font-semibold text-white">FDV</span>
               <p>
-                {token.fdv !== undefined
+                {token.fdv !== undefined && token.fdv !== null
                   ? `${formatLargeNumber(Number(token.fdv))} ETH`
                   : '–'}
               </p>
             </div>
 
-            {token.on_dex && token.market_cap !== undefined && (
+            {token.on_dex && token.market_cap !== undefined && token.market_cap !== null && (
               <div>
                 <span className="font-semibold text-white">Market Cap</span>
                 <p className="text-sm text-white">
@@ -557,6 +561,23 @@ export default function TokenDetailsView({
       </div>
     </div>
   )
+  } catch (error) {
+    console.error('TokenDetailsView render error:', error)
+    return (
+      <div className="max-w-4xl mx-auto mt-0 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
+        <div className="text-center text-red-400">
+          <h2 className="text-xl font-bold mb-4">Error loading token details</h2>
+          <p className="text-sm mb-4">Something went wrong while loading this token.</p>
+          <button
+            onClick={onBack}
+            className="text-sm text-gray-400 hover:text-white transition"
+          >
+            ← Back to all tokens
+          </button>
+        </div>
+      </div>
+    )
+  }
 }
 
 

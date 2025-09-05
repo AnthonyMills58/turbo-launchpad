@@ -178,7 +178,7 @@ export default function PublicSellSection({
   }, [txHash, publicClient, refreshWallet, fetchBalance, onSuccess, token, triggerSync])
 
   //const displayPrice = parseFloat(ethReceived).toFixed(8)
-  const displayPrice = formatValue(Number(ethReceived))
+  const displayPrice = formatValue(Number(ethReceived || 0))
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#2b2e3c] p-4 rounded-lg shadow border border-[#2a2d3a] mt-0 gap-1">

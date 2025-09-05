@@ -155,7 +155,7 @@ export default function PublicBuySection({
     waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token, triggerSync])
 
-  const displayPrice = formatValue(Number(price))
+  const displayPrice = formatValue(Number(price || 0))
 
   return (
     <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">

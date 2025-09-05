@@ -218,7 +218,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
     void waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token.id, token.contract_address, triggerSync])
 
-  const displayPrice = formatValue(Number(price))
+  const displayPrice = formatValue(Number(price || 0))
   const isBusy = loadingPrice || isPending
 
   

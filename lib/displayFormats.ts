@@ -16,8 +16,11 @@ export function formatETH(value: number): string {
   return `${intPart}.${result}`;
 }
 
-export function formatValue(value: number): string {
+export function formatValue(value: number | null | undefined): string {
   if (value === 0) return '0';
+  if (value === null || value === undefined) return '0';
+  if (isNaN(value)) return '0';
+  if (typeof value !== 'number') return '0';
 
   // Convert to string with many decimal places
   const str = value.toFixed(18).replace(/\.?0+$/, '');
@@ -50,8 +53,11 @@ export function formatValue(value: number): string {
  * @param value - Number to format
  * @returns Formatted string with appropriate suffix
  */
-export function formatLargeNumber(value: number): string {
+export function formatLargeNumber(value: number | null | undefined): string {
   if (value === 0) return '0';
+  if (value === null || value === undefined) return '0';
+  if (isNaN(value)) return '0';
+  if (typeof value !== 'number') return '0';
   
   const absValue = Math.abs(value);
   
