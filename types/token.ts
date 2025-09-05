@@ -46,6 +46,9 @@ export type Token = {
   creator_locking_closed?: boolean
   creator_lock_cumulative?: number
 
+  // Holder tracking
+  holder_count?: number
+  holder_count_updated_at?: string
   
 }
 

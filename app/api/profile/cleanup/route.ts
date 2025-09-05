@@ -3,7 +3,6 @@ import db from '@/lib/db'
 
 export async function POST() {
   try {
-    console.log('🔍 Starting media cleanup...')
     
     // Find orphaned media assets (assets without variants)
     const orphanedAssets = await db.query(`
@@ -20,18 +19,15 @@ export async function POST() {
       // Clean up profiles that reference orphaned assets
       for (const asset of orphanedAssets.rows) {
         await db.query('UPDATE profiles SET avatar_asset_id = NULL WHERE avatar_asset_id = $1', [asset.id])
-        console.log('🔍 Cleaned up profile reference for asset:', asset.id)
       }
       
       // Clean up tokens that reference orphaned assets
       await db.query('UPDATE tokens SET token_logo_asset_id = NULL WHERE token_logo_asset_id = ANY($1)', 
         [orphanedAssets.rows.map(a => a.id)])
-      console.log('🔍 Cleaned up token references for orphaned assets')
       
       // Delete orphaned media assets
       await db.query('DELETE FROM media_assets WHERE id = ANY($1)', 
         [orphanedAssets.rows.map(a => a.id)])
-      console.log('🔍 Deleted orphaned media assets')
     }
     
     return NextResponse.json({ 

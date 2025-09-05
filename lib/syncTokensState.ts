@@ -34,6 +34,12 @@ const rpcUrlsByChainId: Record<number, string> = {
   11155111: sepoliaTestnet.rpcUrls.default.http[0],
 }
 
+// DISABLED: Provider cache and getProvider function removed
+// These were only used by the removed getTokenHoldersCount function
+
+// DISABLED: getTokenHoldersCount function removed
+// Holder count is now only calculated on manual user request via /api/token-holders
+
 /**
  * Syncs a token's on-chain state to the database
  */
@@ -74,6 +80,10 @@ export async function syncTokenState(
       contract.creatorLockingClosed?.().catch?.(() => false) ?? Promise.resolve(false),
       contract.creatorLockCumulative?.().catch?.(() => 0n) ?? Promise.resolve(0n),
     ])
+
+    // DISABLED: Automatic holder count fetching in sync
+    // Previously: Fetched holder count during sync
+    // Now: Holder count only fetched on manual user request
 
     const totalSupply = Number(totalSupplyRaw) / 1e18
     const currentPrice = Number(ethers.formatEther(currentPriceRaw))

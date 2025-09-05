@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, memo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
+import { Copy, Users } from 'lucide-react'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
@@ -18,13 +19,25 @@ const TokenCard = memo(({
   token, 
   isSelected, 
   onSelect,
-  usdPrice
+  usdPrice,
+  updateHolderCount,
+  updatingHolders
 }: { 
   token: Token
   isSelected: boolean
   onSelect: (id: string) => void
   usdPrice: number | null
+  updateHolderCount: (tokenId: number, contractAddress: string, chainId: number) => void
+  updatingHolders: Set<number>
 }) => {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyContract = () => {
+    navigator.clipboard.writeText(token.contract_address)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
   const getStatusBadge = () => {
     if (token.on_dex) {
       return { text: 'On DEX', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' }
@@ -61,17 +74,39 @@ const TokenCard = memo(({
     return null
   }
 
-  // Format USD value - always show exactly 2 digits after decimal point
+  // Format USD value using MetaMask style formatting for small values, fixed decimals for larger values
   const formatUSDValue = (ethValue: number, usdPrice: number | null) => {
     if (!usdPrice) return '—'
     const usdValue = ethValue * usdPrice
     
-    // Always show exactly 2 digits after decimal point
-    return usdValue.toFixed(2)
+    // For very small values (< $0.001), use MetaMask formatting
+    if (usdValue < 0.001) {
+      const usdInfo = formatPriceMetaMask(usdValue)
+      
+      if (usdInfo.type === 'metamask') {
+        return (
+          <span>
+            ${usdInfo.value}<sub className="text-xs font-normal" style={{ fontSize: '0.72em' }}>{usdInfo.zeros}</sub>{usdInfo.digits}
+          </span>
+        )
+      }
+      return `$${usdInfo.value}`
+    }
+    
+    // For larger values, use fixed decimal places based on value range
+    if (usdValue >= 0.1) {
+      return `$${usdValue.toFixed(2)}` // 2 decimal places for values >= $0.1
+    } else if (usdValue >= 0.01) {
+      return `$${usdValue.toFixed(3)}` // 3 decimal places for values >= $0.01
+    } else {
+      return `$${usdValue.toFixed(4)}` // 4 decimal places for values >= $0.001
+    }
   }
 
-  // Format ETH value using MetaMask style
+  // Format ETH value using MetaMask style formatting for small values, fixed decimals for larger values
   const formatETHValue = (ethValue: number) => {
+    // For very small values (< 0.001 ETH), use MetaMask formatting
+    if (ethValue < 0.001) {
     const ethInfo = formatPriceMetaMask(ethValue)
     
     if (ethInfo.type === 'metamask') {
@@ -82,6 +117,16 @@ const TokenCard = memo(({
       )
     }
     return ethInfo.value
+    }
+    
+    // For larger values, use fixed decimal places based on value range
+    if (ethValue >= 0.1) {
+      return ethValue.toFixed(2) // 2 decimal places for values >= 0.1 ETH
+    } else if (ethValue >= 0.01) {
+      return ethValue.toFixed(3) // 3 decimal places for values >= 0.01 ETH
+    } else {
+      return ethValue.toFixed(4) // 4 decimal places for values >= 0.001 ETH
+    }
   }
   
   // 24h% - show "--" for now (will be replaced with real data later)
@@ -137,8 +182,9 @@ const TokenCard = memo(({
           : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a] hover:border-[#3a3d4a]'
       }`}
     >
-      {/* Header with logo, name, and status */}
+      {/* Header with logo, name, creator, and status */}
       <div className="flex items-start justify-between mb-3">
+        {/* Token Info Section */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Token Logo */}
           <div className="flex-shrink-0">
@@ -146,7 +192,7 @@ const TokenCard = memo(({
               <LogoContainer
                 src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
                 alt={token.name}
-                baseWidth={40}
+                baseWidth={60}
                 className="rounded-lg"
                 draggable={false}
                 onError={() => {}}
@@ -155,12 +201,12 @@ const TokenCard = memo(({
               <ExternalImageContainer
                 src={token.image}
                 alt={token.name}
-                baseWidth={40}
+                baseWidth={60}
                 className="rounded-lg"
                 draggable={false}
               />
             ) : (
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
                 {token.symbol[0]}
               </div>
             )}
@@ -171,13 +217,46 @@ const TokenCard = memo(({
             <h3 className="font-semibold text-white truncate">
               {token.name}
             </h3>
+            {/* Contract Address */}
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span className="font-mono">
+                {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleCopyContract()
+                }}
+                className="text-gray-400 hover:text-white transition"
+                title="Copy contract address"
+              >
+                <Copy size={12} />
+              </button>
+              {copied && (
+                <span className="text-green-400 text-xs">Copied!</span>
+              )}
+            </div>
             <p className="text-sm text-gray-400 truncate">
               {token.symbol}
             </p>
           </div>
         </div>
+
+        {/* Creator Section - Middle */}
+        <div className="flex-1 flex justify-center">
+          <UserProfile 
+            wallet={token.creator_wallet} 
+            showAvatar={false} 
+            showName={true} 
+            showCreatorLabel={false}
+            showTime={true}
+            createdTime={createdTime}
+            layout="compact"
+          />
+        </div>
         
         {/* Status Badge */}
+        <div className="flex-shrink-0">
         {token.on_dex && token.dex_listing_url ? (
           <a
             href={token.dex_listing_url}
@@ -193,12 +272,13 @@ const TokenCard = memo(({
             {statusBadge.text}
           </div>
         )}
+        </div>
       </div>
 
       {/* Stats Grid - Different layout based on token status */}
       <div className="mb-3">
-        {/* First row: Price and FDV */}
-        <div className="grid grid-cols-2 gap-2 mb-2">
+        {/* First row: Price, FDV, and Holders */}
+        <div className="grid grid-cols-3 gap-2 mb-2">
           {/* Price */}
           <div className="bg-[#23263a] rounded-lg p-2">
             <div className="flex items-center justify-between">
@@ -209,7 +289,7 @@ const TokenCard = memo(({
                 </div>
                 {usdPrice && (
                   <div className="text-xs text-gray-400">
-                    ${formatUSDValue(getNumericPrice(), usdPrice)}
+                    {formatUSDValue(getNumericPrice(), usdPrice)}
                   </div>
                 )}
               </div>
@@ -230,9 +310,39 @@ const TokenCard = memo(({
                 </div>
                 {usdPrice && getFDV() && (
                   <div className="text-xs text-gray-400">
-                    ${formatUSDValue(getFDV()!, usdPrice)}
+                    {formatUSDValue(getFDV()!, usdPrice)}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+
+          {/* Holders */}
+          <div 
+            className="bg-[#23263a] rounded-lg p-2 cursor-pointer hover:bg-[#2a2e4a] transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (token.contract_address && token.chain_id) {
+                updateHolderCount(token.id, token.contract_address, token.chain_id)
+              }
+            }}
+            title="Click to refresh holder count"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <Users size={12} className="text-gray-400" />
+                <span className="text-xs text-gray-400">Holders</span>
+              </div>
+              <div className="text-sm font-semibold text-white text-right">
+                <div>
+                  {updatingHolders.has(token.id) ? (
+                    <span className="text-gray-400">...</span>
+                  ) : token.holder_count !== null && token.holder_count !== undefined ? (
+                    token.holder_count.toLocaleString()
+                  ) : (
+                    '—'
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -266,7 +376,7 @@ const TokenCard = memo(({
                     <path fill="currentColor" d="M12 2.5L8 7h8l-4-4.5zM8 8v6l4 4 4-4V8H8zM10 10h4v2h-4v-2z"/>
                   </svg>
                 </div>
-                <span className="text-sm font-medium text-white">Token Launch Progress</span>
+                <span className="text-sm font-medium text-white">Graduation Progress</span>
               </div>
               
               {/* Progress percentage on the right */}
@@ -316,20 +426,6 @@ const TokenCard = memo(({
       </div>
 
 
-      {/* Footer with creator and created time */}
-      <div className="flex items-center justify-between text-xs text-gray-400">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <UserProfile 
-            wallet={token.creator_wallet} 
-            showAvatar={true} 
-            showName={true} 
-            showCreatorLabel={false}
-          />
-        </div>
-        <div className="flex-shrink-0 ml-2">
-          {createdTime}
-        </div>
-      </div>
     </div>
   )
 })
@@ -345,10 +441,41 @@ export default function TokenPageContent() {
   const [tokens, setTokens] = useState<Token[]>([])
   const [activeToken, setActiveToken] = useState<Token | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [updatingHolders, setUpdatingHolders] = useState<Set<number>>(new Set())
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount()
   const { refreshKey } = useSync()
+
+  const updateHolderCount = useCallback(async (tokenId: number, contractAddress: string, chainId: number) => {
+    if (updatingHolders.has(tokenId)) return // Already updating
+    
+    setUpdatingHolders(prev => new Set(prev).add(tokenId))
+    
+    try {
+      const response = await fetch(`/api/token-holders?tokenId=${tokenId}&contractAddress=${contractAddress}&chainId=${chainId}`)
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Update the token in the tokens array
+        setTokens(prevTokens => 
+          prevTokens.map(token => 
+            token.id === tokenId 
+              ? { ...token, holder_count: data.holderCount, holder_count_updated_at: data.lastUpdated }
+              : token
+          )
+        )
+      }
+    } catch (error) {
+      console.error('Failed to update holder count:', error)
+    } finally {
+      setUpdatingHolders(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(tokenId)
+        return newSet
+      })
+    }
+  }, [updatingHolders])
 
   const fetchTokens = useCallback(async () => {
     setIsLoading(true)
@@ -374,6 +501,15 @@ export default function TokenPageContent() {
 
       const found = baseTokens.find(t => t.id.toString() === selectedId)
       setActiveToken(found ?? null)
+      
+      // Fetch holder count for the selected token if it exists
+      // DISABLED: Automatic holder count fetching
+      // if (found && found.contract_address && found.chain_id) {
+      //   updateHolderCount(found.id, found.contract_address, found.chain_id).catch(error => {
+      //     console.error('Failed to fetch holder count for selected token:', error)
+      //   })
+      // }
+
     } catch (error) {
       console.error('Failed to fetch tokens:', error)
       setTokens([])
@@ -391,7 +527,11 @@ export default function TokenPageContent() {
     fetchTokens()
   }, [fetchTokens, refreshKey])
 
-  const selectToken = (id: string) => {
+  const selectToken = async (id: string) => {
+    // DISABLED: Automatic holder count fetching
+    // Previously: Found token and fetched holder count before navigation
+    // Now: Direct navigation without automatic holder count fetching
+    
     router.push(`/?selected=${id}`)
   }
 
@@ -449,7 +589,7 @@ export default function TokenPageContent() {
     <div className="bg-[#1b1e2b] border border-[#2a2d3a] rounded-xl p-4 animate-pulse">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 bg-gray-700 rounded-lg"></div>
+          <div className="w-16 h-16 bg-gray-700 rounded-lg"></div>
           <div className="flex-1">
             <div className="h-4 bg-gray-700 rounded mb-2"></div>
             <div className="h-3 bg-gray-700 rounded w-2/3"></div>
@@ -457,8 +597,8 @@ export default function TokenPageContent() {
         </div>
         <div className="w-16 h-6 bg-gray-700 rounded-full"></div>
       </div>
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="bg-gray-700 rounded-lg p-2">
             <div className="h-3 bg-gray-600 rounded mb-1"></div>
             <div className="h-4 bg-gray-600 rounded"></div>
@@ -508,6 +648,8 @@ export default function TokenPageContent() {
               isSelected={selectedId === token.id.toString()}
               onSelect={selectToken}
               usdPrice={usdPrice}
+              updateHolderCount={updateHolderCount}
+              updatingHolders={updatingHolders}
             />
           ))
         )}

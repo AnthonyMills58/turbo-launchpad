@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { calculateContainerHeight } from '@/lib/ui-utils'
 
 interface ExternalImageContainerProps {
   src: string
@@ -17,14 +18,32 @@ export default function ExternalImageContainer({
   className = '',
   draggable = false
 }: ExternalImageContainerProps) {
+  const [containerHeight, setContainerHeight] = useState(baseWidth) // Start with square as fallback
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
+
+  useEffect(() => {
+    // Create a temporary image to get dimensions
+    const tempImg = new window.Image()
+    tempImg.onload = () => {
+      const height = calculateContainerHeight(tempImg.naturalWidth, tempImg.naturalHeight, baseWidth)
+      setContainerHeight(height)
+      setImageLoaded(true)
+    }
+    tempImg.onerror = () => {
+      // Fallback to square if image fails to load
+      setContainerHeight(baseWidth)
+      setImageLoaded(true)
+      setImageError(true)
+    }
+    tempImg.src = src
+  }, [src, baseWidth])
 
   if (imageError) {
     return (
       <div
-        className={`w-12 h-8 bg-gray-700 rounded-lg flex items-center justify-center text-sm font-bold ${className}`}
-        style={{ width: `${baseWidth}px`, height: `${Math.max(baseWidth * 0.5, 32)}px` }}
+        className={`bg-gray-700 rounded-lg flex items-center justify-center text-sm font-bold ${className}`}
+        style={{ width: `${baseWidth}px`, height: `${containerHeight}px` }}
       >
         {alt[0]?.toUpperCase() || '?'}
       </div>
@@ -36,7 +55,7 @@ export default function ExternalImageContainer({
       className={`overflow-hidden ${className}`}
       style={{
         width: `${baseWidth}px`,
-        height: `${Math.max(baseWidth * 0.5, 32)}px`
+        height: `${containerHeight}px`
       }}
     >
              <img

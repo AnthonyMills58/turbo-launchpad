@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Copy } from 'lucide-react'
 
 type Profile = {
   wallet: string
@@ -15,37 +16,27 @@ type UserProfileProps = {
   showName?: boolean
   className?: string
   showCreatorLabel?: boolean
+  showTime?: boolean
+  createdTime?: string
+  layout?: 'default' | 'compact'
 }
 
-export default function UserProfile({ wallet, showAvatar = true, showName = true, className = '', showCreatorLabel = false }: UserProfileProps) {
+export default function UserProfile({ wallet, showAvatar = true, showName = true, className = '', showCreatorLabel = false, showTime = false, createdTime, layout = 'default' }: UserProfileProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showTooltip, setShowTooltip] = useState(false)
+  const [copied, setCopied] = useState(false)
   
-  console.log('🔍 UserProfile component rendered with wallet:', wallet, 'showAvatar:', showAvatar, 'showName:', showName)
 
   const loadProfile = useCallback(async () => {
     try {
-      console.log('🔍 Loading profile for wallet:', wallet)
       const response = await fetch(`/api/profile?wallet=${wallet}`)
-      console.log('🔍 Profile response status:', response.status)
       
       if (response.ok) {
         const data = await response.json()
-        console.log('🔍 Profile data:', data)
         if (data.success) {
           setProfile(data.profile)
           
-          // Test if media endpoint works
-          if (data.profile?.avatar_asset_id) {
-            console.log('🔍 Testing media endpoint for avatar:', data.profile.avatar_asset_id)
-            try {
-              const mediaResponse = await fetch(`/api/media/${data.profile.avatar_asset_id}?v=thumb`)
-              console.log('🔍 Media response status:', mediaResponse.status)
-            } catch (mediaError) {
-              console.error('🔍 Media endpoint error:', mediaError)
-            }
-          }
         }
       } else {
         console.error('🔍 Profile API error:', response.status, response.statusText)
@@ -65,6 +56,26 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
 
   const displayName = profile?.display_name || wallet.slice(0, 6) + '...' + wallet.slice(-4)
   const hasAvatar = profile?.avatar_asset_id
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      console.log('Copied to clipboard:', text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy: ', err)
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -114,19 +125,69 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
         )}
                  {showName && (
            <div className="flex flex-col">
-             <span className="text-sm text-gray-300 hover:text-white transition-colors cursor-pointer">
-               {displayName}
-             </span>
-             <span className="text-xs text-gray-400">
-               {wallet.slice(0, 6)}...{wallet.slice(-4)}
-             </span>
+             {layout === 'compact' ? (
+               <>
+                 {/* Line 1: Creator name */}
+                 <span className="text-white hover:text-white transition-colors cursor-pointer">
+                   <span className="text-gray-400">by </span>
+                   <span className="font-semibold">{displayName}</span>
+                 </span>
+                 {/* Line 2: Address with copy icon */}
+                 <div className="flex items-center gap-2 text-xs text-gray-400">
+                   <span className="font-mono">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+                   <button
+                     onClick={(e) => {
+                       e.stopPropagation()
+                       copyToClipboard(wallet)
+                     }}
+                     className="hover:text-white transition-colors"
+                     title="Copy wallet address"
+                   >
+                     <Copy size={12} />
+                   </button>
+                   {copied && <span className="text-green-400 text-xs">Copied!</span>}
+                 </div>
+                 {/* Line 3: Time */}
+                 {createdTime && (
+                   <span className="text-sm text-gray-400">
+                     {createdTime}
+                   </span>
+                 )}
+               </>
+             ) : (
+               <>
+                 <span className="text-sm text-gray-300 hover:text-white transition-colors cursor-pointer">
+                   {displayName}
+                 </span>
+                 {showTime ? (
+                   <div className="flex items-center gap-2 text-xs text-gray-400">
+                     <span>{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+                     <button
+                       onClick={(e) => {
+                         e.stopPropagation()
+                         copyToClipboard(wallet)
+                       }}
+                       className="hover:text-white transition-colors"
+                       title="Copy wallet address"
+                     >
+                       <Copy size={12} />
+                     </button>
+                     {createdTime && <span>• {createdTime}</span>}
+                   </div>
+                 ) : (
+                   <span className="text-xs text-gray-400">
+                     {wallet.slice(0, 6)}...{wallet.slice(-4)}
+                   </span>
+                 )}
+               </>
+             )}
            </div>
          )}
       </div>
 
              {/* Tooltip */}
        {showTooltip && profile && (
-         <div className="absolute z-50 bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-[#1e1f25] border border-[#2a2d3a] rounded-lg shadow-lg text-white text-sm whitespace-nowrap min-w-64">
+         <div className="absolute z-50 top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-[#1e1f25] border border-[#2a2d3a] rounded-lg shadow-lg text-white text-sm whitespace-nowrap min-w-64">
            <div className="flex items-center space-x-3 mb-2">
              {hasAvatar ? (
                <div className="w-24 h-24 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
@@ -156,7 +217,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
              </div>
            )}
            {/* Arrow */}
-           <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#1e1f25]"></div>
+           <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#1e1f25]"></div>
          </div>
        )}
     </div>
