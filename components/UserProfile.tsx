@@ -126,7 +126,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
              {layout === 'compact' ? (
                <>
                  {/* Line 1: Creator name */}
-                 <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1">
+                 <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-sm">
                    <span className="text-gray-400">by</span>
                    {displayName && (
                      <span 
@@ -192,10 +192,10 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
 
              {/* Tooltip */}
        {showTooltip && profile && (
-         <div className="absolute z-50 top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-[#23263a] border border-[#3a3d4a] rounded-lg shadow-lg text-white text-sm w-48">
+         <div className="absolute z-[9999] top-full right-0 transform translate-x-0 mt-2 px-3 py-2 bg-[#1b1e2b] border-2 border-purple-400/30 rounded-xl shadow-2xl shadow-purple-500/20 text-white text-xs min-w-52 max-w-80 w-fit transition-all duration-200 ease-in-out opacity-100">
            <div className="flex justify-center mb-2">
              {hasAvatar && profile ? (
-               <div className="w-24 h-24 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
+               <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 bg-gray-700 ring-2 ring-purple-400/20 shadow-lg">
                  <img
                    src={`/api/media/${profile.avatar_asset_id}?v=thumb`}
                    alt={profile.display_name || 'User'}
@@ -203,23 +203,25 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                  />
                </div>
              ) : (
-               <div className="w-24 h-24 bg-gray-600 rounded-full flex items-center justify-center text-2xl text-gray-300">
+               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-xl text-white shadow-lg ring-2 ring-purple-400/20">
                  {wallet[0].toUpperCase()}
                </div>
              )}
            </div>
            {displayName && (
-             <div className="text-white text-sm font-semibold text-center mb-2">
+             <div className="text-white text-xs font-bold text-center mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
                {displayName}
              </div>
            )}
            {profile?.bio && (
-             <div className="text-gray-300 text-xs break-words text-center">
-               {profile.bio}
+             <div className="text-gray-300 text-xs break-words text-center leading-tight">
+               {profile.bio.length > 80 
+                 ? `${profile.bio.substring(0, 80)}...` 
+                 : profile.bio}
              </div>
            )}
            {/* Arrow */}
-           <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#23263a]"></div>
+           <div className="absolute top-0 right-4 transform translate-x-0 -translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#1b1e2b]"></div>
          </div>
        )}
     </div>

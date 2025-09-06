@@ -157,7 +157,7 @@ const TokenCard = memo(({
           onSelect(token.id.toString())
         }
       }}
-      className={`group cursor-pointer rounded-xl p-2 border transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
+      className={`group cursor-pointer rounded-xl p-2 border transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
         isSelected
           ? 'bg-[#23263a] ring-2 ring-purple-400 border-purple-500'
           : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a] hover:border-[#3a3d4a]'
@@ -195,12 +195,13 @@ const TokenCard = memo(({
           </div>
           
         {/* Section 2: Token Information */}
-        <div className="flex-1 min-w-0 flex flex-col justify-center items-center text-center">
-          <h3 
-            className="font-semibold text-white truncate w-full cursor-help"
-            title={token.name}
-          >
-            {token.name}
+        <div 
+          className="flex-1 min-w-0 flex flex-col justify-center items-center text-center"
+          title={token.name}
+        >
+          {/* Token Symbol */}
+          <h3 className="font-semibold text-white truncate w-full">
+            {token.symbol}
           </h3>
             {/* Contract Address */}
           <div className="flex items-center gap-2 text-xs text-gray-400 justify-center">
@@ -221,9 +222,6 @@ const TokenCard = memo(({
                 <span className="text-green-400 text-xs">Copied!</span>
               )}
             </div>
-          <p className="text-sm text-gray-400 truncate w-full">
-              {token.symbol}
-            </p>
           {/* On DEX Link - Fourth Line */}
           {token.on_dex && token.dex_listing_url && (
             <a
