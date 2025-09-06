@@ -192,35 +192,35 @@ const TokenCard = memo(({
               </div>
             )}
           </div>
-        </div>
-
+          </div>
+          
         {/* Section 2: Token Information */}
         <div className="flex-1 min-w-0 flex flex-col justify-center items-center text-center">
           <h3 className="font-semibold text-white truncate w-full">
-            {token.name}
-          </h3>
-          {/* Contract Address */}
+              {token.name}
+            </h3>
+            {/* Contract Address */}
           <div className="flex items-center gap-2 text-xs text-gray-400 justify-center">
-            <span className="font-mono">
-              {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
-            </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleCopyContract()
-              }}
-              className="text-gray-400 hover:text-white transition"
-              title="Copy contract address"
-            >
-              <Copy size={12} />
-            </button>
-            {copied && (
-              <span className="text-green-400 text-xs">Copied!</span>
-            )}
-          </div>
+              <span className="font-mono">
+                {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleCopyContract()
+                }}
+                className="text-gray-400 hover:text-white transition"
+                title="Copy contract address"
+              >
+                <Copy size={12} />
+              </button>
+              {copied && (
+                <span className="text-green-400 text-xs">Copied!</span>
+              )}
+            </div>
           <p className="text-sm text-gray-400 truncate w-full">
-            {token.symbol}
-          </p>
+              {token.symbol}
+            </p>
           {/* On DEX Link - Fourth Line */}
           {token.on_dex && token.dex_listing_url && (
             <a
@@ -371,33 +371,33 @@ const TokenCard = memo(({
             
             {/* Flaunch-style progress bar with animated stripes */}
             <div className="relative h-3 bg-gray-700 rounded-full overflow-hidden">
-              {/* Animated stripes background - covers entire bar */}
-              <div 
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(
-                    -45deg,
-                    rgba(100,100,100,0.3) 0px,
-                    rgba(100,100,100,0.3) 12px,
-                    rgba(255,255,255,0.2) 12px,
-                    rgba(255,255,255,0.2) 20px
-                  )`,
-                  backgroundSize: '20px 20px',
-                  animation: 'moveStripes 1.28s linear infinite'
-                }}
-              ></div>
-              
-              {/* Progress fill with gradient */}
-              <div 
-                className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
-                style={{ 
-                  width: token.raise_target && token.eth_raised 
-                    ? `${Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 100)}%` 
-                    : '0%' 
-                }}
-              >
-                {/* Solid gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90"></div>
+                {/* Animated stripes background - covers entire bar */}
+                <div 
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage: `repeating-linear-gradient(
+                      -45deg,
+                      rgba(100,100,100,0.3) 0px,
+                      rgba(100,100,100,0.3) 12px,
+                      rgba(255,255,255,0.2) 12px,
+                      rgba(255,255,255,0.2) 20px
+                    )`,
+                    backgroundSize: '20px 20px',
+                    animation: 'moveStripes 1.28s linear infinite'
+                  }}
+                ></div>
+                
+                {/* Progress fill with gradient */}
+                <div 
+                  className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
+                  style={{ 
+                    width: token.raise_target && token.eth_raised 
+                      ? `${Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 100)}%` 
+                      : '0%' 
+                  }}
+                >
+                  {/* Solid gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90"></div>
               </div>
             </div>
           </div>
@@ -611,7 +611,7 @@ export default function TokenPageContent() {
 
   return (
     <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (
