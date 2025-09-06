@@ -187,23 +187,23 @@ const TokenCard = memo(({
           onSelect(token.id.toString())
         }
       }}
-      className={`group cursor-pointer rounded-xl p-4 border transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
+      className={`group cursor-pointer rounded-xl p-2 border transition-all duration-200 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
         isSelected
           ? 'bg-[#23263a] ring-2 ring-purple-400 border-purple-500'
           : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a] hover:border-[#3a3d4a]'
       }`}
     >
-      {/* Header with logo, name, creator, and status */}
-      <div className="flex items-start justify-between mb-3">
-        {/* Token Info Section */}
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+      {/* Three Section Layout */}
+      <div className="flex items-start justify-between mb-3 gap-4">
+        {/* Section 1: Image Only */}
+        <div className="flex-shrink-0">
           {/* Token Logo */}
-          <div className="flex-shrink-0">
+          <div>
             {token.token_logo_asset_id ? (
               <LogoContainer
                 src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
                 alt={token.name}
-                baseWidth={60}
+                baseWidth={80}
                 className="rounded-lg"
                 draggable={false}
                 onError={() => {}}
@@ -212,49 +212,49 @@ const TokenCard = memo(({
               <ExternalImageContainer
                 src={token.image}
                 alt={token.name}
-                baseWidth={60}
+                baseWidth={80}
                 className="rounded-lg"
                 draggable={false}
               />
             ) : (
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+              <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
                 {token.symbol[0]}
               </div>
             )}
           </div>
-          
-          {/* Token Name & Symbol */}
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white truncate">
-              {token.name}
-            </h3>
-            {/* Contract Address */}
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <span className="font-mono">
-                {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
-              </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleCopyContract()
-                }}
-                className="text-gray-400 hover:text-white transition"
-                title="Copy contract address"
-              >
-                <Copy size={12} />
-              </button>
-              {copied && (
-                <span className="text-green-400 text-xs">Copied!</span>
-              )}
-            </div>
-            <p className="text-sm text-gray-400 truncate">
-              {token.symbol}
-            </p>
-          </div>
         </div>
 
-        {/* Creator Section - Middle */}
-        <div className="flex-1 flex justify-center">
+        {/* Section 2: Token Information */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center items-center text-center">
+          <h3 className="font-semibold text-white truncate w-full">
+            {token.name}
+          </h3>
+          {/* Contract Address */}
+          <div className="flex items-center gap-2 text-xs text-gray-400 justify-center">
+            <span className="font-mono">
+              {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleCopyContract()
+              }}
+              className="text-gray-400 hover:text-white transition"
+              title="Copy contract address"
+            >
+              <Copy size={12} />
+            </button>
+            {copied && (
+              <span className="text-green-400 text-xs">Copied!</span>
+            )}
+          </div>
+          <p className="text-sm text-gray-400 truncate w-full">
+            {token.symbol}
+          </p>
+        </div>
+
+        {/* Section 3: Creator Information */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center items-center text-center">
           <UserProfile 
             wallet={token.creator_wallet} 
             showAvatar={false} 
@@ -263,27 +263,104 @@ const TokenCard = memo(({
             showTime={true}
             createdTime={createdTime}
             layout="compact"
+            centerAlign={true}
           />
         </div>
-        
-        {/* Status Badge */}
-        <div className="flex-shrink-0">
+      </div>
+
+      {/* Status/Progress Row - Separate row below first row */}
+      <div className="mb-3">
         {token.on_dex && token.dex_listing_url ? (
-          <a
-            href={token.dex_listing_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`px-2 py-1 rounded-full text-xs font-medium border ${statusBadge.color} hover:brightness-110 transition-all cursor-pointer`}
-            title="View on DEX"
-          >
-            {statusBadge.text} ↗
-          </a>
+          /* On DEX: Status + Volume + Liquidity in single row */
+          <div className="grid grid-cols-3 gap-2">
+            {/* Status Box */}
+            <div className="bg-[#23263a] rounded-lg p-4 flex items-center justify-center">
+              <a
+                href={token.dex_listing_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 rounded-full font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:brightness-110 transition-all cursor-pointer whitespace-nowrap"
+                style={{ fontSize: '0.625rem' }}
+                title="View on DEX"
+              >
+                On DEX ↗
+              </a>
+            </div>
+            
+            {/* Volume Box */}
+            <div className="bg-[#23263a] rounded-lg p-4">
+              <div className="text-xs text-gray-400 mb-1">Volume</div>
+              <div className="text-sm font-semibold text-white">—</div>
+            </div>
+            
+            {/* Liquidity Box */}
+            <div className="bg-[#23263a] rounded-lg p-4">
+              <div className="text-xs text-gray-400 mb-1">Liquidity</div>
+              <div className="text-sm font-semibold text-white">—</div>
+            </div>
+          </div>
+        ) : token.is_graduated ? (
+          <div className="flex justify-center">
+            <div className={`px-4 py-2 rounded-full text-sm font-medium border ${statusBadge.color}`}>
+              {statusBadge.text}
+            </div>
+          </div>
         ) : (
-          <div className={`px-2 py-1 rounded-full text-xs font-medium border ${statusBadge.color}`}>
-            {statusBadge.text}
+          /* In Progress: Flaunch-style progress bar */
+          <div className="bg-[#23263a] rounded-lg p-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                {/* Rocket Icon */}
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-purple-400">
+                    <path fill="currentColor" d="M12 2.5L8 7h8l-4-4.5zM8 8v6l4 4 4-4V8H8zM10 10h4v2h-4v-2z"/>
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-white">Graduation Progress</span>
+              </div>
+              
+              {/* Progress percentage on the right */}
+              <span className="text-sm font-semibold text-orange-400">
+                {token.raise_target && token.eth_raised 
+                  ? `${Math.min(Math.floor((Number(token.eth_raised) / Number(token.raise_target)) * 100), 100)}%`
+                  : '0%'
+                }
+              </span>
+            </div>
+            
+            {/* Flaunch-style progress bar with animated stripes */}
+            <div className="relative h-3 bg-gray-700 rounded-full overflow-hidden">
+              {/* Animated stripes background - covers entire bar */}
+              <div 
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: `repeating-linear-gradient(
+                    -45deg,
+                    rgba(100,100,100,0.3) 0px,
+                    rgba(100,100,100,0.3) 12px,
+                    rgba(255,255,255,0.2) 12px,
+                    rgba(255,255,255,0.2) 20px
+                  )`,
+                  backgroundSize: '20px 20px',
+                  animation: 'moveStripes 1.28s linear infinite'
+                }}
+              ></div>
+              
+              {/* Progress fill with gradient */}
+              <div 
+                className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
+                style={{ 
+                  width: token.raise_target && token.eth_raised 
+                    ? `${Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 100)}%` 
+                    : '0%' 
+                }}
+              >
+                {/* Solid gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90"></div>
+              </div>
+            </div>
           </div>
         )}
-        </div>
       </div>
 
       {/* Stats Grid - Different layout based on token status */}
@@ -296,13 +373,12 @@ const TokenCard = memo(({
               <span className="text-xs text-gray-400">Price</span>
               <div className="text-sm font-semibold text-white text-right">
                 <div>
-                  {formatETHValue(getNumericPrice())} <span className="text-xs text-gray-400">ETH</span>
+                  {usdPrice ? (
+                    formatUSDValue(getNumericPrice(), usdPrice)
+                  ) : (
+                    '—'
+                  )}
                 </div>
-                {usdPrice && (
-                  <div className="text-xs text-gray-400">
-                    {formatUSDValue(getNumericPrice(), usdPrice)}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -313,17 +389,12 @@ const TokenCard = memo(({
               <span className="text-xs text-gray-400">FDV</span>
               <div className="text-sm font-semibold text-white text-right">
                 <div>
-                  {getFDV() ? (
-                    <>
-                      {formatETHValue(getFDV()!)} <span className="text-xs text-gray-400">ETH</span>
-                    </>
-                  ) : '—'}
+                  {usdPrice && getFDV() ? (
+                    formatUSDValue(getFDV()!, usdPrice)
+                  ) : (
+                    '—'
+                  )}
                 </div>
-                {usdPrice && getFDV() && (
-                  <div className="text-xs text-gray-400">
-                    {formatUSDValue(getFDV()!, usdPrice)}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -361,78 +432,11 @@ const TokenCard = memo(({
 
         {/* Second row: Status-specific content */}
         {token.on_dex ? (
-          /* On DEX: Volume, Liquidity, 24h in single line */
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-[#23263a] rounded-lg p-2">
-              <div className="text-xs text-gray-400 mb-1">Volume</div>
-              <div className="text-sm font-semibold text-white">—</div>
-            </div>
-            <div className="bg-[#23263a] rounded-lg p-2">
-              <div className="text-xs text-gray-400 mb-1">Liquidity</div>
-              <div className="text-sm font-semibold text-white">—</div>
-            </div>
-            <div className="bg-[#23263a] rounded-lg p-2">
-              <div className="text-xs text-gray-400 mb-1">24h</div>
-              <div className="text-sm font-semibold text-white">—</div>
-            </div>
-          </div>
+          /* On DEX: Empty space since Volume/Liquidity are now in status row */
+          <div></div>
         ) : (
-          /* In Progress: Flaunch-style progress bar */
-          <div className="bg-[#23263a] rounded-lg p-3">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                {/* Rocket Icon */}
-                <div className="w-6 h-6 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-purple-400">
-                    <path fill="currentColor" d="M12 2.5L8 7h8l-4-4.5zM8 8v6l4 4 4-4V8H8zM10 10h4v2h-4v-2z"/>
-                  </svg>
-                </div>
-                <span className="text-sm font-medium text-white">Graduation Progress</span>
-              </div>
-              
-              {/* Progress percentage on the right */}
-              <span className="text-sm font-semibold text-orange-400">
-                {token.raise_target && token.eth_raised 
-                  ? `${Math.min(Math.floor((Number(token.eth_raised) / Number(token.raise_target)) * 100), 100)}%`
-                  : '0%'
-                }
-              </span>
-            </div>
-            
-            {/* Flaunch-style progress bar with animated stripes */}
-            <div className="relative">
-              <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden relative">
-                {/* Animated stripes background - covers entire bar */}
-                <div 
-                  className="absolute inset-0"
-                  style={{
-                    backgroundImage: `repeating-linear-gradient(
-                      -45deg,
-                      rgba(100,100,100,0.3) 0px,
-                      rgba(100,100,100,0.3) 12px,
-                      rgba(255,255,255,0.2) 12px,
-                      rgba(255,255,255,0.2) 20px
-                    )`,
-                    backgroundSize: '20px 20px',
-                    animation: 'moveStripes 1.28s linear infinite'
-                  }}
-                ></div>
-                
-                {/* Progress fill with gradient */}
-                <div 
-                  className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
-                  style={{ 
-                    width: token.raise_target && token.eth_raised 
-                      ? `${Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 100)}%` 
-                      : '0%' 
-                  }}
-                >
-                  {/* Solid gradient overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90"></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          /* In Progress: Empty space since progress is now in status row */
+          <div></div>
         )}
       </div>
 
@@ -597,7 +601,7 @@ export default function TokenPageContent() {
 
   // Skeleton loading component
   const SkeletonCard = () => (
-    <div className="bg-[#1b1e2b] border border-[#2a2d3a] rounded-xl p-4 animate-pulse">
+    <div className="bg-[#1b1e2b] border border-[#2a2d3a] rounded-xl p-2 animate-pulse">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 flex-1">
           <div className="w-16 h-16 bg-gray-700 rounded-lg"></div>
@@ -643,7 +647,7 @@ export default function TokenPageContent() {
 
   return (
     <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (

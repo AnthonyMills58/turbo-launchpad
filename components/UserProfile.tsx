@@ -19,9 +19,10 @@ type UserProfileProps = {
   showTime?: boolean
   createdTime?: string
   layout?: 'default' | 'compact'
+  centerAlign?: boolean
 }
 
-export default function UserProfile({ wallet, showAvatar = true, showName = true, className = '', showCreatorLabel = false, showTime = false, createdTime, layout = 'default' }: UserProfileProps) {
+export default function UserProfile({ wallet, showAvatar = true, showName = true, className = '', showCreatorLabel = false, showTime = false, createdTime, layout = 'default', centerAlign = false }: UserProfileProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showTooltip, setShowTooltip] = useState(false)
@@ -98,7 +99,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
       onMouseEnter={() => profile && setShowTooltip(true)}
       onMouseLeave={() => profile && setShowTooltip(false)}
     >
-      <div className="flex items-center space-x-2">
+      <div className={`flex items-center space-x-2 ${centerAlign ? 'justify-center' : ''}`}>
         {showCreatorLabel && (
           <span className="text-xs text-gray-400">Creator:</span>
         )}
@@ -121,7 +122,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
            )
         )}
                  {showName && (
-           <div className="flex flex-col">
+           <div className={`flex flex-col ${centerAlign ? 'items-center text-center' : ''}`}>
              {layout === 'compact' ? (
                <>
                  {/* Line 1: Creator name */}
@@ -130,7 +131,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                    {displayName && <span className="font-semibold">{displayName}</span>}
                  </span>
                  {/* Line 2: Address with copy icon */}
-                 <div className="flex items-center gap-2 text-xs text-gray-400">
+                 <div className={`flex items-center gap-2 text-xs text-gray-400 ${centerAlign ? 'justify-center' : ''}`}>
                    <span className="font-mono">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
                    <button
                      onClick={(e) => {
@@ -184,8 +185,8 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
 
              {/* Tooltip */}
        {showTooltip && profile && (
-         <div className="absolute z-50 top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-[#1e1f25] border border-[#2a2d3a] rounded-lg shadow-lg text-white text-sm whitespace-nowrap min-w-64">
-           <div className="flex items-center space-x-3 mb-2">
+         <div className="absolute z-50 top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-[#23263a] border border-[#3a3d4a] rounded-lg shadow-lg text-white text-sm w-48">
+           <div className="flex justify-center mb-2">
              {hasAvatar && profile ? (
                <div className="w-24 h-24 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                  <img
@@ -199,22 +200,14 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                  {wallet[0].toUpperCase()}
                </div>
              )}
-             <div className="flex-1">
-               <div className="font-semibold text-white">
-                 {profile?.display_name || 'Anonymous'}
-               </div>
-               <div className="text-xs text-gray-400">
-                 {wallet.slice(0, 6)}...{wallet.slice(-4)}
-               </div>
-             </div>
            </div>
            {profile?.bio && (
-             <div className="text-gray-300 text-xs max-w-xs break-words">
+             <div className="text-gray-300 text-xs break-words text-center">
                {profile.bio}
              </div>
            )}
            {/* Arrow */}
-           <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#1e1f25]"></div>
+           <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#23263a]"></div>
          </div>
        )}
     </div>
