@@ -611,7 +611,7 @@ export default function TokenPageContent() {
 
   return (
     <div className="min-h-screen bg-[#0d0f1a] p-4 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-6 gap-3">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (
