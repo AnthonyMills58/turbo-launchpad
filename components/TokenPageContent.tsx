@@ -196,9 +196,12 @@ const TokenCard = memo(({
           
         {/* Section 2: Token Information */}
         <div className="flex-1 min-w-0 flex flex-col justify-center items-center text-center">
-          <h3 className="font-semibold text-white truncate w-full">
-              {token.name}
-            </h3>
+          <h3 
+            className="font-semibold text-white truncate w-full cursor-help"
+            title={token.name}
+          >
+            {token.name}
+          </h3>
             {/* Contract Address */}
           <div className="flex items-center gap-2 text-xs text-gray-400 justify-center">
               <span className="font-mono">

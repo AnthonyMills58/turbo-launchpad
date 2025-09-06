@@ -126,10 +126,17 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
              {layout === 'compact' ? (
                <>
                  {/* Line 1: Creator name */}
-                 <span className="text-white hover:text-white transition-colors cursor-pointer">
-                   <span className="text-gray-400">by </span>
-                   {displayName && <span className="font-semibold">{displayName}</span>}
-                 </span>
+                 <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1">
+                   <span className="text-gray-400">by</span>
+                   {displayName && (
+                     <span 
+                       className="text-gray-400 truncate max-w-[80px]"
+                       title={displayName}
+                     >
+                       {displayName}
+                     </span>
+                   )}
+                 </div>
                  {/* Line 2: Address with copy icon */}
                  <div className={`flex items-center gap-2 text-xs text-gray-400 ${centerAlign ? 'justify-center' : ''}`}>
                    <span className="font-mono">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
@@ -201,6 +208,11 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                </div>
              )}
            </div>
+           {displayName && (
+             <div className="text-white text-sm font-semibold text-center mb-2">
+               {displayName}
+             </div>
+           )}
            {profile?.bio && (
              <div className="text-gray-300 text-xs break-words text-center">
                {profile.bio}
