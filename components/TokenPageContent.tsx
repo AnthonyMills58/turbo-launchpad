@@ -109,36 +109,6 @@ const TokenCard = memo(({
     }
   }
 
-  // Format ETH value using MetaMask style formatting for small values, K/M/B for larger values
-  const formatETHValue = (ethValue: number) => {
-    // For very small values (< 0.001 ETH), use MetaMask formatting
-    if (ethValue < 0.001) {
-    const ethInfo = formatPriceMetaMask(ethValue)
-    
-    if (ethInfo.type === 'metamask') {
-      return (
-        <span>
-          {ethInfo.value}<sub className="text-xs font-normal" style={{ fontSize: '0.72em' }}>{ethInfo.zeros}</sub>{ethInfo.digits}
-        </span>
-      )
-    }
-    return ethInfo.value
-    }
-    
-    // For values >= 1000 ETH, use K/M/B formatting
-    if (ethValue >= 1000) {
-      return formatLargeNumber(ethValue)
-    }
-    
-    // For smaller values, use fixed decimal places based on value range
-    if (ethValue >= 0.1) {
-      return ethValue.toFixed(2) // 2 decimal places for values >= 0.1 ETH
-    } else if (ethValue >= 0.01) {
-      return ethValue.toFixed(3) // 3 decimal places for values >= 0.01 ETH
-    } else {
-      return ethValue.toFixed(4) // 4 decimal places for values >= 0.001 ETH
-    }
-  }
   
   // 24h% - show "--" for now (will be replaced with real data later)
   const change24h = null // No mock data
@@ -251,6 +221,21 @@ const TokenCard = memo(({
           <p className="text-sm text-gray-400 truncate w-full">
             {token.symbol}
           </p>
+          {/* On DEX Link - Fourth Line */}
+          {token.on_dex && token.dex_listing_url && (
+            <a
+              href={token.dex_listing_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              title="View on DEX"
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
+            >
+              On DEX ↗
+            </a>
+          )}
         </div>
 
         {/* Section 3: Creator Information */}
@@ -266,101 +251,6 @@ const TokenCard = memo(({
             centerAlign={true}
           />
         </div>
-      </div>
-
-      {/* Status/Progress Row - Separate row below first row */}
-      <div className="mb-3">
-        {token.on_dex && token.dex_listing_url ? (
-          /* On DEX: Status + Volume + Liquidity in single row */
-          <div className="grid grid-cols-3 gap-2">
-            {/* Status Box */}
-            <div className="bg-[#23263a] rounded-lg p-4 flex items-center justify-center">
-              <a
-                href={token.dex_listing_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-2 rounded-full font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:brightness-110 transition-all cursor-pointer whitespace-nowrap"
-                style={{ fontSize: '0.625rem' }}
-                title="View on DEX"
-              >
-                On DEX ↗
-              </a>
-            </div>
-            
-            {/* Volume Box */}
-            <div className="bg-[#23263a] rounded-lg p-4">
-              <div className="text-xs text-gray-400 mb-1">Volume</div>
-              <div className="text-sm font-semibold text-white">—</div>
-            </div>
-            
-            {/* Liquidity Box */}
-            <div className="bg-[#23263a] rounded-lg p-4">
-              <div className="text-xs text-gray-400 mb-1">Liquidity</div>
-              <div className="text-sm font-semibold text-white">—</div>
-            </div>
-          </div>
-        ) : token.is_graduated ? (
-          <div className="flex justify-center">
-            <div className={`px-4 py-2 rounded-full text-sm font-medium border ${statusBadge.color}`}>
-              {statusBadge.text}
-            </div>
-          </div>
-        ) : (
-          /* In Progress: Flaunch-style progress bar */
-          <div className="bg-[#23263a] rounded-lg p-3">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                {/* Rocket Icon */}
-                <div className="w-6 h-6 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-purple-400">
-                    <path fill="currentColor" d="M12 2.5L8 7h8l-4-4.5zM8 8v6l4 4 4-4V8H8zM10 10h4v2h-4v-2z"/>
-                  </svg>
-                </div>
-                <span className="text-sm font-medium text-white">Graduation Progress</span>
-              </div>
-              
-              {/* Progress percentage on the right */}
-              <span className="text-sm font-semibold text-orange-400">
-                {token.raise_target && token.eth_raised 
-                  ? `${Math.min(Math.floor((Number(token.eth_raised) / Number(token.raise_target)) * 100), 100)}%`
-                  : '0%'
-                }
-              </span>
-            </div>
-            
-            {/* Flaunch-style progress bar with animated stripes */}
-            <div className="relative h-3 bg-gray-700 rounded-full overflow-hidden">
-              {/* Animated stripes background - covers entire bar */}
-              <div 
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(
-                    -45deg,
-                    rgba(100,100,100,0.3) 0px,
-                    rgba(100,100,100,0.3) 12px,
-                    rgba(255,255,255,0.2) 12px,
-                    rgba(255,255,255,0.2) 20px
-                  )`,
-                  backgroundSize: '20px 20px',
-                  animation: 'moveStripes 1.28s linear infinite'
-                }}
-              ></div>
-              
-              {/* Progress fill with gradient */}
-              <div 
-                className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
-                style={{ 
-                  width: token.raise_target && token.eth_raised 
-                    ? `${Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 100)}%` 
-                    : '0%' 
-                }}
-              >
-                {/* Solid gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90"></div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Stats Grid - Different layout based on token status */}
@@ -431,12 +321,86 @@ const TokenCard = memo(({
         </div>
 
         {/* Second row: Status-specific content */}
-        {token.on_dex ? (
-          /* On DEX: Empty space since Volume/Liquidity are now in status row */
-          <div></div>
+        {token.on_dex && token.dex_listing_url ? (
+          /* On DEX: Volume + Liquidity in single row */
+          <div className="grid grid-cols-2 gap-2">
+            {/* Volume Box */}
+            <div className="bg-[#23263a] rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Volume</span>
+                <span className="text-sm font-semibold text-white">—</span>
+              </div>
+            </div>
+            
+            {/* Liquidity Box */}
+            <div className="bg-[#23263a] rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Liquidity</span>
+                <span className="text-sm font-semibold text-white">—</span>
+              </div>
+            </div>
+          </div>
+        ) : token.is_graduated ? (
+          <div className="flex justify-center">
+            <div className={`px-4 py-2 rounded-full text-sm font-medium border ${statusBadge.color}`}>
+              {statusBadge.text}
+            </div>
+          </div>
         ) : (
-          /* In Progress: Empty space since progress is now in status row */
-          <div></div>
+          /* In Progress: Flaunch-style progress bar */
+          <div className="bg-[#23263a] rounded-lg p-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                {/* Rocket Icon */}
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-purple-400">
+                    <path fill="currentColor" d="M12 2.5L8 7h8l-4-4.5zM8 8v6l4 4 4-4V8H8zM10 10h4v2h-4v-2z"/>
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-white">Graduation Progress</span>
+              </div>
+              
+              {/* Progress percentage on the right */}
+              <span className="text-sm font-semibold text-orange-400">
+                {token.raise_target && token.eth_raised 
+                  ? `${Math.min(Math.floor((Number(token.eth_raised) / Number(token.raise_target)) * 100), 100)}%`
+                  : '0%'
+                }
+              </span>
+            </div>
+            
+            {/* Flaunch-style progress bar with animated stripes */}
+            <div className="relative h-3 bg-gray-700 rounded-full overflow-hidden">
+              {/* Animated stripes background - covers entire bar */}
+              <div 
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: `repeating-linear-gradient(
+                    -45deg,
+                    rgba(100,100,100,0.3) 0px,
+                    rgba(100,100,100,0.3) 12px,
+                    rgba(255,255,255,0.2) 12px,
+                    rgba(255,255,255,0.2) 20px
+                  )`,
+                  backgroundSize: '20px 20px',
+                  animation: 'moveStripes 1.28s linear infinite'
+                }}
+              ></div>
+              
+              {/* Progress fill with gradient */}
+              <div 
+                className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
+                style={{ 
+                  width: token.raise_target && token.eth_raised 
+                    ? `${Math.min((Number(token.eth_raised) / Number(token.raise_target)) * 100, 100)}%` 
+                    : '0%' 
+                }}
+              >
+                {/* Solid gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90"></div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
