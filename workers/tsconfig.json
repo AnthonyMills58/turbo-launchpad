@@ -1,0 +1,35 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+      "rootDir": "..",
+      "outDir": "../dist",
+      "noEmit": false,                 // ⬅️ ensure JS is emitted
+      "emitDeclarationOnly": false,    // ⬅️ emit JS, not just d.ts
+      "incremental": false,            // optional: avoid tsbuildinfo
+      "noEmitOnError": true,
+      "module": "CommonJS",
+      "target": "ES2020",
+      "moduleResolution": "Node",
+      "skipLibCheck": true,
+      "baseUrl": "..",
+      "paths": { "@/*": ["./*"] },
+      "esModuleInterop": true,
+      "resolveJsonModule": true,
+      "lib": ["ES2020"],
+      "types": ["node"]
+    },
+    "include": [
+      "./**/*.ts",
+      "../lib/db.ts",
+      "../lib/chains.ts",
+      "../lib/abi/**/*.ts",
+      "../lib/abi/**/*.json"
+    ],
+    "exclude": ["../node_modules", "../.next", "../dist"]
+  }
+  
+  
+  
+  
+  
+  
