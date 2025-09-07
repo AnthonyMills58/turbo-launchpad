@@ -255,7 +255,8 @@ async function refreshTokenSummariesForChain(chainId: number): Promise<void> {
       t.id, t.name, t.contract_address, t.base_price,
       dp.pair_address, dp.quote_token, dp.quote_decimals, dp.token_decimals,
       ps.price_eth_per_token as snapshot_price, ps.block_number as snapshot_block,
-      tr.price_eth_per_token as trade_price, tr.block_time as trade_time
+      tr.price_eth_per_token as trade_price, tr.block_time as trade_time,
+      tt.price_eth_per_token as bonding_price, tt.block_time as bonding_time
     FROM public.tokens t
     LEFT JOIN public.dex_pools dp ON dp.token_id = t.id AND dp.chain_id = t.chain_id
     LEFT JOIN LATERAL (
@@ -270,6 +271,12 @@ async function refreshTokenSummariesForChain(chainId: number): Promise<void> {
       WHERE tr2.chain_id = t.chain_id AND tr2.token_id = t.id AND tr2.src = 'DEX'
       ORDER BY tr2.block_time DESC, tr2.log_index DESC LIMIT 1
     ) tr ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT tt2.*
+      FROM public.token_transfers tt2
+      WHERE tt2.chain_id = t.chain_id AND tt2.token_id = t.id AND tt2.price_eth_per_token IS NOT NULL
+      ORDER BY tt2.block_time DESC, tt2.log_index DESC LIMIT 1
+    ) tt ON TRUE
     WHERE t.chain_id = $1
     ORDER BY t.id
   `
@@ -283,7 +290,8 @@ async function refreshTokenSummariesForChain(chainId: number): Promise<void> {
     has_pool: !!r.pair_address,
     snapshot_price: r.snapshot_price,
     trade_price: r.trade_price,
-    final_price: r.snapshot_price || r.trade_price || (r.base_price ? (Number(r.base_price) / 1e18).toString() : null)
+    bonding_price: r.bonding_price,
+    final_price: r.snapshot_price || r.trade_price || r.bonding_price || (r.base_price ? (Number(r.base_price) / 1e18).toString() : null)
   })))
   
   const sql = `
@@ -323,15 +331,24 @@ last_trade AS (
   WHERE tr.chain_id = $1 AND tr.src = 'DEX' AND tr.token_id IS NOT NULL
   ORDER BY tr.token_id, tr.block_time DESC, tr.log_index DESC
 ),
+-- Bonding curve price from token_transfers (pre-graduation)
+bonding_price AS (
+  SELECT DISTINCT ON (tt.token_id)
+         tt.token_id, tt.chain_id, tt.price_eth_per_token
+  FROM public.token_transfers tt
+  WHERE tt.chain_id = $1 AND tt.price_eth_per_token IS NOT NULL
+  ORDER BY tt.token_id, tt.block_time DESC, tt.log_index DESC
+),
 -- Price + reserve source merged
 price_src AS (
   SELECT
     t.id AS token_id,
     t.chain_id,
-    -- Price priority: DEX snapshot → DEX trade → Base price (convert wei to ETH)
+    -- Price priority: DEX snapshot → DEX trade → Bonding curve → Base price (convert wei to ETH)
     COALESCE(
       ls.price_eth_per_token,           -- DEX snapshot (graduated tokens)
       lt.price_eth_per_token,           -- DEX trade (graduated tokens)
+      bp.price_eth_per_token,           -- Bonding curve transfer (pre-graduation)
       t.base_price / power(10::numeric, 18)  -- Base price (convert wei to ETH)
     ) AS current_price_eth,
     ls.quote_reserve_wei,
@@ -340,6 +357,7 @@ price_src AS (
   FROM public.tokens t
   LEFT JOIN last_snap ls ON ls.token_id = t.id AND ls.chain_id = t.chain_id
   LEFT JOIN last_trade lt ON lt.token_id = t.id AND lt.chain_id = t.chain_id
+  LEFT JOIN bonding_price bp ON bp.token_id = t.id AND bp.chain_id = t.chain_id
   WHERE t.chain_id = $1
 ),
 -- Circulating supply from balances (wei → tokens)

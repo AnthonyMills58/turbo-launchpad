@@ -363,12 +363,31 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         const bn       = log.blockNumber!
         const ts       = tsByBlock.get(bn) ?? Math.floor(Date.now() / 1000)
 
+        // Get ETH amount from transaction
+        let ethAmount = 0n
+        let price = null
+        try {
+          const tx = await provider.getTransaction(log.transactionHash!)
+          if (tx?.value) {
+            ethAmount = tx.value
+            // Calculate price: ETH sent / tokens received
+            if (amount > 0n) {
+              price = Number(ethAmount) / Number(amount)
+            }
+          }
+        } catch (e) {
+          // Transaction might not be available, continue without price
+          console.warn(`Could not get transaction ${log.transactionHash} for price calculation:`, e)
+        }
+
         await client.query(
           `INSERT INTO public.token_transfers
-             (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei)
-           VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10)
-           ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
-          [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString()]
+             (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token)
+           VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12)
+           ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+             amount_eth_wei = EXCLUDED.amount_eth_wei,
+             price_eth_per_token = EXCLUDED.price_eth_per_token`,
+          [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), ethAmount.toString(), price]
         )
 
         if (fromAddr !== ZERO) {
