@@ -20,6 +20,7 @@ const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 50))
 const RPC_TIMEOUT_MS = Number(process.env.RPC_TIMEOUT_MS ?? 30000)      // RPC timeout in milliseconds
 const MIN_CHUNK_SIZE = Number(process.env.MIN_CHUNK_SIZE ?? 100)        // minimum chunk size for safety
 const EMERGENCY_CHUNK_SIZE = Number(process.env.EMERGENCY_CHUNK_SIZE ?? 10) // emergency fallback chunk size
+const MAX_BLOCKS_PER_RPC = Number(process.env.MAX_BLOCKS_PER_RPC ?? 50000)   // RPC provider block limit
 
 // Singleton advisory lock (prevent overlapping runs)
 const LOCK_NS = 42
@@ -205,22 +206,26 @@ function chunkAddresses<T>(arr: T[], size: number): T[][] {
 
 // Dynamic chunk sizing based on address count to prevent timeouts
 function getOptimalChunkSize(addressCount: number): number {
-  if (addressCount <= 10) return Math.floor(DEFAULT_CHUNK * 0.1)  // 5k blocks for safety
-  if (addressCount <= 50) return Math.floor(DEFAULT_CHUNK * 0.05) // 2.5k blocks
-  if (addressCount <= 100) return Math.floor(DEFAULT_CHUNK * 0.02) // 1k blocks
-  if (addressCount <= 200) return Math.floor(DEFAULT_CHUNK * 0.01) // 500 blocks
-  return Math.max(MIN_CHUNK_SIZE, Math.floor(DEFAULT_CHUNK * 0.005)) // 250 blocks or min
+  let chunk: number
+  if (addressCount <= 10) chunk = Math.floor(DEFAULT_CHUNK * 0.1)  // 5k blocks for safety
+  else if (addressCount <= 50) chunk = Math.floor(DEFAULT_CHUNK * 0.05) // 2.5k blocks
+  else if (addressCount <= 100) chunk = Math.floor(DEFAULT_CHUNK * 0.02) // 1k blocks
+  else if (addressCount <= 200) chunk = Math.floor(DEFAULT_CHUNK * 0.01) // 500 blocks
+  else chunk = Math.max(MIN_CHUNK_SIZE, Math.floor(DEFAULT_CHUNK * 0.005)) // 250 blocks or min
+  
+  // Never exceed RPC provider's block limit
+  return Math.min(chunk, MAX_BLOCKS_PER_RPC)
 }
 
 // Progressive chunk shrinking for high-activity blocks
 function getNextChunkSize(currentChunk: number, attempt: number): number {
   if (attempt >= 6) {
     // After 6 attempts, use emergency chunk size
-    return EMERGENCY_CHUNK_SIZE
+    return Math.min(EMERGENCY_CHUNK_SIZE, MAX_BLOCKS_PER_RPC)
   }
   const shrinkFactor = Math.pow(0.5, attempt) // 0.5, 0.25, 0.125, etc.
   const newChunk = Math.floor(currentChunk * shrinkFactor)
-  return Math.max(newChunk, MIN_CHUNK_SIZE)
+  return Math.min(Math.max(newChunk, MIN_CHUNK_SIZE), MAX_BLOCKS_PER_RPC)
 }
 
 async function processChain(chainId: number, tokens: TokenRow[]) {
@@ -271,7 +276,16 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
 
   for (let from = start; from <= latest; from += chunk + 1) {
     const to = Math.min(from + chunk, latest)
-    console.log(`Chain ${chainId}: scanning blocks ${from}..${to} across ${addresses.length} addresses`)
+    
+    // Ensure we never exceed RPC provider's block limit
+    const blockRange = to - from + 1
+    if (blockRange > MAX_BLOCKS_PER_RPC) {
+      console.warn(`Chain ${chainId}: Block range ${blockRange} exceeds RPC limit ${MAX_BLOCKS_PER_RPC}, adjusting chunk size`)
+      chunk = MAX_BLOCKS_PER_RPC - 1
+      continue // Retry with smaller chunk
+    }
+    
+    console.log(`Chain ${chainId}: scanning blocks ${from}..${to} (${blockRange} blocks) across ${addresses.length} addresses`)
 
     // Collect logs across address batches with progressive retry
     let allLogs: Log[] = []
@@ -463,6 +477,7 @@ async function main() {
     console.log(`⏱️  RPC timeout: ${RPC_TIMEOUT_MS}ms`)
     console.log(`🛡️  Reorg cushion: ${REORG_CUSHION} blocks`)
     console.log(`📏 Min chunk size: ${MIN_CHUNK_SIZE} blocks`)
+    console.log(`🚫 Max blocks per RPC: ${MAX_BLOCKS_PER_RPC} blocks (provider limit)`)
 
     const allTokens = await fetchTokens()
     if (allTokens.length === 0) {
