@@ -10,7 +10,7 @@ const ZERO = '0x0000000000000000000000000000000000000000'
 const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : undefined
 
 // Tunables (env)
-const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000) // blocks per query
+const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000)         // blocks per query
 const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15) // ms pacing between getBlock calls
 const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5)) // blocks to rewind
 const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE ?? 100) // tokens per batch per chain
@@ -107,6 +107,7 @@ function groupBy<T, K extends string | number>(array: T[], keyFn: (item: T) => K
     return groups
   }, {} as Record<K, T[]>)
 }
+
 
 // ---- Singleton advisory lock helpers ----
 async function acquireGlobalLock(): Promise<null | { release: () => Promise<void> }> {
@@ -250,8 +251,6 @@ async function processTokenBatch(chainId: number, tokens: TokenRow[]) {
     
     // Get unique block numbers for timestamp fetching
     const blockNums = Array.from(new Set(logs.map(l => l.blockNumber!))).sort((a, b) => a - b)
-    
-    // Fetch timestamps
     let tsByBlock = new Map<number, number>()
     try {
       tsByBlock = await fetchBlockTimestamps(provider, blockNums)
