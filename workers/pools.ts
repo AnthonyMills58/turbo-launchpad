@@ -171,8 +171,19 @@ export async function processDexPools(chainId: number): Promise<void> {
   for (const rawPool of pools) {
     const p = await ensurePoolDecimals(rawPool, provider)
     // For new pools (last_processed_block is null), start from token deployment block
-    const startBlock = p.last_processed_block ?? p.deployment_block ?? Math.max(1, head - 50000)
+    // If last_processed_block is very old (before deployment), use deployment block instead
+    const isLastProcessedTooOld = p.last_processed_block && p.deployment_block && p.last_processed_block < p.deployment_block
+    const startBlock = isLastProcessedTooOld ? p.deployment_block : (p.last_processed_block ?? p.deployment_block ?? Math.max(1, head - 50000))
     const from = Math.max(1, startBlock + 1)
+    
+    // If we detected a wrong last_processed_block, reset it in the database
+    if (isLastProcessedTooOld) {
+      await pool.query(
+        `UPDATE public.dex_pools SET last_processed_block = NULL WHERE chain_id = $1 AND pair_address = $2`,
+        [p.chain_id, p.pair_address]
+      )
+      console.log(`Reset wrong last_processed_block for pool ${p.pair_address}`)
+    }
     if (from > head) continue
     const to = Math.min(head, from + DEFAULT_DEX_CHUNK)
     
@@ -285,6 +296,8 @@ export async function processDexPools(chainId: number): Promise<void> {
         }
       }
 
+      // Always update cursor when we successfully process a block range
+      // (even if no events found, we still processed those blocks)
       await client.query(
         `UPDATE public.dex_pools
          SET last_processed_block = $1
