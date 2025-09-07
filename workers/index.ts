@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { ethers } from 'ethers'
 import type { Log } from 'ethers'
+import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
 
@@ -8,7 +9,16 @@ const TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)')
 const ZERO = '0x0000000000000000000000000000000000000000'
 const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : undefined
 
-// RPCs per chain
+// Tunables (env)
+const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000) // blocks per query
+const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15) // ms pacing between getBlock calls
+const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5)) // blocks to rewind
+
+// Global singleton lock (prevents overlapping runs)
+const LOCK_NS = 42
+const LOCK_ID = 1
+
+// RPCs per chain (prefer env override, fall back to lib/chains)
 const rpcByChain: Record<number, string> = {
   6342: process.env.MEGAETH_RPC_URL ?? megaethTestnet.rpcUrls.default.http[0],
   9999: process.env.MEGAETH_MAINNET_RPC ?? megaethMainnet.rpcUrls.default.http[0],
@@ -26,10 +36,10 @@ function sleep(ms: number) {
 }
 
 function isRateLimit(err: unknown): boolean {
-  const errorObj = err as { 
-    code?: number; 
-    error?: { code?: number; message?: string }; 
-    message?: string 
+  const errorObj = err as {
+    code?: number
+    error?: { code?: number; message?: string }
+    message?: string
   }
   const code = errorObj?.code ?? errorObj?.error?.code
   const msg = (errorObj?.message ?? errorObj?.error?.message ?? '').toLowerCase()
@@ -79,15 +89,37 @@ function addrFromTopic(topic: string): string {
   return ('0x' + topic.slice(26)).toLowerCase()
 }
 
-// simple LRU for block timestamps (cap ~2000)
+// ---- Singleton advisory lock helpers ----
+async function acquireGlobalLock(): Promise<null | { release: () => Promise<void> }> {
+  const lockClient: PoolClient = await pool.connect()
+  try {
+    const { rows } = await lockClient.query<{ locked: boolean }>(
+      'SELECT pg_try_advisory_lock($1, $2) AS locked',
+      [LOCK_NS, LOCK_ID]
+    )
+    if (!rows[0]?.locked) {
+      lockClient.release()
+      return null
+    }
+    return {
+      release: async () => {
+        await lockClient.query('SELECT pg_advisory_unlock($1, $2)', [LOCK_NS, LOCK_ID])
+        lockClient.release()
+      }
+    }
+  } catch (e) {
+    lockClient.release()
+    throw e
+  }
+}
+
+// ---- Timestamp LRU cache (cap ~2000) ----
 const tsCache = new Map<number, number>()
 function cacheTs(bn: number, ts: number) {
   tsCache.set(bn, ts)
   if (tsCache.size > 2000) {
-    const first = tsCache.keys().next().value
-    if (first !== undefined) {
-      tsCache.delete(first)
-    }
+    const first = tsCache.keys().next().value as number | undefined
+    if (first !== undefined) tsCache.delete(first)
   }
 }
 
@@ -103,6 +135,7 @@ async function fetchBlockTimestamps(
       continue
     }
     let attempts = 0
+   
     while (true) {
       try {
         const b = await provider.getBlock(bn)
@@ -111,8 +144,7 @@ async function fetchBlockTimestamps(
           out.set(bn, ts)
           cacheTs(bn, ts)
         }
-        // tiny pacing to be nice to RPC
-        await sleep(15)
+        await sleep(HEADER_SLEEP_MS)
         break
       } catch (e) {
         attempts++
@@ -133,12 +165,11 @@ async function processToken(t: TokenRow) {
   const provider = providerFor(t.chain_id)
   const latest = await provider.getBlockNumber()
 
+  // Use reorg cushion when resuming
   let start =
     t.last_processed_block != null
-      ? Math.max(t.last_processed_block + 1, 0)
-      : t.deployment_block != null
-      ? t.deployment_block
-      : undefined
+      ? Math.max(t.last_processed_block - REORG_CUSHION, 0)
+      : (t.deployment_block != null ? t.deployment_block : undefined)
 
   if (start == null) {
     const tsSec = t.created_at ? Math.floor(new Date(t.created_at).getTime() / 1000) : 0
@@ -151,8 +182,7 @@ async function processToken(t: TokenRow) {
     return
   }
 
-  // adaptive chunking
-  let chunk = 50000
+  let chunk = DEFAULT_CHUNK
   for (let from = start; from <= latest; from += chunk + 1) {
     const to = Math.min(from + chunk, latest)
     console.log(`Token ${t.id}: scanning blocks ${from}..${to}`)
@@ -167,17 +197,16 @@ async function processToken(t: TokenRow) {
       })
     } catch (e) {
       if (isRateLimit(e) && chunk > 5000) {
-        // shrink chunk and retry this window
         chunk = Math.floor(chunk / 2)
         console.warn(`Rate limit on getLogs; shrinking chunk to ${chunk} and retrying`)
-        from -= (chunk + 1) // rewind loop increment
+        from -= (chunk + 1) // retry same window
         continue
       }
       throw e
     }
 
     // unique block numbers for the logs (often small)
-    const blockNums = Array.from(new Set(logs.map(l => l.blockNumber!))).sort((a,b)=>a-b)
+    const blockNums = Array.from(new Set(logs.map(l => l.blockNumber!))).sort((a, b) => a - b)
 
     // fetch timestamps with throttle + retry
     let tsByBlock = new Map<number, number>()
@@ -207,10 +236,7 @@ async function processToken(t: TokenRow) {
              (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei)
            VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10)
            ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
-          [
-            t.id, t.chain_id, t.contract_address!, bn, ts,
-            log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString()
-          ]
+          [t.id, t.chain_id, t.contract_address!, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString()]
         )
 
         if (fromAddr !== ZERO) {
@@ -267,30 +293,46 @@ async function processToken(t: TokenRow) {
 }
 
 async function main() {
-  const tokens = await fetchTokens()
-  if (tokens.length === 0) {
-    console.log('No tokens found with contract_address; exiting.')
+  // Optional visibility (no secrets)
+  try {
+    const u = new URL(process.env.DATABASE_URL!)
+    console.log(`DB host: ${u.hostname}:${u.port || '5432'}`)
+  } catch { /* ignore */ }
+
+  const lock = await acquireGlobalLock()
+  if (!lock) {
+    console.log('Another worker run is in progress. Exiting.')
     await pool.end()
     return
   }
 
-  for (const t of tokens) {
-    console.log(`\n=== Indexing token #${t.id} (chain ${t.chain_id}) ===`)
-    try {
-      await processToken(t)
-    } catch (e) {
-      console.error(`Token ${t.id}: failed with`, e)
-      // continue with next token instead of crashing the whole run
+  try {
+    const tokens = await fetchTokens()
+    if (tokens.length === 0) {
+      console.log('No tokens found with contract_address; exiting.')
+      return
     }
-  }
 
-  await pool.end()
-  console.log('\nDone. Exiting.')
+    for (const t of tokens) {
+      console.log(`\n=== Indexing token #${t.id} (chain ${t.chain_id}) ===`)
+      try {
+        await processToken(t)
+      } catch (e) {
+        console.error(`Token ${t.id}: failed with`, e)
+        // continue to next token instead of crashing the whole run
+      }
+    }
+  } finally {
+    await lock.release()
+    await pool.end()
+    console.log('\nDone. Exiting.')
+  }
 }
 
 main().catch(err => {
   console.error(err)
   process.exit(1)
 })
+
 
 
