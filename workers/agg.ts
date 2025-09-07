@@ -246,6 +246,45 @@ async function refreshTokenSummariesForChain(chainId: number): Promise<void> {
   // - Liquidity: from latest snapshot quote reserve
   // - FDV: (total_supply OR supply) * current_price
   // - Market cap: circulating (sum of token_balances) * current_price
+  
+  console.log(`\n=== Token summaries: chain ${chainId} ===`)
+  
+  // Debug: Check what data we have
+  const debugSql = `
+    SELECT 
+      t.id, t.name, t.contract_address,
+      dp.pair_address, dp.quote_token, dp.quote_decimals, dp.token_decimals,
+      ps.price_eth_per_token as snapshot_price, ps.block_number as snapshot_block,
+      tr.price_eth_per_token as trade_price, tr.block_time as trade_time
+    FROM public.tokens t
+    LEFT JOIN public.dex_pools dp ON dp.token_id = t.id AND dp.chain_id = t.chain_id
+    LEFT JOIN LATERAL (
+      SELECT ps2.*
+      FROM public.pair_snapshots ps2
+      WHERE ps2.chain_id = dp.chain_id AND ps2.pair_address = dp.pair_address
+      ORDER BY ps2.block_number DESC LIMIT 1
+    ) ps ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT tr2.*
+      FROM public.token_trades tr2
+      WHERE tr2.chain_id = t.chain_id AND tr2.token_id = t.id AND tr2.src = 'DEX'
+      ORDER BY tr2.block_time DESC, tr2.log_index DESC LIMIT 1
+    ) tr ON TRUE
+    WHERE t.chain_id = $1
+    ORDER BY t.id
+  `
+  
+  const { rows: debugRows } = await pool.query(debugSql, [chainId])
+  console.log('Debug data for chain', chainId, ':', debugRows.map(r => ({
+    id: r.id,
+    name: r.name,
+    has_pool: !!r.pair_address,
+    snapshot_price: r.snapshot_price,
+    trade_price: r.trade_price,
+    quote_decimals: r.quote_decimals,
+    token_decimals: r.token_decimals
+  })))
+  
   const sql = `
 WITH ep AS (
   SELECT price_usd FROM public.eth_price_cache WHERE id = 1
@@ -256,10 +295,14 @@ last_snap AS (
          dp.chain_id,
          ps.block_time,
          ps.price_eth_per_token,
+         -- Use the same logic as pools.ts for reserve selection
          CASE
            WHEN lower(dp.quote_token) = lower(dp.token0) THEN ps.reserve0_wei
            ELSE ps.reserve1_wei
-         END::numeric AS quote_reserve_wei
+         END::numeric AS quote_reserve_wei,
+         -- Get the correct decimals for calculations
+         dp.quote_decimals,
+         dp.token_decimals
   FROM public.dex_pools dp
   JOIN LATERAL (
     SELECT ps2.*
@@ -285,7 +328,9 @@ price_src AS (
     t.id AS token_id,
     t.chain_id,
     COALESCE(ls.price_eth_per_token, lt.price_eth_per_token) AS current_price_eth,
-    ls.quote_reserve_wei
+    ls.quote_reserve_wei,
+    ls.quote_decimals,
+    ls.token_decimals
   FROM public.tokens t
   LEFT JOIN last_snap ls ON ls.token_id = t.id AND ls.chain_id = t.chain_id
   LEFT JOIN last_trade lt ON lt.token_id = t.id AND lt.chain_id = t.chain_id
@@ -310,9 +355,15 @@ UPDATE public.tokens AS t
 SET
   on_dex = CASE WHEN hp.token_id IS NOT NULL THEN TRUE ELSE t.on_dex END,
   current_price = ps.current_price_eth,
-  -- liquidity
-  liquidity_eth = COALESCE( (ps.quote_reserve_wei / power(10::numeric, 18)) * 2::numeric, t.liquidity_eth ),
-  liquidity_usd = COALESCE( (ps.quote_reserve_wei / power(10::numeric, 18)) * 2::numeric * (SELECT price_usd FROM ep), t.liquidity_usd ),
+  -- liquidity: use correct decimals from dex_pools table
+  liquidity_eth = COALESCE( 
+    (ps.quote_reserve_wei / power(10::numeric, COALESCE(ps.quote_decimals, 18))) * 2::numeric, 
+    t.liquidity_eth 
+  ),
+  liquidity_usd = COALESCE( 
+    (ps.quote_reserve_wei / power(10::numeric, COALESCE(ps.quote_decimals, 18))) * 2::numeric * (SELECT price_usd FROM ep), 
+    t.liquidity_usd 
+  ),
   -- valuations (ETH-denominated)
   fdv = CASE
     WHEN ps.current_price_eth IS NULL THEN t.fdv
@@ -320,7 +371,7 @@ SET
   END,
   market_cap = CASE
     WHEN ps.current_price_eth IS NULL OR c.circ_wei IS NULL THEN t.market_cap
-    ELSE (c.circ_wei / power(10::numeric, 18)) * ps.current_price_eth
+    ELSE (c.circ_wei / power(10::numeric, COALESCE(ps.token_decimals, 18))) * ps.current_price_eth
   END,
   updated_at = NOW()
 FROM price_src ps
