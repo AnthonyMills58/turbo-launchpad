@@ -279,10 +279,11 @@ async function refreshTokenSummariesForChain(chainId: number): Promise<void> {
     id: r.id,
     name: r.name,
     base_price: r.base_price,
+    base_price_eth: r.base_price ? (Number(r.base_price) / 1e18).toString() : null,
     has_pool: !!r.pair_address,
     snapshot_price: r.snapshot_price,
     trade_price: r.trade_price,
-    final_price: r.snapshot_price || r.trade_price || r.base_price
+    final_price: r.snapshot_price || r.trade_price || (r.base_price ? (Number(r.base_price) / 1e18).toString() : null)
   })))
   
   const sql = `
