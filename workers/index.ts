@@ -18,7 +18,8 @@ const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15)       // ms be
 const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
 const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 50)) // addresses per getLogs (reduced for stability)
 const RPC_TIMEOUT_MS = Number(process.env.RPC_TIMEOUT_MS ?? 30000)      // RPC timeout in milliseconds
-const MIN_CHUNK_SIZE = Number(process.env.MIN_CHUNK_SIZE ?? 1000)       // minimum chunk size for safety
+const MIN_CHUNK_SIZE = Number(process.env.MIN_CHUNK_SIZE ?? 100)        // minimum chunk size for safety
+const EMERGENCY_CHUNK_SIZE = Number(process.env.EMERGENCY_CHUNK_SIZE ?? 10) // emergency fallback chunk size
 
 // Singleton advisory lock (prevent overlapping runs)
 const LOCK_NS = 42
@@ -204,11 +205,22 @@ function chunkAddresses<T>(arr: T[], size: number): T[][] {
 
 // Dynamic chunk sizing based on address count to prevent timeouts
 function getOptimalChunkSize(addressCount: number): number {
-  if (addressCount <= 10) return DEFAULT_CHUNK
-  if (addressCount <= 50) return Math.floor(DEFAULT_CHUNK * 0.5)  // 25k blocks
-  if (addressCount <= 100) return Math.floor(DEFAULT_CHUNK * 0.2) // 10k blocks
-  if (addressCount <= 200) return Math.floor(DEFAULT_CHUNK * 0.1) // 5k blocks
-  return Math.max(MIN_CHUNK_SIZE, Math.floor(DEFAULT_CHUNK * 0.05)) // 2.5k blocks or min
+  if (addressCount <= 10) return Math.floor(DEFAULT_CHUNK * 0.1)  // 5k blocks for safety
+  if (addressCount <= 50) return Math.floor(DEFAULT_CHUNK * 0.05) // 2.5k blocks
+  if (addressCount <= 100) return Math.floor(DEFAULT_CHUNK * 0.02) // 1k blocks
+  if (addressCount <= 200) return Math.floor(DEFAULT_CHUNK * 0.01) // 500 blocks
+  return Math.max(MIN_CHUNK_SIZE, Math.floor(DEFAULT_CHUNK * 0.005)) // 250 blocks or min
+}
+
+// Progressive chunk shrinking for high-activity blocks
+function getNextChunkSize(currentChunk: number, attempt: number): number {
+  if (attempt >= 6) {
+    // After 6 attempts, use emergency chunk size
+    return EMERGENCY_CHUNK_SIZE
+  }
+  const shrinkFactor = Math.pow(0.5, attempt) // 0.5, 0.25, 0.125, etc.
+  const newChunk = Math.floor(currentChunk * shrinkFactor)
+  return Math.max(newChunk, MIN_CHUNK_SIZE)
 }
 
 async function processChain(chainId: number, tokens: TokenRow[]) {
@@ -261,37 +273,72 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
     const to = Math.min(from + chunk, latest)
     console.log(`Chain ${chainId}: scanning blocks ${from}..${to} across ${addresses.length} addresses`)
 
-    // Collect logs across address batches
+    // Collect logs across address batches with progressive retry
     let allLogs: Log[] = []
-    try {
-      for (const batch of addrBatches) {
-        // Guard: provider.getLogs supports address: string|string[]
-        const logs = await provider.getLogs({
-          address: batch as unknown as string[], // v6 types allow string|string[]
-          topics: [TRANSFER_TOPIC],
-          fromBlock: from,
-          toBlock: to,
-        })
-        allLogs = allLogs.concat(logs)
-        
-        // Small delay between batches to be nice to RPC
-        if (addrBatches.length > 1) {
-          await sleep(50)
+    let retryAttempt = 0
+    const maxRetries = 8 // Allow up to 8 retries with shrinking chunks
+    
+    while (retryAttempt <= maxRetries) {
+      try {
+        for (const batch of addrBatches) {
+          // Guard: provider.getLogs supports address: string|string[]
+          const logs = await provider.getLogs({
+            address: batch as unknown as string[], // v6 types allow string|string[]
+            topics: [TRANSFER_TOPIC],
+            fromBlock: from,
+            toBlock: to,
+          })
+          allLogs = allLogs.concat(logs)
+          
+          // Small delay between batches to be nice to RPC
+          if (addrBatches.length > 1) {
+            await sleep(50)
+          }
         }
+        break // Success, exit retry loop
+      } catch (e) {
+        const error = e as { code?: string; message?: string }
+        const isTimeout = error?.code === 'TIMEOUT' || 
+                         error?.message?.includes('timeout') ||
+                         error?.message?.includes('deadline exceeded')
+        
+        if ((isRateLimit(e) || isTimeout) && retryAttempt < maxRetries) {
+          retryAttempt++
+          chunk = getNextChunkSize(chunk, retryAttempt)
+          
+          // If we're down to emergency chunk size and still failing, try single blocks
+          if (chunk === EMERGENCY_CHUNK_SIZE && retryAttempt >= 6) {
+            console.warn(`Chain ${chainId}: Emergency chunk size failed, trying single-block processing for blocks ${from}..${to}`)
+            // Process one block at a time
+            for (let singleBlock = from; singleBlock <= to; singleBlock++) {
+              try {
+                for (const batch of addrBatches) {
+                  const singleLogs = await provider.getLogs({
+                    address: batch as unknown as string[],
+                    topics: [TRANSFER_TOPIC],
+                    fromBlock: singleBlock,
+                    toBlock: singleBlock,
+                  })
+                  allLogs = allLogs.concat(singleLogs)
+                  await sleep(100) // Small delay between single blocks
+                }
+              } catch (singleError) {
+                console.error(`Chain ${chainId}: Failed to process single block ${singleBlock}, skipping:`, singleError)
+                // Continue with next block instead of failing completely
+              }
+            }
+            break // Exit retry loop after single-block processing
+          }
+          
+          console.warn(`${isTimeout ? 'Timeout' : 'Rate limit'} on getLogs(chain ${chainId}) attempt ${retryAttempt}; shrinking chunk to ${chunk} and retrying`)
+          
+          // Reset logs for retry
+          allLogs = []
+          await sleep(1000 * retryAttempt) // Progressive backoff
+          continue
+        }
+        throw e
       }
-    } catch (e) {
-      const error = e as { code?: string; message?: string }
-      const isTimeout = error?.code === 'TIMEOUT' || 
-                       error?.message?.includes('timeout') ||
-                       error?.message?.includes('deadline exceeded')
-      
-      if ((isRateLimit(e) || isTimeout) && chunk > MIN_CHUNK_SIZE) {
-        chunk = Math.max(Math.floor(chunk / 2), MIN_CHUNK_SIZE)
-        console.warn(`${isTimeout ? 'Timeout' : 'Rate limit'} on getLogs(chain ${chainId}); shrinking chunk to ${chunk} and retrying`)
-        from -= (chunk + 1) // retry same window with smaller chunk
-        continue
-      }
-      throw e
     }
 
     // Timestamps per unique block
