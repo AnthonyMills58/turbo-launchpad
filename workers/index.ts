@@ -17,6 +17,8 @@ const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000)         // block
 const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15)       // ms between getBlock calls
 const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
 const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 200)) // addresses per getLogs
+const SKIP_HEALTH_CHECK = process.env.SKIP_HEALTH_CHECK === 'true'      // skip chain health checks
+const HEALTH_CHECK_TIMEOUT = Number(process.env.HEALTH_CHECK_TIMEOUT ?? 10000) // health check timeout in ms
 
 // Singleton advisory lock (prevent overlapping runs)
 const LOCK_NS = 42
@@ -113,6 +115,64 @@ async function upsertChainCursor(chainId: number, last: number) {
 
 function addrFromTopic(topic: string): string {
   return ('0x' + topic.slice(26)).toLowerCase()
+}
+
+// -------------------- Chain Health Detection --------------------
+async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvider): Promise<boolean> {
+  try {
+    console.log(`Checking health for chain ${chainId}...`)
+    
+    // Try to get the latest block number with a timeout
+    const latestBlock = await Promise.race([
+      provider.getBlockNumber(),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Health check timeout')), HEALTH_CHECK_TIMEOUT)
+      )
+    ])
+    
+    // Try to get block details to ensure the chain is actually responding
+    const block = await Promise.race([
+      provider.getBlock(latestBlock),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Block fetch timeout')), HEALTH_CHECK_TIMEOUT / 2)
+      )
+    ])
+    
+    if (!block) {
+      console.warn(`Chain ${chainId}: Health check failed - no block data`)
+      return false
+    }
+    
+    console.log(`Chain ${chainId}: Health check passed - latest block ${latestBlock}`)
+    return true
+    
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.warn(`Chain ${chainId}: Health check failed - ${errorMsg}`)
+    return false
+  }
+}
+
+async function getHealthyChains(tokensByChain: Map<number, TokenRow[]>): Promise<Map<number, TokenRow[]>> {
+  const healthyChains = new Map<number, TokenRow[]>()
+  
+  for (const [chainId, tokens] of tokensByChain) {
+    try {
+      const provider = providerFor(chainId)
+      const isHealthy = await checkChainHealth(chainId, provider)
+      
+      if (isHealthy) {
+        healthyChains.set(chainId, tokens)
+        console.log(`✅ Chain ${chainId}: Healthy - will process ${tokens.length} tokens`)
+      } else {
+        console.log(`❌ Chain ${chainId}: Unhealthy - skipping ${tokens.length} tokens`)
+      }
+    } catch (error) {
+      console.error(`❌ Chain ${chainId}: Health check error - ${error}`)
+    }
+  }
+  
+  return healthyChains
 }
 
 // ---- Singleton advisory lock helpers ----
@@ -400,7 +460,24 @@ async function main() {
       byChain.get(t.chain_id)!.push(t)
     }
 
-    for (const [chainId, tokens] of byChain) {
+    let chainsToProcess = byChain
+    
+    if (!SKIP_HEALTH_CHECK) {
+      console.log(`\n🔍 Checking chain health before processing...`)
+      const healthyChains = await getHealthyChains(byChain)
+      
+      if (healthyChains.size === 0) {
+        console.log('❌ No healthy chains found. Exiting.')
+        return
+      }
+      
+      console.log(`\n✅ Found ${healthyChains.size} healthy chains out of ${byChain.size} total chains`)
+      chainsToProcess = healthyChains
+    } else {
+      console.log(`\n⚠️  Health checks disabled - processing all ${byChain.size} chains`)
+    }
+
+    for (const [chainId, tokens] of chainsToProcess) {
       console.log(`\n=== Indexing chain ${chainId} (${tokens.length} tokens) ===`)
       try {
         await processChain(chainId, tokens)
