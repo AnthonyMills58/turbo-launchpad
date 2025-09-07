@@ -489,9 +489,8 @@ async function main() {
       }
     }
 
-    // 2) Pools pipeline (auto-discovery + DEX logs) — run for ALL chains (health-independent)
-    //    Requires: import { runPoolsPipelineForChain } from './pools'
-    for (const chainId of byChain.keys()) {
+    // 2) Pools pipeline (auto-discovery + DEX logs) — run on same healthy chains as ERC-20 scan
+    for (const [chainId] of chainsToProcess) {
       console.log(`\n=== Pools pipeline: chain ${chainId} ===`)
       try {
         await runPoolsPipelineForChain(chainId)
