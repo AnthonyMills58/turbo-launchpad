@@ -13,6 +13,7 @@ const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : unde
 const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000) // blocks per query
 const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15) // ms pacing between getBlock calls
 const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5)) // blocks to rewind
+const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE ?? 100) // tokens per batch per chain
 
 // Global singleton lock (prevents overlapping runs)
 const LOCK_NS = 42
@@ -89,6 +90,24 @@ function addrFromTopic(topic: string): string {
   return ('0x' + topic.slice(26)).toLowerCase()
 }
 
+// Utility functions for batching
+function chunk<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size))
+  }
+  return chunks
+}
+
+function groupBy<T, K extends string | number>(array: T[], keyFn: (item: T) => K): Record<K, T[]> {
+  return array.reduce((groups, item) => {
+    const key = keyFn(item)
+    if (!groups[key]) groups[key] = []
+    groups[key].push(item)
+    return groups
+  }, {} as Record<K, T[]>)
+}
+
 // ---- Singleton advisory lock helpers ----
 async function acquireGlobalLock(): Promise<null | { release: () => Promise<void> }> {
   const lockClient: PoolClient = await pool.connect()
@@ -160,37 +179,51 @@ async function fetchBlockTimestamps(
   return out
 }
 
-async function processToken(t: TokenRow) {
-  if (!t.contract_address) return
-  const provider = providerFor(t.chain_id)
+// Process a batch of tokens on the same chain
+async function processTokenBatch(chainId: number, tokens: TokenRow[]) {
+  if (tokens.length === 0) return
+  
+  const provider = providerFor(chainId)
   const latest = await provider.getBlockNumber()
-
-  // Use reorg cushion when resuming
-  let start =
-    t.last_processed_block != null
-      ? Math.max(t.last_processed_block - REORG_CUSHION, 0)
-      : (t.deployment_block != null ? t.deployment_block : undefined)
-
-  if (start == null) {
-    const tsSec = t.created_at ? Math.floor(new Date(t.created_at).getTime() / 1000) : 0
-    start = await findBlockByTimestamp(provider, tsSec)
-    await pool.query(`UPDATE public.tokens SET deployment_block = $1 WHERE id = $2`, [start, t.id])
+  
+  // Find the common block range for this batch
+  const validTokens = tokens.filter(t => t.contract_address)
+  if (validTokens.length === 0) return
+  
+  // Calculate start block for each token and find the minimum
+  const tokenStarts = new Map<number, number>()
+  
+  for (const token of validTokens) {
+    let start = token.last_processed_block != null
+      ? Math.max(token.last_processed_block - REORG_CUSHION, 0)
+      : (token.deployment_block != null ? token.deployment_block : undefined)
+    
+    if (start == null) {
+      const tsSec = token.created_at ? Math.floor(new Date(token.created_at).getTime() / 1000) : 0
+      start = await findBlockByTimestamp(provider, tsSec)
+      await pool.query(`UPDATE public.tokens SET deployment_block = $1 WHERE id = $2`, [start, token.id])
+    }
+    
+    tokenStarts.set(token.id, start)
   }
-
-  if (start > latest) {
-    console.log(`Token ${t.id}: up to date (start ${start} > latest ${latest})`)
+  
+  const minStart = Math.min(...Array.from(tokenStarts.values()))
+  
+  if (minStart > latest) {
+    console.log(`Chain ${chainId}: all tokens up to date (min start ${minStart} > latest ${latest})`)
     return
   }
-
+  
+  // Process in chunks
   let chunk = DEFAULT_CHUNK
-  for (let from = start; from <= latest; from += chunk + 1) {
+  for (let from = minStart; from <= latest; from += chunk + 1) {
     const to = Math.min(from + chunk, latest)
-    console.log(`Token ${t.id}: scanning blocks ${from}..${to}`)
-
+    console.log(`Chain ${chainId}: scanning blocks ${from}..${to} for ${validTokens.length} tokens`)
+    
     let logs: Log[] = []
     try {
       logs = await provider.getLogs({
-        address: t.contract_address!,
+        address: validTokens.map(t => t.contract_address!),
         topics: [TRANSFER_TOPIC],
         fromBlock: from,
         toBlock: to,
@@ -204,11 +237,21 @@ async function processToken(t: TokenRow) {
       }
       throw e
     }
-
-    // unique block numbers for the logs (often small)
+    
+    // Group logs by token address
+    const logsByToken = new Map<string, Log[]>()
+    for (const log of logs) {
+      const address = log.address.toLowerCase()
+      if (!logsByToken.has(address)) {
+        logsByToken.set(address, [])
+      }
+      logsByToken.get(address)!.push(log)
+    }
+    
+    // Get unique block numbers for timestamp fetching
     const blockNums = Array.from(new Set(logs.map(l => l.blockNumber!))).sort((a, b) => a - b)
-
-    // fetch timestamps with throttle + retry
+    
+    // Fetch timestamps
     let tsByBlock = new Map<number, number>()
     try {
       tsByBlock = await fetchBlockTimestamps(provider, blockNums)
@@ -219,75 +262,109 @@ async function processToken(t: TokenRow) {
         throw e
       }
     }
-
+    
+    // Process each token's logs
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
-
-      for (const log of logs) {
-        const fromAddr = addrFromTopic(log.topics[1])
-        const toAddr   = addrFromTopic(log.topics[2])
-        const amount   = BigInt(log.data)
-        const bn       = log.blockNumber!
-        const ts       = tsByBlock.get(bn) ?? Math.floor(Date.now() / 1000)
-
+      
+      for (const token of validTokens) {
+        const tokenLogs = logsByToken.get(token.contract_address!.toLowerCase()) || []
+        if (tokenLogs.length === 0) continue
+        
+        // Only process logs that are within this token's range
+        const tokenStart = tokenStarts.get(token.id)!
+        const relevantLogs = tokenLogs.filter(log => log.blockNumber! >= tokenStart)
+        
+        for (const log of relevantLogs) {
+          const fromAddr = addrFromTopic(log.topics[1])
+          const toAddr = addrFromTopic(log.topics[2])
+          const amount = BigInt(log.data)
+          const bn = log.blockNumber!
+          const ts = tsByBlock.get(bn) ?? Math.floor(Date.now() / 1000)
+          
+          await client.query(
+            `INSERT INTO public.token_transfers
+               (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei)
+             VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10)
+             ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
+            [token.id, token.chain_id, token.contract_address!, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString()]
+          )
+          
+          if (fromAddr !== ZERO) {
+            await client.query(
+              `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+               VALUES ($1,$2,$3,$4)
+               ON CONFLICT (token_id, holder) DO UPDATE
+               SET balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei`,
+              [token.id, token.chain_id, fromAddr, amount.toString()]
+            )
+          }
+          if (toAddr !== ZERO) {
+            await client.query(
+              `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+               VALUES ($1,$2,$3,$4)
+               ON CONFLICT (token_id, holder) DO UPDATE
+               SET balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei`,
+              [token.id, token.chain_id, toAddr, amount.toString()]
+            )
+          }
+        }
+        
+        // Clean up zero balances and update holder count
         await client.query(
-          `INSERT INTO public.token_transfers
-             (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei)
-           VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10)
-           ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
-          [t.id, t.chain_id, t.contract_address!, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString()]
+          `DELETE FROM public.token_balances
+           WHERE token_id=$1 AND balance_wei::numeric = 0`,
+          [token.id]
         )
-
-        if (fromAddr !== ZERO) {
-          await client.query(
-            `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-             VALUES ($1,$2,$3,$4)
-             ON CONFLICT (token_id, holder) DO UPDATE
-             SET balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei`,
-            [t.id, t.chain_id, fromAddr, amount.toString()]
-          )
-        }
-        if (toAddr !== ZERO) {
-          await client.query(
-            `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-             VALUES ($1,$2,$3,$4)
-             ON CONFLICT (token_id, holder) DO UPDATE
-             SET balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei`,
-            [t.id, t.chain_id, toAddr, amount.toString()]
-          )
-        }
+        
+        const { rows: [{ holders }] } = await client.query(
+          `SELECT COUNT(*)::int AS holders
+           FROM public.token_balances
+           WHERE token_id = $1 AND balance_wei::numeric > 0`,
+          [token.id]
+        )
+        
+        await client.query(
+          `UPDATE public.tokens
+           SET holder_count = $1,
+               holder_count_updated_at = NOW(),
+               last_processed_block = $2
+           WHERE id = $3`,
+          [holders, to, token.id]
+        )
+        
+        console.log(`Token ${token.id}: +${relevantLogs.length} logs → holders=${holders}, last_block=${to}`)
       }
-
-      await client.query(
-        `DELETE FROM public.token_balances
-         WHERE token_id=$1 AND balance_wei::numeric = 0`,
-        [t.id]
-      )
-
-      const { rows: [{ holders }] } = await client.query(
-        `SELECT COUNT(*)::int AS holders
-         FROM public.token_balances
-         WHERE token_id = $1 AND balance_wei::numeric > 0`,
-        [t.id]
-      )
-
-      await client.query(
-        `UPDATE public.tokens
-         SET holder_count = $1,
-             holder_count_updated_at = NOW(),
-             last_processed_block = $2
-         WHERE id = $3`,
-        [holders, to, t.id]
-      )
-
+      
       await client.query('COMMIT')
-      console.log(`Token ${t.id}: +${logs.length} logs → holders=${holders}, last_block=${to}`)
     } catch (e) {
       await client.query('ROLLBACK')
       throw e
     } finally {
       client.release()
+    }
+  }
+}
+
+// Process all tokens on a specific chain
+async function processChain(chainId: number, tokens: TokenRow[]) {
+  if (tokens.length === 0) return
+  
+  console.log(`\n=== Processing chain ${chainId} with ${tokens.length} tokens ===`)
+  
+  // Split tokens into batches
+  const batches = chunk(tokens, BATCH_SIZE)
+  
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i]
+    console.log(`Chain ${chainId}: processing batch ${i + 1}/${batches.length} (${batch.length} tokens)`)
+    
+    try {
+      await processTokenBatch(chainId, batch)
+    } catch (e) {
+      console.error(`Chain ${chainId} batch ${i + 1}: failed with`, e)
+      // Continue with next batch instead of crashing the whole chain
     }
   }
 }
@@ -313,15 +390,29 @@ async function main() {
       return
     }
 
-    for (const t of tokens) {
-      console.log(`\n=== Indexing token #${t.id} (chain ${t.chain_id}) ===`)
+    console.log(`\n🚀 Starting optimized worker for ${tokens.length} tokens`)
+    console.log(`📊 Batch size: ${BATCH_SIZE} tokens per batch per chain`)
+
+    // Group tokens by chain ID
+    const tokensByChain = groupBy(tokens, t => t.chain_id)
+    const chainIds = Object.keys(tokensByChain).map(Number).sort()
+    
+    console.log(`🔗 Processing ${chainIds.length} chains: ${chainIds.join(', ')}`)
+    
+    // Process each chain (can be parallelized in the future)
+    for (const chainId of chainIds) {
+      const chainTokens = tokensByChain[chainId]
+      console.log(`\n📈 Chain ${chainId}: ${chainTokens.length} tokens`)
+      
       try {
-        await processToken(t)
+        await processChain(chainId, chainTokens)
       } catch (e) {
-        console.error(`Token ${t.id}: failed with`, e)
-        // continue to next token instead of crashing the whole run
+        console.error(`Chain ${chainId}: failed with`, e)
+        // Continue with next chain instead of crashing the whole run
       }
     }
+    
+    console.log('\n✅ Worker completed successfully. Exiting.')
   } finally {
     await lock.release()
     await pool.end()
