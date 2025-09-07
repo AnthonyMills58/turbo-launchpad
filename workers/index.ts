@@ -16,11 +16,12 @@ const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : unde
 const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000)         // blocks per query
 const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15)       // ms between getBlock calls
 const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
-const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 50)) // addresses per getLogs (reduced for stability)
+const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 5)) // addresses per getLogs (very conservative for MegaETH)
 const RPC_TIMEOUT_MS = Number(process.env.RPC_TIMEOUT_MS ?? 30000)      // RPC timeout in milliseconds
 const MIN_CHUNK_SIZE = Number(process.env.MIN_CHUNK_SIZE ?? 100)        // minimum chunk size for safety
 const EMERGENCY_CHUNK_SIZE = Number(process.env.EMERGENCY_CHUNK_SIZE ?? 10) // emergency fallback chunk size
 const MAX_BLOCKS_PER_RPC = Number(process.env.MAX_BLOCKS_PER_RPC ?? 50000)   // RPC provider block limit
+const MAX_FAILED_BLOCKS = Number(process.env.MAX_FAILED_BLOCKS ?? 10)         // Skip block range after this many failures
 
 // Singleton advisory lock (prevent overlapping runs)
 const LOCK_NS = 42
@@ -320,26 +321,65 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
           retryAttempt++
           chunk = getNextChunkSize(chunk, retryAttempt)
           
-          // If we're down to emergency chunk size and still failing, try single blocks
+          // If we're down to emergency chunk size and still failing, try single blocks with address batching
           if (chunk === EMERGENCY_CHUNK_SIZE && retryAttempt >= 6) {
-            console.warn(`Chain ${chainId}: Emergency chunk size failed, trying single-block processing for blocks ${from}..${to}`)
-            // Process one block at a time
+            console.warn(`Chain ${chainId}: Emergency chunk size failed, trying single-block processing with address batching for blocks ${from}..${to}`)
+            // Process one block at a time, with smaller address batches
+            const singleBlockAddrBatches = chunkAddresses(addresses, Math.max(1, Math.floor(ADDR_BATCH_LIMIT / 4))) // Use 1/4 of normal batch size
+            
+            let failedBlocks = 0
             for (let singleBlock = from; singleBlock <= to; singleBlock++) {
-              try {
-                for (const batch of addrBatches) {
+              // Circuit breaker: skip remaining blocks if too many failures
+              if (failedBlocks >= MAX_FAILED_BLOCKS) {
+                console.warn(`Chain ${chainId}: Too many failed blocks (${failedBlocks}), skipping remaining blocks ${singleBlock}..${to}`)
+                break
+              }
+              
+              let blockLogs: Log[] = []
+              let blockSuccess = false
+              
+              for (const addrBatch of singleBlockAddrBatches) {
+                try {
                   const singleLogs = await provider.getLogs({
-                    address: batch as unknown as string[],
+                    address: addrBatch as unknown as string[],
                     topics: [TRANSFER_TOPIC],
                     fromBlock: singleBlock,
                     toBlock: singleBlock,
                   })
-                  allLogs = allLogs.concat(singleLogs)
-                  await sleep(100) // Small delay between single blocks
+                  blockLogs = blockLogs.concat(singleLogs)
+                  blockSuccess = true
+                  await sleep(200) // Longer delay between address batches
+                } catch {
+                  console.error(`Chain ${chainId}: Failed to process single block ${singleBlock} with ${addrBatch.length} addresses, trying individual addresses`)
+                  
+                  // Last resort: try each address individually
+                  for (const singleAddr of addrBatch) {
+                    try {
+                      const individualLogs = await provider.getLogs({
+                        address: singleAddr,
+                        topics: [TRANSFER_TOPIC],
+                        fromBlock: singleBlock,
+                        toBlock: singleBlock,
+                      })
+                      blockLogs = blockLogs.concat(individualLogs)
+                      blockSuccess = true
+                      await sleep(500) // Even longer delay for individual addresses
+                    } catch {
+                      console.error(`Chain ${chainId}: Failed to process block ${singleBlock} for address ${singleAddr}, skipping`)
+                    }
+                  }
                 }
-              } catch (singleError) {
-                console.error(`Chain ${chainId}: Failed to process single block ${singleBlock}, skipping:`, singleError)
-                // Continue with next block instead of failing completely
               }
+              
+              if (!blockSuccess) {
+                failedBlocks++
+                console.warn(`Chain ${chainId}: Block ${singleBlock} failed completely, failure count: ${failedBlocks}/${MAX_FAILED_BLOCKS}`)
+              } else {
+                failedBlocks = 0 // Reset counter on success
+              }
+              
+              allLogs = allLogs.concat(blockLogs)
+              console.log(`Chain ${chainId}: Processed block ${singleBlock} with ${blockLogs.length} logs`)
             }
             break // Exit retry loop after single-block processing
           }
@@ -478,6 +518,7 @@ async function main() {
     console.log(`🛡️  Reorg cushion: ${REORG_CUSHION} blocks`)
     console.log(`📏 Min chunk size: ${MIN_CHUNK_SIZE} blocks`)
     console.log(`🚫 Max blocks per RPC: ${MAX_BLOCKS_PER_RPC} blocks (provider limit)`)
+    console.log(`⚠️  Max failed blocks: ${MAX_FAILED_BLOCKS} (circuit breaker)`)
 
     const allTokens = await fetchTokens()
     if (allTokens.length === 0) {
