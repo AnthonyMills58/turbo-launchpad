@@ -174,7 +174,7 @@ export async function processDexPools(chainId: number): Promise<void> {
     // If last_processed_block is very old (before deployment), use deployment block instead
     const isLastProcessedTooOld = p.last_processed_block && p.deployment_block && p.last_processed_block < p.deployment_block
     const startBlock = isLastProcessedTooOld ? p.deployment_block : (p.last_processed_block ?? p.deployment_block ?? Math.max(1, head - 50000))
-    const from = Math.max(1, startBlock + 1)
+    const from = Math.max(1, (startBlock ?? Math.max(1, head - 50000)) + 1)
     
     // If we detected a wrong last_processed_block, reset it in the database
     if (isLastProcessedTooOld) {
