@@ -4,6 +4,7 @@ import type { Log } from 'ethers'
 import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
+import { runPoolsPipelineForChain } from './pools'
 
 // -------------------- Config --------------------
 const TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)')
@@ -461,28 +462,41 @@ async function main() {
     }
 
     let chainsToProcess = byChain
-    
+
     if (!SKIP_HEALTH_CHECK) {
       console.log(`\n🔍 Checking chain health before processing...`)
       const healthyChains = await getHealthyChains(byChain)
-      
+
       if (healthyChains.size === 0) {
-        console.log('❌ No healthy chains found. Exiting.')
-        return
+        console.log('❌ No healthy chains found for ERC-20 scan. Skipping transfer scan, continuing with pools pipeline.')
+        chainsToProcess = new Map<number, TokenRow[]>() // empty map; we'll still run pools later
+      } else {
+        console.log(`\n✅ ERC-20 scan on ${healthyChains.size} healthy chains (of ${byChain.size})`)
+        chainsToProcess = healthyChains
       }
-      
-      console.log(`\n✅ Found ${healthyChains.size} healthy chains out of ${byChain.size} total chains`)
-      chainsToProcess = healthyChains
     } else {
-      console.log(`\n⚠️  Health checks disabled - processing all ${byChain.size} chains`)
+      console.log(`\n⚠️  Health checks disabled - processing all ${byChain.size} chains for ERC-20 scan`)
     }
 
+    // 1) ERC-20 transfers/balances/holders — only on healthy chains (or all if health disabled)
     for (const [chainId, tokens] of chainsToProcess) {
-      console.log(`\n=== Indexing chain ${chainId} (${tokens.length} tokens) ===`)
+      console.log(`\n=== ERC-20 scan: chain ${chainId} (${tokens.length} tokens) ===`)
       try {
         await processChain(chainId, tokens)
       } catch (e) {
-        console.error(`Chain ${chainId}: failed with`, e)
+        console.error(`Chain ${chainId}: ERC-20 scan failed with`, e)
+        // continue to next chain
+      }
+    }
+
+    // 2) Pools pipeline (auto-discovery + DEX logs) — run for ALL chains (health-independent)
+    //    Requires: import { runPoolsPipelineForChain } from './pools'
+    for (const chainId of byChain.keys()) {
+      console.log(`\n=== Pools pipeline: chain ${chainId} ===`)
+      try {
+        await runPoolsPipelineForChain(chainId)
+      } catch (e) {
+        console.error(`Chain ${chainId}: pools pipeline failed with`, e)
         // continue to next chain
       }
     }

@@ -1,0 +1,307 @@
+import { ethers, type Log } from 'ethers'
+import pool from '../lib/db'
+import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
+import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
+
+// ---------- Config (same style as index.ts) ----------
+const DEFAULT_DEX_CHUNK = Number(process.env.DEX_CHUNK ?? 5_000) // blocks per query window
+
+// Event topics
+const SWAP_TOPIC = ethers.id('Swap(address,uint256,uint256,uint256,uint256,address)')
+const SYNC_TOPIC = ethers.id('Sync(uint112,uint112)')
+
+// Reuse env RPCs like index.ts
+const rpcByChain: Record<number, string> = {
+  6342: process.env.MEGAETH_RPC_URL ?? megaethTestnet.rpcUrls.default.http[0],
+  9999: process.env.MEGAETH_MAINNET_RPC ?? megaethMainnet.rpcUrls.default.http[0],
+  11155111: process.env.SEPOLIA_RPC_URL ?? sepoliaTestnet.rpcUrls.default.http[0],
+}
+
+function providerFor(chainId: number) {
+  const url = rpcByChain[chainId]
+  if (!url) throw new Error(`No RPC for chain ${chainId}`)
+  return new ethers.JsonRpcProvider(url, { chainId, name: `chain-${chainId}` })
+}
+
+// ---------- DB shapes ----------
+type TokenRow = {
+  id: number
+  chain_id: number
+  contract_address: string | null
+}
+
+type DexPoolRow = {
+  token_id: number | null
+  chain_id: number
+  pair_address: string
+  token0: string
+  token1: string
+  quote_token: string
+  last_processed_block: number | null
+  token_decimals: number | null
+  quote_decimals: number | null
+}
+
+// ---------- Helpers ----------
+async function fetchTokensForChain(chainId: number): Promise<TokenRow[]> {
+  const { rows } = await pool.query<TokenRow>(
+    `SELECT id, chain_id, contract_address
+     FROM public.tokens
+     WHERE chain_id = $1 AND contract_address IS NOT NULL`,
+    [chainId]
+  )
+  return rows
+}
+
+async function fetchDexPools(chainId: number): Promise<DexPoolRow[]> {
+  const { rows } = await pool.query<DexPoolRow>(
+    `SELECT token_id, chain_id, pair_address, token0, token1, quote_token,
+            COALESCE(last_processed_block,0) AS last_processed_block,
+            token_decimals, quote_decimals
+     FROM public.dex_pools
+     WHERE chain_id = $1
+     ORDER BY pair_address`,
+    [chainId]
+  )
+  return rows
+}
+
+async function ensurePoolDecimals(p: DexPoolRow, provider: ethers.JsonRpcProvider) {
+  if (p.token_decimals != null && p.quote_decimals != null) return p
+
+  const decAbi = ['function decimals() view returns (uint8)']
+  const t0 = new ethers.Contract(p.token0, decAbi, provider)
+  const t1 = new ethers.Contract(p.token1, decAbi, provider)
+  const [dec0, dec1] = await Promise.all([
+    t0.decimals().catch(() => 18),
+    t1.decimals().catch(() => 18),
+  ])
+
+  const isQuoteToken0 = p.quote_token.toLowerCase() === p.token0.toLowerCase()
+  const quote_decimals = Number(isQuoteToken0 ? dec0 : dec1)
+  const token_decimals = Number(isQuoteToken0 ? dec1 : dec0)
+
+  await pool.query(
+    `UPDATE public.dex_pools
+     SET token_decimals = $1, quote_decimals = $2
+     WHERE chain_id = $3 AND pair_address = $4`,
+    [token_decimals, quote_decimals, p.chain_id, p.pair_address]
+  )
+
+  return { ...p, token_decimals, quote_decimals }
+}
+
+// ---------- 1) Auto-discover pools (detect new graduations) ----------
+export async function discoverDexPools(chainId: number): Promise<void> {
+  const routerAddr = DEX_ROUTER_BY_CHAIN[chainId]
+  if (!routerAddr) {
+    console.warn(`Chain ${chainId}: no router in DEX_ROUTER_BY_CHAIN; skipping discovery`)
+    return
+  }
+
+  const provider = providerFor(chainId)
+  const router = new ethers.Contract(routerAddr, routerAbi, provider)
+
+  // Resolve factory + WETH once via router
+  const factoryAddr: string = await router.factory()
+  // Your routerAbi declares WETH() pure; still call it normally
+  const wethAddr: string = await router.WETH()
+
+  // Cache existing pool addresses to skip duplicates
+  const existing = new Set<string>()
+  {
+    const { rows } = await pool.query<{ pair_address: string }>(
+      `SELECT pair_address FROM public.dex_pools WHERE chain_id = $1`,
+      [chainId]
+    )
+    for (const r of rows) existing.add(r.pair_address.toLowerCase())
+  }
+
+  const factory = new ethers.Contract(factoryAddr, factoryAbi, provider)
+  const tokens = await fetchTokensForChain(chainId)
+
+  for (const t of tokens) {
+    if (!t.contract_address) continue
+    const token = t.contract_address
+
+    let pair: string = await factory.getPair(token, wethAddr).catch(() => ethers.ZeroAddress)
+    if (!pair || pair === ethers.ZeroAddress) {
+      pair = await factory.getPair(wethAddr, token).catch(() => ethers.ZeroAddress)
+    }
+    if (!pair || pair === ethers.ZeroAddress) continue // not graduated / no LP yet
+
+    const pairLc = pair.toLowerCase()
+    if (existing.has(pairLc)) continue // already known
+
+    // Read token0/token1 ordering
+    const pairCtr = new ethers.Contract(pair, pairAbi, provider)
+    const [token0, token1] = await Promise.all([pairCtr.token0(), pairCtr.token1()])
+
+    await pool.query(
+      `INSERT INTO public.dex_pools
+         (token_id, chain_id, pair_address, token0, token1, quote_token)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (chain_id, pair_address) DO NOTHING`,
+      [t.id, chainId, pair, token0, token1, wethAddr]
+    )
+
+    // Optional: reflect on_dex flag
+    await pool.query(
+      `UPDATE public.tokens
+       SET on_dex = TRUE, updated_at = NOW()
+       WHERE id = $1 AND (on_dex IS DISTINCT FROM TRUE)`,
+      [t.id]
+    )
+
+    console.log(`🧭 Discovered pool for token ${t.id} on chain ${chainId}: ${pair}`)
+  }
+}
+
+// ---------- 2) Scan pools → pair_snapshots + token_trades ----------
+export async function processDexPools(chainId: number): Promise<void> {
+  const provider = providerFor(chainId)
+  const pools = await fetchDexPools(chainId)
+  if (pools.length === 0) return
+
+  const head = await provider.getBlockNumber()
+
+  for (const rawPool of pools) {
+    const p = await ensurePoolDecimals(rawPool, provider)
+    const from = Math.max(1, (p.last_processed_block ?? 0) + 1)
+    if (from > head) continue
+    const to = Math.min(head, from + DEFAULT_DEX_CHUNK)
+
+    const logs: Log[] = await provider.getLogs({
+      address: p.pair_address as `0x${string}`,
+      fromBlock: from,
+      toBlock: to,
+      topics: [[SWAP_TOPIC, SYNC_TOPIC]],
+    })
+
+    logs.sort(
+      (a, b) =>
+        a.blockNumber - b.blockNumber ||
+        a.transactionIndex - b.transactionIndex ||
+        a.index - b.index
+    )
+
+    const isQuoteToken0 = p.quote_token.toLowerCase() === p.token0.toLowerCase()
+
+    // simple per-chunk timestamp cache
+    const blkTs = new Map<number, number>()
+    const tsOf = async (bn: number) => {
+      if (blkTs.has(bn)) return blkTs.get(bn)!
+      const blk = await provider.getBlock(bn)
+      const ts = Number(blk?.timestamp ?? Math.floor(Date.now() / 1000))
+      blkTs.set(bn, ts)
+      return ts
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+
+      for (const log of logs) {
+        const bn = log.blockNumber!
+        const block_time = new Date((await tsOf(bn)) * 1000)
+
+        if (log.topics[0] === SYNC_TOPIC) {
+          const [r0, r1] = ethers.AbiCoder.defaultAbiCoder().decode(['uint112','uint112'], log.data)
+          const reserve0 = BigInt(r0.toString())
+          const reserve1 = BigInt(r1.toString())
+
+          const reserveQuoteWei = isQuoteToken0 ? reserve0 : reserve1
+          const reserveTokenWei = isQuoteToken0 ? reserve1 : reserve0
+
+          const price_eth_per_token =
+            (Number(reserveQuoteWei) / 10 ** (p.quote_decimals ?? 18)) /
+            (Number(reserveTokenWei) / 10 ** (p.token_decimals ?? 18))
+
+          await client.query(
+            `INSERT INTO public.pair_snapshots
+               (chain_id, pair_address, block_number, block_time,
+                reserve0_wei, reserve1_wei, price_eth_per_token)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)
+             ON CONFLICT (chain_id, pair_address, block_number)
+             DO UPDATE SET
+               block_time = EXCLUDED.block_time,
+               reserve0_wei = EXCLUDED.reserve0_wei,
+               reserve1_wei = EXCLUDED.reserve1_wei,
+               price_eth_per_token = EXCLUDED.price_eth_per_token`,
+            [
+              p.chain_id, p.pair_address, bn, block_time,
+              reserve0.toString(), reserve1.toString(), price_eth_per_token
+            ]
+          )
+        } else if (log.topics[0] === SWAP_TOPIC) {
+          const sender = ethers.getAddress('0x' + log.topics[1].slice(26))
+          const [a0In, a1In, a0Out, a1Out] =
+            ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256','uint256'], log.data)
+
+          const n0In  = BigInt(a0In.toString())
+          const n1In  = BigInt(a1In.toString())
+          const n0Out = BigInt(a0Out.toString())
+          const n1Out = BigInt(a1Out.toString())
+
+          let side: 'BUY' | 'SELL'
+          let tokenWei: bigint
+          let quoteWei: bigint
+
+          if (isQuoteToken0) {
+            // quote = token0, token = token1
+            if (n1Out > 0n && n0In > 0n) { side = 'BUY';  tokenWei = n1Out; quoteWei = n0In }
+            else                          { side = 'SELL'; tokenWei = n1In;  quoteWei = n0Out }
+          } else {
+            // quote = token1, token = token0
+            if (n0Out > 0n && n1In > 0n) { side = 'BUY';  tokenWei = n0Out; quoteWei = n1In }
+            else                          { side = 'SELL'; tokenWei = n0In;  quoteWei = n1Out }
+          }
+
+          const price_eth_per_token =
+            (Number(quoteWei) / 10 ** (p.quote_decimals ?? 18)) /
+            (Number(tokenWei) / 10 ** (p.token_decimals ?? 18))
+
+          await client.query(
+            `INSERT INTO public.token_trades
+               (token_id, chain_id, src, tx_hash, log_index,
+                block_number, block_time, side, trader,
+                amount_token_wei, amount_eth_wei, price_eth_per_token)
+             VALUES ($1,$2,'DEX',$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             ON CONFLICT DO NOTHING`,
+            [
+              p.token_id, p.chain_id,
+              log.transactionHash!, log.index!,
+              bn, block_time, side, sender,
+              tokenWei.toString(), quoteWei.toString(), price_eth_per_token
+            ]
+          )
+        }
+      }
+
+      await client.query(
+        `UPDATE public.dex_pools
+         SET last_processed_block = $1
+         WHERE chain_id = $2 AND pair_address = $3`,
+        [to, p.chain_id, p.pair_address]
+      )
+
+      await client.query('COMMIT')
+      console.log(`DEX ${chainId} ${p.pair_address}: logs=${logs.length} cursor=${to}`)
+    } catch (e) {
+      await client.query('ROLLBACK')
+      console.error(`DEX ${chainId} ${p.pair_address} failed:`, e)
+    } finally {
+      client.release()
+    }
+  }
+}
+
+// ---------- 3) Convenience: one-shot pipeline per chain ----------
+export async function runPoolsPipelineForChain(chainId: number): Promise<void> {
+  try {
+    await discoverDexPools(chainId)  // auto-add pools after graduation
+    await processDexPools(chainId)   // fill pair_snapshots + token_trades
+  } catch (e) {
+    console.error(`Pools pipeline error on chain ${chainId}:`, e)
+  }
+}
