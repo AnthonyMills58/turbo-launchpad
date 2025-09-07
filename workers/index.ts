@@ -5,6 +5,7 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
 import { runPoolsPipelineForChain } from './pools'
+import { runAggPipelineForChain } from './agg'
 
 // -------------------- Config --------------------
 const TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)')
@@ -499,6 +500,19 @@ async function main() {
         // continue to next chain
       }
     }
+
+    // 3) Aggregations (candles, daily, token summaries) — run for ALL chains
+    for (const chainId of byChain.keys()) {
+      console.log(`\n=== Aggregations: chain ${chainId} ===`)
+      try {
+        await runAggPipelineForChain(chainId)
+      } catch (e) {
+        console.error(`Chain ${chainId}: agg pipeline failed with`, e)
+        // continue to next chain
+      }
+    }
+
+    
   } finally {
     await lock.release()
     await pool.end()
