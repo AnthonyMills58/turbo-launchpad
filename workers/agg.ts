@@ -327,11 +327,11 @@ price_src AS (
   SELECT
     t.id AS token_id,
     t.chain_id,
-    -- Price priority: DEX snapshot → DEX trade → Base price
+    -- Price priority: DEX snapshot → DEX trade → Base price (convert wei to ETH)
     COALESCE(
       ls.price_eth_per_token,           -- DEX snapshot (graduated tokens)
       lt.price_eth_per_token,           -- DEX trade (graduated tokens)
-      t.base_price                      -- Base price (new tokens, no activity)
+      t.base_price / power(10::numeric, 18)  -- Base price (convert wei to ETH)
     ) AS current_price_eth,
     ls.quote_reserve_wei,
     ls.quote_decimals,
