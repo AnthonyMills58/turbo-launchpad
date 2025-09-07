@@ -5,17 +5,20 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
 
+// -------------------- Config --------------------
 const TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)')
 const ZERO = '0x0000000000000000000000000000000000000000'
+
+// Optional: limit to one token for smoke tests (NOT used in chain-batched mode)
 const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : undefined
 
-// Tunables (env)
+// Tunables
 const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000)         // blocks per query
-const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15) // ms pacing between getBlock calls
-const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5)) // blocks to rewind
-const BATCH_SIZE = Number(process.env.WORKER_BATCH_SIZE ?? 100) // tokens per batch per chain
+const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15)       // ms between getBlock calls
+const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
+const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 200)) // addresses per getLogs
 
-// Global singleton lock (prevents overlapping runs)
+// Singleton advisory lock (prevent overlapping runs)
 const LOCK_NS = 42
 const LOCK_ID = 1
 
@@ -36,14 +39,11 @@ function sleep(ms: number) {
   return new Promise(res => setTimeout(res, ms))
 }
 
+type RpcLikeError = { code?: number; message?: string; error?: { code?: number; message?: string } }
 function isRateLimit(err: unknown): boolean {
-  const errorObj = err as {
-    code?: number
-    error?: { code?: number; message?: string }
-    message?: string
-  }
-  const code = errorObj?.code ?? errorObj?.error?.code
-  const msg = (errorObj?.message ?? errorObj?.error?.message ?? '').toLowerCase()
+  const e = err as RpcLikeError
+  const code = e?.code ?? e?.error?.code
+  const msg = (e?.message ?? e?.error?.message ?? '').toLowerCase()
   return code === -32016 || msg.includes('rate limit')
 }
 
@@ -65,6 +65,7 @@ async function findBlockByTimestamp(p: ethers.JsonRpcProvider, targetTsSec: numb
   return lo
 }
 
+// -------------------- DB shapes --------------------
 type TokenRow = {
   id: number
   chain_id: number
@@ -74,6 +75,12 @@ type TokenRow = {
   last_processed_block: number | null
 }
 
+type ChainCursorRow = {
+  chain_id: number
+  last_processed_block: number
+}
+
+// -------------------- DB helpers --------------------
 async function fetchTokens(): Promise<TokenRow[]> {
   const base = `
     SELECT id, chain_id, contract_address, created_at, deployment_block, last_processed_block
@@ -86,28 +93,27 @@ async function fetchTokens(): Promise<TokenRow[]> {
   return rows
 }
 
+async function fetchChainCursors(): Promise<Map<number, number>> {
+  const { rows } = await pool.query<ChainCursorRow>(`SELECT chain_id, last_processed_block FROM public.chain_cursors`)
+  const m = new Map<number, number>()
+  for (const r of rows) m.set(r.chain_id, r.last_processed_block)
+  return m
+}
+
+async function upsertChainCursor(chainId: number, last: number) {
+  await pool.query(
+    `INSERT INTO public.chain_cursors (chain_id, last_processed_block, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (chain_id) DO UPDATE
+     SET last_processed_block = EXCLUDED.last_processed_block,
+         updated_at = NOW()`,
+    [chainId, last]
+  )
+}
+
 function addrFromTopic(topic: string): string {
   return ('0x' + topic.slice(26)).toLowerCase()
 }
-
-// Utility functions for batching
-function chunk<T>(array: T[], size: number): T[][] {
-  const chunks: T[][] = []
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size))
-  }
-  return chunks
-}
-
-function groupBy<T, K extends string | number>(array: T[], keyFn: (item: T) => K): Record<K, T[]> {
-  return array.reduce((groups, item) => {
-    const key = keyFn(item)
-    if (!groups[key]) groups[key] = []
-    groups[key].push(item)
-    return groups
-  }, {} as Record<K, T[]>)
-}
-
 
 // ---- Singleton advisory lock helpers ----
 async function acquireGlobalLock(): Promise<null | { release: () => Promise<void> }> {
@@ -133,17 +139,16 @@ async function acquireGlobalLock(): Promise<null | { release: () => Promise<void
   }
 }
 
-// ---- Timestamp LRU cache (cap ~2000) ----
+// -------------------- Timestamp cache --------------------
 const tsCache = new Map<number, number>()
 function cacheTs(bn: number, ts: number) {
   tsCache.set(bn, ts)
   if (tsCache.size > 2000) {
-    const first = tsCache.keys().next().value as number | undefined
-    if (first !== undefined) tsCache.delete(first)
+    const it = tsCache.keys().next()
+    if (!it.done && it.value !== undefined) tsCache.delete(it.value as number)
   }
 }
 
-// Throttled header fetch with retries
 async function fetchBlockTimestamps(
   provider: ethers.JsonRpcProvider,
   blockNumbers: number[]
@@ -180,163 +185,182 @@ async function fetchBlockTimestamps(
   return out
 }
 
-// Process a batch of tokens on the same chain
-async function processTokenBatch(chainId: number, tokens: TokenRow[]) {
+// -------------------- Per-chain batched scan --------------------
+async function ensureDeploymentBlock(provider: ethers.JsonRpcProvider, t: TokenRow): Promise<number> {
+  if (t.deployment_block != null) return t.deployment_block
+  const tsSec = t.created_at ? Math.floor(new Date(t.created_at).getTime() / 1000) : 0
+  const start = await findBlockByTimestamp(provider, tsSec)
+  await pool.query(`UPDATE public.tokens SET deployment_block = $1 WHERE id = $2`, [start, t.id])
+  return start
+}
+
+function chunkAddresses<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
+async function processChain(chainId: number, tokens: TokenRow[]) {
   if (tokens.length === 0) return
-  
+
   const provider = providerFor(chainId)
   const latest = await provider.getBlockNumber()
-  
-  // Find the common block range for this batch
-  const validTokens = tokens.filter(t => t.contract_address)
-  if (validTokens.length === 0) return
-  
-  // Calculate start block for each token and find the minimum
-  const tokenStarts = new Map<number, number>()
-  
-  for (const token of validTokens) {
-    let start = token.last_processed_block != null
-      ? Math.max(token.last_processed_block - REORG_CUSHION, 0)
-      : (token.deployment_block != null ? token.deployment_block : undefined)
-    
-    if (start == null) {
-      const tsSec = token.created_at ? Math.floor(new Date(token.created_at).getTime() / 1000) : 0
-      start = await findBlockByTimestamp(provider, tsSec)
-      await pool.query(`UPDATE public.tokens SET deployment_block = $1 WHERE id = $2`, [start, token.id])
-    }
-    
-    tokenStarts.set(token.id, start)
+
+  // Build address list & mapping (lowercased)
+  const addrToTokenId = new Map<string, number>()
+  const addresses: string[] = []
+  for (const t of tokens) {
+    if (!t.contract_address) continue
+    const a = t.contract_address.toLowerCase()
+    addrToTokenId.set(a, t.id)
+    addresses.push(a)
   }
-  
-  const minStart = Math.min(...Array.from(tokenStarts.values()))
-  
-  if (minStart > latest) {
-    console.log(`Chain ${chainId}: all tokens up to date (min start ${minStart} > latest ${latest})`)
+  if (addresses.length === 0) return
+
+  // Compute starting block for this chain:
+  // - existing chain cursor (rewound by REORG_CUSHION)
+  // - capped by the MIN of token deployment blocks (to avoid scanning before any token exists)
+  const cursors = await fetchChainCursors()
+  let start = cursors.has(chainId) ? Math.max(cursors.get(chainId)! - REORG_CUSHION, 0) : 0
+
+  // If no cursor yet, compute min deployment across tokens (fill missing using created_at)
+  if (!cursors.has(chainId)) {
+    let minDep = Number.MAX_SAFE_INTEGER
+    for (const t of tokens) {
+      if (!t.contract_address) continue
+      const dep = await ensureDeploymentBlock(provider, t)
+      if (dep < minDep) minDep = dep
+    }
+    if (!Number.isFinite(minDep)) minDep = 0
+    start = Math.max(minDep - REORG_CUSHION, 0)
+  }
+
+  if (start > latest) {
+    console.log(`Chain ${chainId}: up to date (start ${start} > latest ${latest})`)
     return
   }
-  
-  // Process in chunks
+
+  const addrBatches = chunkAddresses(addresses, ADDR_BATCH_LIMIT)
+
   let chunk = DEFAULT_CHUNK
-  for (let from = minStart; from <= latest; from += chunk + 1) {
+  for (let from = start; from <= latest; from += chunk + 1) {
     const to = Math.min(from + chunk, latest)
-    console.log(`Chain ${chainId}: scanning blocks ${from}..${to} for ${validTokens.length} tokens`)
-    
-    let logs: Log[] = []
+    console.log(`Chain ${chainId}: scanning blocks ${from}..${to} across ${addresses.length} addresses`)
+
+    // Collect logs across address batches
+    let allLogs: Log[] = []
     try {
-      logs = await provider.getLogs({
-        address: validTokens.map(t => t.contract_address!),
-        topics: [TRANSFER_TOPIC],
-        fromBlock: from,
-        toBlock: to,
-      })
+      for (const batch of addrBatches) {
+        // Guard: provider.getLogs supports address: string|string[]
+        const logs = await provider.getLogs({
+          address: batch as unknown as string[], // v6 types allow string|string[]
+          topics: [TRANSFER_TOPIC],
+          fromBlock: from,
+          toBlock: to,
+        })
+        allLogs = allLogs.concat(logs)
+      }
     } catch (e) {
       if (isRateLimit(e) && chunk > 5000) {
         chunk = Math.floor(chunk / 2)
-        console.warn(`Rate limit on getLogs; shrinking chunk to ${chunk} and retrying`)
-        from -= (chunk + 1) // retry same window
+        console.warn(`Rate limit on getLogs(chain ${chainId}); shrinking chunk to ${chunk} and retrying`)
+        from -= (chunk + 1) // retry same window with smaller chunk
         continue
       }
       throw e
     }
-    
-    // Group logs by token address
-    const logsByToken = new Map<string, Log[]>()
-    for (const log of logs) {
-      const address = log.address.toLowerCase()
-      if (!logsByToken.has(address)) {
-        logsByToken.set(address, [])
-      }
-      logsByToken.get(address)!.push(log)
-    }
-    
-    // Get unique block numbers for timestamp fetching
-    const blockNums = Array.from(new Set(logs.map(l => l.blockNumber!))).sort((a, b) => a - b)
+
+    // Timestamps per unique block
+    const blockNums = Array.from(new Set(allLogs.map(l => l.blockNumber!))).sort((a,b)=>a-b)
     let tsByBlock = new Map<number, number>()
     try {
       tsByBlock = await fetchBlockTimestamps(provider, blockNums)
     } catch (e) {
       if (isRateLimit(e)) {
-        console.warn(`Rate limit on getBlock; using now() as fallback for this chunk`)
+        console.warn(`Rate limit on getBlock(chain ${chainId}); using now() as fallback for this chunk`)
       } else {
         throw e
       }
     }
-    
-    // Process each token's logs
+
+    // DB transaction for this chunk
     const client = await pool.connect()
+    const touchedTokenIds = new Set<number>()
     try {
       await client.query('BEGIN')
-      
-      for (const token of validTokens) {
-        const tokenLogs = logsByToken.get(token.contract_address!.toLowerCase()) || []
-        if (tokenLogs.length === 0) continue
-        
-        // Only process logs that are within this token's range
-        const tokenStart = tokenStarts.get(token.id)!
-        const relevantLogs = tokenLogs.filter(log => log.blockNumber! >= tokenStart)
-        
-        for (const log of relevantLogs) {
-          const fromAddr = addrFromTopic(log.topics[1])
-          const toAddr = addrFromTopic(log.topics[2])
-          const amount = BigInt(log.data)
-          const bn = log.blockNumber!
-          const ts = tsByBlock.get(bn) ?? Math.floor(Date.now() / 1000)
-          
+
+      for (const log of allLogs) {
+        const tokenAddr = (log.address || '').toLowerCase()
+        const tokenId = addrToTokenId.get(tokenAddr)
+        if (!tokenId) continue // (unlikely) address not in our list anymore
+        touchedTokenIds.add(tokenId)
+
+        const fromAddr = addrFromTopic(log.topics[1])
+        const toAddr   = addrFromTopic(log.topics[2])
+        const amount   = BigInt(log.data)
+        const bn       = log.blockNumber!
+        const ts       = tsByBlock.get(bn) ?? Math.floor(Date.now() / 1000)
+
+        await client.query(
+          `INSERT INTO public.token_transfers
+             (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei)
+           VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10)
+           ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
+          [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString()]
+        )
+
+        if (fromAddr !== ZERO) {
           await client.query(
-            `INSERT INTO public.token_transfers
-               (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei)
-             VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10)
-             ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
-            [token.id, token.chain_id, token.contract_address!, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString()]
+            `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+             VALUES ($1,$2,$3,$4)
+             ON CONFLICT (token_id, holder) DO UPDATE
+             SET balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei`,
+            [tokenId, chainId, fromAddr, amount.toString()]
           )
-          
-          if (fromAddr !== ZERO) {
-            await client.query(
-              `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-               VALUES ($1,$2,$3,$4)
-               ON CONFLICT (token_id, holder) DO UPDATE
-               SET balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei`,
-              [token.id, token.chain_id, fromAddr, amount.toString()]
-            )
-          }
-          if (toAddr !== ZERO) {
-            await client.query(
-              `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-               VALUES ($1,$2,$3,$4)
-               ON CONFLICT (token_id, holder) DO UPDATE
-               SET balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei`,
-              [token.id, token.chain_id, toAddr, amount.toString()]
-            )
-          }
         }
-        
-        // Clean up zero balances and update holder count
+        if (toAddr !== ZERO) {
+          await client.query(
+            `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+             VALUES ($1,$2,$3,$4)
+             ON CONFLICT (token_id, holder) DO UPDATE
+             SET balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei`,
+            [tokenId, chainId, toAddr, amount.toString()]
+          )
+        }
+      }
+
+      // hygiene: delete exact zeros (only for touched tokens to keep it cheap)
+      if (touchedTokenIds.size > 0) {
         await client.query(
           `DELETE FROM public.token_balances
-           WHERE token_id=$1 AND balance_wei::numeric = 0`,
-          [token.id]
+           WHERE token_id = ANY($1::int[]) AND balance_wei::numeric = 0`,
+          [Array.from(touchedTokenIds)]
         )
-        
+      }
+
+      // recompute holders + bump per-token watermark only for touched tokens
+      for (const tokenId of touchedTokenIds) {
         const { rows: [{ holders }] } = await client.query(
           `SELECT COUNT(*)::int AS holders
            FROM public.token_balances
            WHERE token_id = $1 AND balance_wei::numeric > 0`,
-          [token.id]
+          [tokenId]
         )
-        
         await client.query(
           `UPDATE public.tokens
            SET holder_count = $1,
                holder_count_updated_at = NOW(),
                last_processed_block = $2
            WHERE id = $3`,
-          [holders, to, token.id]
+          [holders, to, tokenId]
         )
-        
-        console.log(`Token ${token.id}: +${relevantLogs.length} logs → holders=${holders}, last_block=${to}`)
       }
-      
+
+      // advance chain cursor regardless of whether there were logs
+      await upsertChainCursor(chainId, to)
+
       await client.query('COMMIT')
+      console.log(`Chain ${chainId}: +${allLogs.length} logs across ${touchedTokenIds.size} tokens → cursor=${to}`)
     } catch (e) {
       await client.query('ROLLBACK')
       throw e
@@ -346,28 +370,7 @@ async function processTokenBatch(chainId: number, tokens: TokenRow[]) {
   }
 }
 
-// Process all tokens on a specific chain
-async function processChain(chainId: number, tokens: TokenRow[]) {
-  if (tokens.length === 0) return
-  
-  console.log(`\n=== Processing chain ${chainId} with ${tokens.length} tokens ===`)
-  
-  // Split tokens into batches
-  const batches = chunk(tokens, BATCH_SIZE)
-  
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i]
-    console.log(`Chain ${chainId}: processing batch ${i + 1}/${batches.length} (${batch.length} tokens)`)
-    
-    try {
-      await processTokenBatch(chainId, batch)
-    } catch (e) {
-      console.error(`Chain ${chainId} batch ${i + 1}: failed with`, e)
-      // Continue with next batch instead of crashing the whole chain
-    }
-  }
-}
-
+// -------------------- Main --------------------
 async function main() {
   // Optional visibility (no secrets)
   try {
@@ -383,35 +386,29 @@ async function main() {
   }
 
   try {
-    const tokens = await fetchTokens()
-    if (tokens.length === 0) {
+    const allTokens = await fetchTokens()
+    if (allTokens.length === 0) {
       console.log('No tokens found with contract_address; exiting.')
       return
     }
 
-    console.log(`\n🚀 Starting optimized worker for ${tokens.length} tokens`)
-    console.log(`📊 Batch size: ${BATCH_SIZE} tokens per batch per chain`)
+    // Group tokens per chain
+    const byChain = new Map<number, TokenRow[]>()
+    for (const t of allTokens) {
+      if (t.contract_address == null) continue
+      if (!byChain.has(t.chain_id)) byChain.set(t.chain_id, [])
+      byChain.get(t.chain_id)!.push(t)
+    }
 
-    // Group tokens by chain ID
-    const tokensByChain = groupBy(tokens, t => t.chain_id)
-    const chainIds = Object.keys(tokensByChain).map(Number).sort()
-    
-    console.log(`🔗 Processing ${chainIds.length} chains: ${chainIds.join(', ')}`)
-    
-    // Process each chain (can be parallelized in the future)
-    for (const chainId of chainIds) {
-      const chainTokens = tokensByChain[chainId]
-      console.log(`\n📈 Chain ${chainId}: ${chainTokens.length} tokens`)
-      
+    for (const [chainId, tokens] of byChain) {
+      console.log(`\n=== Indexing chain ${chainId} (${tokens.length} tokens) ===`)
       try {
-        await processChain(chainId, chainTokens)
+        await processChain(chainId, tokens)
       } catch (e) {
         console.error(`Chain ${chainId}: failed with`, e)
-        // Continue with next chain instead of crashing the whole run
+        // continue to next chain
       }
     }
-    
-    console.log('\n✅ Worker completed successfully. Exiting.')
   } finally {
     await lock.release()
     await pool.end()
@@ -423,6 +420,10 @@ main().catch(err => {
   console.error(err)
   process.exit(1)
 })
+
+
+
+
 
 
 
