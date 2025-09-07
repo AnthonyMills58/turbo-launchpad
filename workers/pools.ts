@@ -40,6 +40,7 @@ type DexPoolRow = {
   last_processed_block: number | null
   token_decimals: number | null
   quote_decimals: number | null
+  deployment_block: number | null
 }
 
 // ---------- Helpers ----------
@@ -55,12 +56,14 @@ async function fetchTokensForChain(chainId: number): Promise<TokenRow[]> {
 
 async function fetchDexPools(chainId: number): Promise<DexPoolRow[]> {
   const { rows } = await pool.query<DexPoolRow>(
-    `SELECT token_id, chain_id, pair_address, token0, token1, quote_token,
-            COALESCE(last_processed_block,0) AS last_processed_block,
-            token_decimals, quote_decimals
-     FROM public.dex_pools
-     WHERE chain_id = $1
-     ORDER BY pair_address`,
+    `SELECT dp.token_id, dp.chain_id, dp.pair_address, dp.token0, dp.token1, dp.quote_token,
+            COALESCE(dp.last_processed_block,0) AS last_processed_block,
+            dp.token_decimals, dp.quote_decimals,
+            t.deployment_block
+     FROM public.dex_pools dp
+     JOIN public.tokens t ON dp.token_id = t.id
+     WHERE dp.chain_id = $1
+     ORDER BY dp.pair_address`,
     [chainId]
   )
   return rows
@@ -167,9 +170,13 @@ export async function processDexPools(chainId: number): Promise<void> {
 
   for (const rawPool of pools) {
     const p = await ensurePoolDecimals(rawPool, provider)
-    const from = Math.max(1, (p.last_processed_block ?? 0) + 1)
+    // For new pools (last_processed_block is null), start from token deployment block
+    const startBlock = p.last_processed_block ?? p.deployment_block ?? Math.max(1, head - 50000)
+    const from = Math.max(1, startBlock + 1)
     if (from > head) continue
     const to = Math.min(head, from + DEFAULT_DEX_CHUNK)
+    
+    console.log(`Pool ${p.pair_address}: last_processed=${p.last_processed_block}, deployment=${p.deployment_block}, from=${from}, to=${to}`)
 
     const logs: Log[] = await provider.getLogs({
       address: p.pair_address as `0x${string}`,
