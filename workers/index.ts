@@ -16,7 +16,9 @@ const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : unde
 const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000)         // blocks per query
 const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15)       // ms between getBlock calls
 const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
-const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 200)) // addresses per getLogs
+const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 50)) // addresses per getLogs (reduced for stability)
+const RPC_TIMEOUT_MS = Number(process.env.RPC_TIMEOUT_MS ?? 30000)      // RPC timeout in milliseconds
+const MIN_CHUNK_SIZE = Number(process.env.MIN_CHUNK_SIZE ?? 1000)       // minimum chunk size for safety
 
 // Singleton advisory lock (prevent overlapping runs)
 const LOCK_NS = 42
@@ -200,6 +202,15 @@ function chunkAddresses<T>(arr: T[], size: number): T[][] {
   return out
 }
 
+// Dynamic chunk sizing based on address count to prevent timeouts
+function getOptimalChunkSize(addressCount: number): number {
+  if (addressCount <= 10) return DEFAULT_CHUNK
+  if (addressCount <= 50) return Math.floor(DEFAULT_CHUNK * 0.5)  // 25k blocks
+  if (addressCount <= 100) return Math.floor(DEFAULT_CHUNK * 0.2) // 10k blocks
+  if (addressCount <= 200) return Math.floor(DEFAULT_CHUNK * 0.1) // 5k blocks
+  return Math.max(MIN_CHUNK_SIZE, Math.floor(DEFAULT_CHUNK * 0.05)) // 2.5k blocks or min
+}
+
 async function processChain(chainId: number, tokens: TokenRow[]) {
   if (tokens.length === 0) return
 
@@ -241,8 +252,11 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
   }
 
   const addrBatches = chunkAddresses(addresses, ADDR_BATCH_LIMIT)
+  
+  // Use dynamic chunk sizing based on address count
+  let chunk = getOptimalChunkSize(addresses.length)
+  console.log(`Chain ${chainId}: using chunk size ${chunk} for ${addresses.length} addresses (${addrBatches.length} batches)`)
 
-  let chunk = DEFAULT_CHUNK
   for (let from = start; from <= latest; from += chunk + 1) {
     const to = Math.min(from + chunk, latest)
     console.log(`Chain ${chainId}: scanning blocks ${from}..${to} across ${addresses.length} addresses`)
@@ -259,11 +273,21 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
           toBlock: to,
         })
         allLogs = allLogs.concat(logs)
+        
+        // Small delay between batches to be nice to RPC
+        if (addrBatches.length > 1) {
+          await sleep(50)
+        }
       }
     } catch (e) {
-      if (isRateLimit(e) && chunk > 5000) {
-        chunk = Math.floor(chunk / 2)
-        console.warn(`Rate limit on getLogs(chain ${chainId}); shrinking chunk to ${chunk} and retrying`)
+      const error = e as { code?: string; message?: string }
+      const isTimeout = error?.code === 'TIMEOUT' || 
+                       error?.message?.includes('timeout') ||
+                       error?.message?.includes('deadline exceeded')
+      
+      if ((isRateLimit(e) || isTimeout) && chunk > MIN_CHUNK_SIZE) {
+        chunk = Math.max(Math.floor(chunk / 2), MIN_CHUNK_SIZE)
+        console.warn(`${isTimeout ? 'Timeout' : 'Rate limit'} on getLogs(chain ${chainId}); shrinking chunk to ${chunk} and retrying`)
         from -= (chunk + 1) // retry same window with smaller chunk
         continue
       }
@@ -360,7 +384,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
       await upsertChainCursor(chainId, to)
 
       await client.query('COMMIT')
-      console.log(`Chain ${chainId}: +${allLogs.length} logs across ${touchedTokenIds.size} tokens → cursor=${to}`)
+      console.log(`Chain ${chainId}: +${allLogs.length} logs across ${touchedTokenIds.size} tokens → cursor=${to} (chunk: ${chunk})`)
     } catch (e) {
       await client.query('ROLLBACK')
       throw e
@@ -386,6 +410,13 @@ async function main() {
   }
 
   try {
+    console.log(`\n🚀 Starting optimized worker with configuration:`)
+    console.log(`📊 Default chunk: ${DEFAULT_CHUNK} blocks`)
+    console.log(`🔗 Address batch limit: ${ADDR_BATCH_LIMIT} addresses per RPC call`)
+    console.log(`⏱️  RPC timeout: ${RPC_TIMEOUT_MS}ms`)
+    console.log(`🛡️  Reorg cushion: ${REORG_CUSHION} blocks`)
+    console.log(`📏 Min chunk size: ${MIN_CHUNK_SIZE} blocks`)
+
     const allTokens = await fetchTokens()
     if (allTokens.length === 0) {
       console.log('No tokens found with contract_address; exiting.')
