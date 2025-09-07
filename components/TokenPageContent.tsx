@@ -52,14 +52,12 @@ const TokenCard = memo(({
   const statusBadge = getStatusBadge()
 
 
-  // Get numeric price value for USD calculation
+  // Get numeric price value for USD calculation - use same logic as TokenDetailsView
   const getNumericPrice = (): number => {
-    if (token.on_dex && token.current_price !== undefined) {
+    if (token.current_price !== undefined && token.current_price !== null) {
       return Number(token.current_price)
-    } else {
-      const pricePerTokenWei = Number(token.base_price) || 0
-      return pricePerTokenWei / 1e18
     }
+    return 0 // Return 0 if no current_price, same as TokenDetailsView showing "–"
   }
 
   // Get FDV value - for DEX tokens use token.fdv, for In Progress calculate from bonding curve
@@ -264,7 +262,7 @@ const TokenCard = memo(({
               <span className="text-xs text-gray-400">Price</span>
               <div className="text-sm font-semibold text-white text-right">
                 <div>
-                  {usdPrice ? (
+                  {token.current_price !== undefined && token.current_price !== null && usdPrice ? (
                     formatUSDValue(getNumericPrice(), usdPrice)
                   ) : (
                     '—'
