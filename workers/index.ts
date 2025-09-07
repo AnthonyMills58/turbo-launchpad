@@ -262,6 +262,43 @@ function chunkAddresses<T>(arr: T[], size: number): T[][] {
   return out
 }
 
+// Backfill price data for existing transfers
+async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcProvider) {
+  console.log(`\n=== Backfilling transfer prices for chain ${chainId} ===`)
+  
+  const { rows } = await pool.query(
+    `SELECT tx_hash, log_index, amount_wei, token_id 
+     FROM public.token_transfers 
+     WHERE chain_id = $1 AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)
+     ORDER BY block_number DESC 
+     LIMIT 100`,
+    [chainId]
+  )
+  
+  console.log(`Found ${rows.length} transfers without price data`)
+  
+  for (const row of rows) {
+    try {
+      const tx = await provider.getTransaction(row.tx_hash)
+      if (tx?.value) {
+        const ethAmount = tx.value
+        const price = Number(ethAmount) / Number(row.amount_wei)
+        
+        await pool.query(
+          `UPDATE public.token_transfers 
+           SET amount_eth_wei = $1, price_eth_per_token = $2 
+           WHERE chain_id = $3 AND tx_hash = $4 AND log_index = $5`,
+          [ethAmount.toString(), price, chainId, row.tx_hash, row.log_index]
+        )
+        
+        console.log(`Backfilled: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+      }
+    } catch (e) {
+      console.warn(`Could not backfill tx ${row.tx_hash}:`, e)
+    }
+  }
+}
+
 async function processChain(chainId: number, tokens: TokenRow[]) {
   if (tokens.length === 0) return
 
@@ -374,6 +411,9 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
             if (amount > 0n) {
               price = Number(ethAmount) / Number(amount)
             }
+            console.log(`Token ${tokenId}: tx=${log.transactionHash}, eth=${ethAmount.toString()}, tokens=${amount.toString()}, price=${price}`)
+          } else {
+            console.log(`Token ${tokenId}: tx=${log.transactionHash}, no ETH value (tx.value=${tx?.value})`)
           }
         } catch (e) {
           // Transaction might not be available, continue without price
@@ -385,8 +425,8 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
              (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token)
            VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12)
            ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
-             amount_eth_wei = EXCLUDED.amount_eth_wei,
-             price_eth_per_token = EXCLUDED.price_eth_per_token`,
+             amount_eth_wei = CASE WHEN EXCLUDED.amount_eth_wei IS NOT NULL THEN EXCLUDED.amount_eth_wei ELSE token_transfers.amount_eth_wei END,
+             price_eth_per_token = CASE WHEN EXCLUDED.price_eth_per_token IS NOT NULL THEN EXCLUDED.price_eth_per_token ELSE token_transfers.price_eth_per_token END`,
           [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), ethAmount.toString(), price]
         )
 
@@ -502,7 +542,9 @@ async function main() {
     for (const [chainId, tokens] of chainsToProcess) {
       console.log(`\n=== ERC-20 scan: chain ${chainId} (${tokens.length} tokens) ===`)
       try {
+        const provider = providerFor(chainId)
         await processChain(chainId, tokens)
+        await backfillTransferPrices(chainId, provider)
       } catch (e) {
         console.error(`Chain ${chainId}: ERC-20 scan failed with`, e)
         // continue to next chain
