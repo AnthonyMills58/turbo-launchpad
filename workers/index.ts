@@ -409,7 +409,7 @@ async function consolidateGraduationTransactions(chainId: number) {
       await pool.query(
         `INSERT INTO public.token_transfers
            (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
-         VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12,$13)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
            amount_eth_wei = EXCLUDED.amount_eth_wei,
            price_eth_per_token = EXCLUDED.price_eth_per_token,
