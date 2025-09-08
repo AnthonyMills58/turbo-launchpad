@@ -402,6 +402,12 @@ async function consolidateGraduationTransactions(chainId: number) {
       const totalEthWei = BigInt(firstBondingCurveOp.amount_eth_wei)
       const totalTokens = BigInt(firstBondingCurveOp.amount_wei)
       
+      // Calculate price in ETH (totalEthWei / totalTokens)
+      // Since both are in wei, divide by 1e18 to get ETH per token
+      const priceEthPerToken = totalTokens > 0n 
+        ? Number(totalEthWei / totalTokens) / 1e18
+        : 0
+      
       // Get transaction details for from/to addresses
       const firstTransfer = transfers[0]
       
@@ -426,7 +432,7 @@ async function consolidateGraduationTransactions(chainId: number) {
           candidate.contract_address, // To contract (graduation target)
           totalTokens.toString(), 
           totalEthWei.toString(), 
-          null, // No meaningful price for graduation
+          priceEthPerToken, // Calculated price in ETH
           'GRADUATION'
         ]
       )
