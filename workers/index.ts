@@ -278,10 +278,11 @@ async function identifyTransferType(
     try {
       // Common function selectors for TurboToken
       const functionSelectors = {
-        '0x47e7ef24': 'BUY',           // buy(uint256)
-        '0x38ed1739': 'SELL',          // sell(uint256) 
-        '0x4e71d92d': 'CLAIMAIRDROP',  // claimAirdrop()
-        '0x2e1a7d4d': 'UNLOCK',        // unlockCreatorTokens()
+        '0xd96a094a': 'BUY',           // buy(uint256)
+        '0xe4849b32': 'SELL',          // sell(uint256) 
+        '0x5b88349d': 'CLAIMAIRDROP',  // claimAirdrop()
+        '0xb4105e06': 'UNLOCK',        // unlockCreatorTokens()
+        '0xb34ffc5f': 'BUY',           // creatorBuy(uint256)
       }
       
       const selector = tx.data.slice(0, 10)
@@ -324,7 +325,7 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   console.log(`\n=== Backfilling transfer prices for chain ${chainId} ===`)
   
   const { rows } = await pool.query(
-    `SELECT tx_hash, log_index, amount_wei, token_id, side
+    `SELECT tx_hash, log_index, amount_wei, token_id, side, from_address, to_address, contract_address
      FROM public.token_transfers 
      WHERE chain_id = $1 AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)
      ORDER BY block_number DESC 
@@ -338,10 +339,11 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
     try {
       const tx = await provider.getTransaction(row.tx_hash)
       
-      // Get transfer type for this transaction
-      const fromAddr = '0x0000000000000000000000000000000000000000' // We don't have this in backfill, so we'll use a placeholder
-      const toAddr = '0x0000000000000000000000000000000000000000'   // We don't have this in backfill, so we'll use a placeholder
-      const transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, '0x0000000000000000000000000000000000000000')
+      // Get transfer type for this transaction using actual addresses from the database
+      const fromAddr = row.from_address || '0x0000000000000000000000000000000000000000'
+      const toAddr = row.to_address || '0x0000000000000000000000000000000000000000'
+      const tokenAddr = row.contract_address || '0x0000000000000000000000000000000000000000'
+      const transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr)
       
       if (tx?.value && tx.value > 0n) {
         // Buy operation: ETH sent TO contract
