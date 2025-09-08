@@ -77,6 +77,7 @@ type TokenRow = {
   created_at: string | null
   deployment_block: number | null
   last_processed_block: number | null
+  creator_wallet: string | null
 }
 
 type ChainCursorRow = {
@@ -87,7 +88,7 @@ type ChainCursorRow = {
 // -------------------- DB helpers --------------------
 async function fetchTokens(): Promise<TokenRow[]> {
   const base = `
-    SELECT id, chain_id, contract_address, created_at, deployment_block, last_processed_block
+    SELECT id, chain_id, contract_address, created_at, deployment_block, last_processed_block, creator_wallet
     FROM public.tokens
     WHERE contract_address IS NOT NULL
   `
@@ -268,7 +269,8 @@ async function identifyTransferType(
   fromAddr: string, 
   toAddr: string, 
   chainId: number, 
-  tokenAddr: string
+  tokenAddr: string,
+  creatorWallet: string | null
 ): Promise<string> {
   if (!tx) return 'OTHER'
   
@@ -302,17 +304,30 @@ async function identifyTransferType(
     console.log(`Transaction with short data: ${tx.data} for tx ${tx.hash}`)
   }
   
-  // Check for specific transfer patterns
+  // Check for specific transfer patterns using address patterns (more reliable)
   if (fromAddr === '0x0000000000000000000000000000000000000000') {
-    // Check if this is a graduation mint (mint to contract address)
+    // Mint from zero address
     if (toAddr === tokenAddr.toLowerCase()) {
       return 'GRADUATION' // Graduation mint to contract
     }
-    return 'TRANSFER' // Regular token creation (mint)
+    // Check if this is a creator buy (mint to contract, then to creator)
+    if (tx.value && tx.value > 0n) {
+      // Check if transaction is from the creator wallet
+      if (creatorWallet && tx.from && tx.from.toLowerCase() === creatorWallet.toLowerCase()) {
+        console.log(`DEBUG: Creator transaction detected: tx=${tx.hash}, creator=${creatorWallet}, from=${tx.from}`)
+        return 'BUY&LOCK' // Creator buy operation
+      }
+      return 'BUY' // Regular buy (mint to user with ETH)
+    }
+    return 'TRANSFER' // Regular token creation (mint without ETH)
   }
   
   if (toAddr === '0x0000000000000000000000000000000000000000') {
-    return 'TRANSFER' // Token destruction (burn)
+    // Burn to zero address
+    if (tx.value && tx.value > 0n) {
+      return 'SELL' // Sell operation (burn with ETH payout)
+    }
+    return 'TRANSFER' // Regular token destruction (burn)
   }
   
   if (fromAddr === tokenAddr.toLowerCase()) {
@@ -323,12 +338,55 @@ async function identifyTransferType(
     return 'SELL' // To contract (sell, etc.)
   }
   
-  // Fallback: if transaction has ETH value and no function call data, it might be a BUY
-  if (tx.value && tx.value > 0n && (!tx.data || tx.data === '0x')) {
-    return 'BUY' // ETH sent to contract without function call (fallback BUY)
+  // Fallback: if transaction has ETH value, it might be a BUY
+  if (tx.value && tx.value > 0n) {
+    return 'BUY' // ETH sent to contract (fallback BUY)
   }
   
   return 'TRANSFER' // Regular token transfer
+}
+
+// Clean up overlapping records between token_transfers and token_trades
+async function cleanupOverlappingTransfers(chainId: number) {
+  console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
+  
+  // Count overlapping records first
+  const { rows: overlapCount } = await pool.query(
+    `SELECT COUNT(*) as count
+     FROM public.token_transfers tt
+     JOIN public.token_trades tr ON (
+       tt.chain_id = tr.chain_id 
+       AND tt.block_number = tr.block_number 
+       AND tt.tx_hash = tr.tx_hash
+     )
+     WHERE tt.chain_id = $1`,
+    [chainId]
+  )
+  
+  const count = parseInt(overlapCount[0].count)
+  console.log(`Found ${count} overlapping records in chain ${chainId}`)
+  
+  if (count > 0) {
+    // Remove overlapping records from token_transfers
+    // These are DEX operations that should only exist in token_trades
+    const { rowCount } = await pool.query(
+      `DELETE FROM public.token_transfers 
+       WHERE chain_id = $1 
+       AND (chain_id, block_number, tx_hash) IN (
+         SELECT DISTINCT tt.chain_id, tt.block_number, tt.tx_hash
+         FROM public.token_transfers tt
+         JOIN public.token_trades tr ON (
+           tt.chain_id = tr.chain_id 
+           AND tt.block_number = tr.block_number 
+           AND tt.tx_hash = tr.tx_hash
+         )
+         WHERE tt.chain_id = $1
+       )`,
+      [chainId]
+    )
+    
+    console.log(`Removed ${rowCount} overlapping records from token_transfers`)
+  }
 }
 
 // Backfill price data for existing transfers
@@ -354,7 +412,15 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
       const fromAddr = row.from_address || '0x0000000000000000000000000000000000000000'
       const toAddr = row.to_address || '0x0000000000000000000000000000000000000000'
       const tokenAddr = row.contract_address || '0x0000000000000000000000000000000000000000'
-      const transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr)
+      
+      // Get creator wallet for this token
+      const { rows: tokenRows } = await pool.query(
+        'SELECT creator_wallet FROM public.tokens WHERE id = $1',
+        [row.token_id]
+      )
+      const creatorWallet = tokenRows[0]?.creator_wallet || null
+      
+      const transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr, creatorWallet)
       
       if (tx?.value && tx.value > 0n) {
         // Buy operation: ETH sent TO contract
@@ -586,7 +652,10 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         
         try {
           const tx = await provider.getTransaction(log.transactionHash!)
-          transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr)
+          // Get creator wallet for this token
+          const token = tokens.find(t => t.id === tokenId)
+          const creatorWallet = token?.creator_wallet || null
+          transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr, creatorWallet)
           
           // Debug: log transaction details for ETH transactions
           if (tx?.value && tx.value > 0n) {
@@ -662,6 +731,19 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         } catch (e) {
           // Transaction might not be available, continue without price
           console.warn(`Could not get transaction ${log.transactionHash} for price calculation:`, e)
+        }
+
+        // Check if this transfer should be skipped (DEX operation for graduated token)
+        const { rows: dexCheck } = await client.query(
+          `SELECT 1 FROM public.token_trades 
+           WHERE chain_id = $1 AND block_number = $2 AND tx_hash = $3
+           LIMIT 1`,
+          [chainId, bn, log.transactionHash!]
+        )
+        
+        if (dexCheck.length > 0) {
+          console.log(`Skipping DEX transfer: token ${tokenId}, tx ${log.transactionHash} (exists in token_trades)`)
+          continue // Skip this transfer as it's already in token_trades
         }
 
         await client.query(
@@ -783,7 +865,29 @@ async function main() {
       console.log(`\n⚠️  Health checks disabled - processing all ${byChain.size} chains for ERC-20 scan`)
     }
 
-    // 1) ERC-20 transfers/balances/holders — only on healthy chains (or all if health disabled)
+    // 1) Pools pipeline (auto-discovery + DEX logs) — run FIRST to populate token_trades
+    for (const [chainId] of chainsToProcess) {
+      console.log(`\n=== Pools pipeline: chain ${chainId} ===`)
+      try {
+        await runPoolsPipelineForChain(chainId)
+      } catch (e) {
+        console.error(`Chain ${chainId}: pools pipeline failed with`, e)
+        // continue to next chain
+      }
+    }
+
+    // 1.5) Clean up any overlapping records between token_transfers and token_trades
+    for (const [chainId] of chainsToProcess) {
+      console.log(`\n=== Cleanup overlapping transfers: chain ${chainId} ===`)
+      try {
+        await cleanupOverlappingTransfers(chainId)
+      } catch (e) {
+        console.error(`Chain ${chainId}: cleanup failed with`, e)
+        // continue to next chain
+      }
+    }
+
+    // 2) ERC-20 transfers/balances/holders — run AFTER pools to avoid DEX overlap
     for (const [chainId, tokens] of chainsToProcess) {
       console.log(`\n=== ERC-20 scan: chain ${chainId} (${tokens.length} tokens) ===`)
       try {
@@ -792,17 +896,6 @@ async function main() {
         await backfillTransferPrices(chainId, provider)
       } catch (e) {
         console.error(`Chain ${chainId}: ERC-20 scan failed with`, e)
-        // continue to next chain
-      }
-    }
-
-    // 2) Pools pipeline (auto-discovery + DEX logs) — run on same healthy chains as ERC-20 scan
-    for (const [chainId] of chainsToProcess) {
-      console.log(`\n=== Pools pipeline: chain ${chainId} ===`)
-      try {
-        await runPoolsPipelineForChain(chainId)
-      } catch (e) {
-        console.error(`Chain ${chainId}: pools pipeline failed with`, e)
         // continue to next chain
       }
     }
