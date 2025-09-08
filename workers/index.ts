@@ -273,16 +273,16 @@ async function identifyTransferType(
   if (!tx) return 'OTHER'
   
   // Check if it's a contract call (has data)
-  if (tx.data && tx.data !== '0x') {
+  if (tx.data && tx.data !== '0x' && tx.data.length >= 10) {
     // Try to decode the function call
     try {
       // Common function selectors for TurboToken
       const functionSelectors = {
-        '0xd96a094a': 'BUY',           // buy(uint256)
-        '0xe4849b32': 'SELL',          // sell(uint256) 
+        '0x3ec5b71f': 'BUY',           // buy(uint256 amount)
+        '0x3a7e97c6': 'SELL',          // sell(uint256 amount) 
         '0x5b88349d': 'CLAIMAIRDROP',  // claimAirdrop()
         '0xb4105e06': 'UNLOCK',        // unlockCreatorTokens()
-        '0xb34ffc5f': 'BUY',           // creatorBuy(uint256)
+        '0x0ae33023': 'BUY&LOCK',      // creatorBuy(uint256 amount)
       }
       
       const selector = tx.data.slice(0, 10)
@@ -290,10 +290,16 @@ async function identifyTransferType(
       
       if (functionName) {
         return functionName
+      } else {
+        // Debug: log unknown function selectors
+        console.log(`Unknown function selector: ${selector} for tx ${tx.hash}`)
       }
     } catch {
       // Ignore decoding errors
     }
+  } else if (tx.data && tx.data !== '0x') {
+    // Debug: log transactions with data but not enough for a selector
+    console.log(`Transaction with short data: ${tx.data} for tx ${tx.hash}`)
   }
   
   // Check for specific transfer patterns
@@ -315,6 +321,11 @@ async function identifyTransferType(
   
   if (toAddr === tokenAddr.toLowerCase()) {
     return 'SELL' // To contract (sell, etc.)
+  }
+  
+  // Fallback: if transaction has ETH value and no function call data, it might be a BUY
+  if (tx.value && tx.value > 0n && (!tx.data || tx.data === '0x')) {
+    return 'BUY' // ETH sent to contract without function call (fallback BUY)
   }
   
   return 'TRANSFER' // Regular token transfer
@@ -358,6 +369,97 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
         )
         
         console.log(`Backfilled ${transferType}: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+      } else if (transferType === 'SELL') {
+        // For SELL operations, try to get the sell price even if tx.value is 0
+        // This handles the case where the sell price calculation failed during initial processing
+        try {
+          const receipt = await provider.getTransactionReceipt(row.tx_hash)
+          if (receipt) {
+            const blockBeforeTx = receipt.blockNumber - 1
+            
+            try {
+              const turboTokenInterface = new ethers.Interface([
+                'function getSellPrice(uint256 amount) view returns (uint256)'
+              ])
+              
+              const sellPriceResult = await provider.call({
+                to: row.contract_address,
+                data: turboTokenInterface.encodeFunctionData('getSellPrice', [row.amount_wei.toString()]),
+                blockTag: blockBeforeTx
+              })
+              
+              if (sellPriceResult && sellPriceResult !== '0x') {
+                const decoded = turboTokenInterface.decodeFunctionResult('getSellPrice', sellPriceResult)
+                const sellPrice = BigInt(decoded[0].toString())
+                
+                if (sellPrice > 0n) {
+                  const price = Number(sellPrice) / Number(row.amount_wei)
+                  
+                  await pool.query(
+                    `UPDATE public.token_transfers 
+                     SET amount_eth_wei = $1, price_eth_per_token = $2, side = $3
+                     WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6`,
+                    [sellPrice.toString(), price, transferType, chainId, row.tx_hash, row.log_index]
+                  )
+                  
+                  console.log(`Backfilled SELL: token ${row.token_id}, tx ${row.tx_hash}, eth ${sellPrice.toString()}, price ${price}`)
+                } else {
+                  // Update side field even if sell price is 0
+                  await pool.query(
+                    `UPDATE public.token_transfers 
+                     SET side = $1
+                     WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
+                    [transferType, chainId, row.tx_hash, row.log_index]
+                  )
+                  
+                  console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (sell price was 0)`)
+                }
+              } else {
+                // Update side field if sell price call failed
+                await pool.query(
+                  `UPDATE public.token_transfers 
+                   SET side = $1
+                   WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
+                  [transferType, chainId, row.tx_hash, row.log_index]
+                )
+                
+                console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (sell price call failed)`)
+              }
+            } catch (callError) {
+              console.log(`Could not call getSellPrice for backfill tx ${row.tx_hash}:`, callError)
+              // Update side field even if call failed
+              await pool.query(
+                `UPDATE public.token_transfers 
+                 SET side = $1
+                 WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
+                [transferType, chainId, row.tx_hash, row.log_index]
+              )
+              
+              console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (sell price call error)`)
+            }
+          } else {
+            // Update side field if no receipt
+            await pool.query(
+              `UPDATE public.token_transfers 
+               SET side = $1
+               WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
+              [transferType, chainId, row.tx_hash, row.log_index]
+            )
+            
+            console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (no receipt)`)
+          }
+        } catch (receiptError) {
+          console.warn(`Could not get receipt for backfill sell tx ${row.tx_hash}:`, receiptError)
+          // Update side field even if receipt failed
+          await pool.query(
+            `UPDATE public.token_transfers 
+             SET side = $1
+             WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
+            [transferType, chainId, row.tx_hash, row.log_index]
+          )
+          
+          console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (receipt error)`)
+        }
       } else {
         // Update side field even if we can't get ETH amount
         await pool.query(
@@ -486,6 +588,11 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
           const tx = await provider.getTransaction(log.transactionHash!)
           transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr)
           
+          // Debug: log transaction details for ETH transactions
+          if (tx?.value && tx.value > 0n) {
+            console.log(`DEBUG: ETH transaction ${log.transactionHash}: value=${tx.value.toString()}, data=${tx.data}, to=${tx.to}, from=${tx.from}`)
+          }
+          
           if (tx?.value && tx.value > 0n) {
             // Buy operation: ETH sent TO contract
             ethAmount = tx.value
@@ -525,19 +632,27 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
                       isPaymentTransfer = true
                       price = Number(ethAmount) / Number(amount)
                       console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, eth=${ethAmount.toString()}, tokens=${amount.toString()}, price=${price}`)
+                    } else {
+                      console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, getSellPrice returned 0 for amount=${amount.toString()}`)
                     }
+                  } else {
+                    console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, getSellPrice call returned empty result`)
                   }
                 } catch (callError) {
                   console.log(`Could not call getSellPrice for tx ${log.transactionHash}:`, callError)
                 }
+              } else {
+                console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, could not get transaction receipt`)
               }
             } catch (receiptError) {
               console.warn(`Could not get receipt for sell tx ${log.transactionHash}:`, receiptError)
             }
             
+            // For SELL operations, we still mark as payment transfer even if price calculation failed
+            // This ensures the transfer is properly categorized
             if (!isPaymentTransfer) {
               isPaymentTransfer = true
-              console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, tokens=${amount.toString()} (ETH amount calculation failed)`)
+              console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, tokens=${amount.toString()} (ETH amount calculation failed, but still marked as payment)`)
             }
           }
           
