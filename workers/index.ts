@@ -282,6 +282,7 @@ async function identifyTransferType(
       const functionSelectors = {
         '0x3ec5b71f': 'BUY',           // buy(uint256 amount)
         '0x3a7e97c6': 'SELL',          // sell(uint256 amount) 
+        '0xe4849b32': 'SELL',          // sell(uint256)
         '0x5b88349d': 'CLAIMAIRDROP',  // claimAirdrop()
         '0xb4105e06': 'UNLOCK',        // unlockCreatorTokens()
         '0xb34ffc5f': 'BUY&LOCK',      // creatorBuy(uint256)
