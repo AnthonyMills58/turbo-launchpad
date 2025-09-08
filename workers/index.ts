@@ -396,13 +396,17 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   const { rows } = await pool.query(
     `SELECT tx_hash, log_index, amount_wei, token_id, side, from_address, to_address, contract_address
      FROM public.token_transfers 
-     WHERE chain_id = $1 AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)
+     WHERE chain_id = $1 AND (
+       amount_eth_wei IS NULL OR 
+       price_eth_per_token IS NULL OR 
+       side IN ('OTHER', 'TRANSFER')
+     )
      ORDER BY block_number DESC 
      LIMIT 100`,
     [chainId]
   )
   
-  console.log(`Found ${rows.length} transfers without price data`)
+  console.log(`Found ${rows.length} transfers without price data or with incorrect side values`)
   
   for (const row of rows) {
     try {
@@ -422,19 +426,21 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
       
       const transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr, creatorWallet)
       
-      if (tx?.value && tx.value > 0n) {
+      // Calculate ETH amount and price based on transfer type
+      let ethAmount = 0n
+      let price = null
+      let isPaymentTransfer = false
+      
+      if (transferType === 'BUY' || transferType === 'BUY&LOCK') {
         // Buy operation: ETH sent TO contract
-        const ethAmount = tx.value
-        const price = Number(ethAmount) / Number(row.amount_wei)
-        
-        await pool.query(
-          `UPDATE public.token_transfers 
-           SET amount_eth_wei = $1, price_eth_per_token = $2, side = $3
-           WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6`,
-          [ethAmount.toString(), price, transferType, chainId, row.tx_hash, row.log_index]
-        )
-        
-        console.log(`Backfilled ${transferType}: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+        if (tx?.value && tx.value > 0n) {
+          ethAmount = tx.value
+          isPaymentTransfer = true
+          price = Number(ethAmount) / Number(row.amount_wei)
+          console.log(`Backfilled ${transferType}: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+        } else {
+          console.log(`Backfilled ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (no ETH value)`)
+        }
       } else if (transferType === 'SELL') {
         // For SELL operations, try to get the sell price even if tx.value is 0
         // This handles the case where the sell price calculation failed during initial processing
@@ -459,82 +465,36 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
                 const sellPrice = BigInt(decoded[0].toString())
                 
                 if (sellPrice > 0n) {
-                  const price = Number(sellPrice) / Number(row.amount_wei)
-                  
-                  await pool.query(
-                    `UPDATE public.token_transfers 
-                     SET amount_eth_wei = $1, price_eth_per_token = $2, side = $3
-                     WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6`,
-                    [sellPrice.toString(), price, transferType, chainId, row.tx_hash, row.log_index]
-                  )
-                  
-                  console.log(`Backfilled SELL: token ${row.token_id}, tx ${row.tx_hash}, eth ${sellPrice.toString()}, price ${price}`)
+                  ethAmount = sellPrice
+                  isPaymentTransfer = true
+                  price = Number(ethAmount) / Number(row.amount_wei)
+                  console.log(`Backfilled SELL: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
                 } else {
-                  // Update side field even if sell price is 0
-                  await pool.query(
-                    `UPDATE public.token_transfers 
-                     SET side = $1
-                     WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
-                    [transferType, chainId, row.tx_hash, row.log_index]
-                  )
-                  
-                  console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (sell price was 0)`)
+                  console.log(`Backfilled SELL: token ${row.token_id}, tx ${row.tx_hash} (sell price was 0)`)
                 }
               } else {
-                // Update side field if sell price call failed
-                await pool.query(
-                  `UPDATE public.token_transfers 
-                   SET side = $1
-                   WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
-                  [transferType, chainId, row.tx_hash, row.log_index]
-                )
-                
-                console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (sell price call failed)`)
+                console.log(`Backfilled SELL: token ${row.token_id}, tx ${row.tx_hash} (sell price call failed)`)
               }
             } catch (callError) {
               console.log(`Could not call getSellPrice for backfill tx ${row.tx_hash}:`, callError)
-              // Update side field even if call failed
-              await pool.query(
-                `UPDATE public.token_transfers 
-                 SET side = $1
-                 WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
-                [transferType, chainId, row.tx_hash, row.log_index]
-              )
-              
-              console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (sell price call error)`)
             }
           } else {
-            // Update side field if no receipt
-            await pool.query(
-              `UPDATE public.token_transfers 
-               SET side = $1
-               WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
-              [transferType, chainId, row.tx_hash, row.log_index]
-            )
-            
-            console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (no receipt)`)
+            console.log(`Backfilled SELL: token ${row.token_id}, tx ${row.tx_hash} (no receipt)`)
           }
         } catch (receiptError) {
           console.warn(`Could not get receipt for backfill sell tx ${row.tx_hash}:`, receiptError)
-          // Update side field even if receipt failed
-          await pool.query(
-            `UPDATE public.token_transfers 
-             SET side = $1
-             WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
-            [transferType, chainId, row.tx_hash, row.log_index]
-          )
-          
-          console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (receipt error)`)
         }
-      } else {
-        // Update side field even if we can't get ETH amount
-        await pool.query(
-          `UPDATE public.token_transfers 
-           SET side = $1
-           WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
-          [transferType, chainId, row.tx_hash, row.log_index]
-        )
-        
+      }
+      
+      // Update the database with all the calculated values
+      await pool.query(
+        `UPDATE public.token_transfers 
+         SET amount_eth_wei = $1, price_eth_per_token = $2, side = $3
+         WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6`,
+        [isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType, chainId, row.tx_hash, row.log_index]
+      )
+      
+      if (!isPaymentTransfer) {
         console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash}`)
       }
     } catch (e) {
