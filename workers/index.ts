@@ -286,6 +286,7 @@ async function identifyTransferType(
         '0x5b88349d': 'CLAIMAIRDROP',  // claimAirdrop()
         '0xb4105e06': 'UNLOCK',        // unlockCreatorTokens()
         '0xb34ffc5f': 'BUY&LOCK',      // creatorBuy(uint256)
+        '0xd96a094a': 'GRADUATION',    // graduate() - triggers graduation process
       }
       
       const selector = tx.data.slice(0, 10)
@@ -346,6 +347,37 @@ async function identifyTransferType(
   }
   
   return 'TRANSFER' // Regular token transfer
+}
+
+// Process graduation transaction as a single record
+async function processGraduationTransaction(
+  client: PoolClient,
+  chainId: number,
+  tokenId: number,
+  tokenAddr: string,
+  tx: ethers.TransactionResponse,
+  blockNumber: number,
+  blockTime: number
+) {
+  console.log(`Processing graduation transaction: token ${tokenId}, tx ${tx.hash}`)
+  
+  // Calculate total ETH used for graduation (transaction value)
+  const ethAmount = tx.value || 0n
+  const price = null // No meaningful price for graduation
+  
+  // Create single graduation record
+  await client.query(
+    `INSERT INTO public.token_transfers
+       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
+     VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12,$13)
+     ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+       amount_eth_wei = EXCLUDED.amount_eth_wei,
+       price_eth_per_token = EXCLUDED.price_eth_per_token,
+       side = EXCLUDED.side`,
+    [tokenId, chainId, tokenAddr, blockNumber, blockTime, tx.hash, 0, tx.from, tokenAddr, '0', ethAmount.toString(), price, 'GRADUATION']
+  )
+  
+  console.log(`Created graduation record: token ${tokenId}, tx ${tx.hash}, eth ${ethAmount.toString()}`)
 }
 
 // Clean up overlapping records between token_transfers and token_trades
@@ -614,6 +646,14 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         
         try {
           const tx = await provider.getTransaction(log.transactionHash!)
+          
+          // Check if this is a graduation transaction
+          if (tx?.data && tx.data.startsWith('0xd96a094a')) {
+            // This is a graduation transaction - process it as a single record
+            await processGraduationTransaction(client, chainId, tokenId, tokenAddr, tx, bn, ts)
+            continue // Skip individual transfer log processing
+          }
+          
           // Get creator wallet for this token
           const token = tokens.find(t => t.id === tokenId)
           const creatorWallet = token?.creator_wallet || null
