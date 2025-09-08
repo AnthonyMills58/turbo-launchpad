@@ -286,7 +286,7 @@ async function identifyTransferType(
         '0x5b88349d': 'CLAIMAIRDROP',  // claimAirdrop()
         '0xb4105e06': 'UNLOCK',        // unlockCreatorTokens()
         '0xb34ffc5f': 'BUY&LOCK',      // creatorBuy(uint256)
-        '0xd96a094a': 'GRADUATION',    // graduate() - triggers graduation process
+        // Note: graduate() function selector removed - use address patterns instead
       }
       
       const selector = tx.data.slice(0, 10)
@@ -349,35 +349,110 @@ async function identifyTransferType(
   return 'TRANSFER' // Regular token transfer
 }
 
-// Process graduation transaction as a single record
-async function processGraduationTransaction(
-  client: PoolClient,
-  chainId: number,
-  tokenId: number,
-  tokenAddr: string,
-  tx: ethers.TransactionResponse,
-  blockNumber: number,
-  blockTime: number
-) {
-  console.log(`Processing graduation transaction: token ${tokenId}, tx ${tx.hash}`)
+// Consolidate graduation transactions into single records
+async function consolidateGraduationTransactions(chainId: number) {
+  console.log(`\n=== Consolidating graduation transactions for chain ${chainId} ===`)
   
-  // Calculate total ETH used for graduation (transaction value)
-  const ethAmount = tx.value || 0n
-  const price = null // No meaningful price for graduation
-  
-  // Create single graduation record
-  await client.query(
-    `INSERT INTO public.token_transfers
-       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
-     VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12,$13)
-     ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
-       amount_eth_wei = EXCLUDED.amount_eth_wei,
-       price_eth_per_token = EXCLUDED.price_eth_per_token,
-       side = EXCLUDED.side`,
-    [tokenId, chainId, tokenAddr, blockNumber, blockTime, tx.hash, 0, tx.from, tokenAddr, '0', ethAmount.toString(), price, 'GRADUATION']
+  // Find transactions that look like graduation (multiple transfer logs with high ETH value)
+  const { rows: graduationCandidates } = await pool.query(
+    `SELECT 
+       tx_hash,
+       COUNT(*) as transfer_count,
+       SUM(amount_eth_wei::numeric) as total_eth_wei,
+       MIN(block_number) as block_number,
+       MIN(block_time) as block_time,
+       MIN(token_id) as token_id,
+       MIN(contract_address) as contract_address
+     FROM public.token_transfers 
+     WHERE chain_id = $1 
+       AND amount_eth_wei IS NOT NULL 
+       AND amount_eth_wei::numeric > 0
+     GROUP BY tx_hash
+     HAVING COUNT(*) >= 2 
+       AND SUM(amount_eth_wei::numeric) > 100000000000000000  -- More than 0.1 ETH
+     ORDER BY block_number DESC`,
+    [chainId]
   )
   
-  console.log(`Created graduation record: token ${tokenId}, tx ${tx.hash}, eth ${ethAmount.toString()}`)
+  console.log(`Found ${graduationCandidates.length} potential graduation transactions`)
+  
+  for (const candidate of graduationCandidates) {
+    try {
+      // Get all transfer records for this transaction
+      const { rows: transfers } = await pool.query(
+        `SELECT * FROM public.token_transfers 
+         WHERE chain_id = $1 AND tx_hash = $2 
+         ORDER BY log_index`,
+        [chainId, candidate.tx_hash]
+      )
+      
+      // Check if this looks like a graduation transaction
+      // Graduation typically has: mint to user + mint to contract + contract transfers
+      const hasMintToUser = transfers.some(t => 
+        t.from_address === '0x0000000000000000000000000000000000000000' && 
+        t.to_address !== t.contract_address
+      )
+      const hasMintToContract = transfers.some(t => 
+        t.from_address === '0x0000000000000000000000000000000000000000' && 
+        t.to_address === t.contract_address
+      )
+      const hasContractTransfers = transfers.some(t => 
+        t.from_address === t.contract_address
+      )
+      
+      if (hasMintToUser && hasMintToContract && hasContractTransfers) {
+        console.log(`Consolidating graduation transaction: ${candidate.tx_hash} (${transfers.length} transfers)`)
+        
+        // Calculate total values
+        const totalEthWei = transfers
+          .filter(t => t.amount_eth_wei)
+          .reduce((sum, t) => sum + BigInt(t.amount_eth_wei), 0n)
+        
+        const totalTokens = transfers
+          .reduce((sum, t) => sum + BigInt(t.amount_wei), 0n)
+        
+        // Get transaction details for from/to addresses
+        const firstTransfer = transfers[0]
+        
+        // Create single graduation record
+        await pool.query(
+          `INSERT INTO public.token_transfers
+             (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
+           VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12,$13)
+           ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+             amount_eth_wei = EXCLUDED.amount_eth_wei,
+             price_eth_per_token = EXCLUDED.price_eth_per_token,
+             side = EXCLUDED.side`,
+          [
+            candidate.token_id, 
+            chainId, 
+            candidate.contract_address, 
+            candidate.block_number, 
+            candidate.block_time, 
+            candidate.tx_hash, 
+            0, // Use log_index 0 for consolidated record
+            firstTransfer.from_address, 
+            candidate.contract_address, // To contract (graduation target)
+            totalTokens.toString(), 
+            totalEthWei.toString(), 
+            null, // No meaningful price for graduation
+            'GRADUATION'
+          ]
+        )
+        
+        // Remove the individual transfer records
+        await pool.query(
+          `DELETE FROM public.token_transfers 
+           WHERE chain_id = $1 AND tx_hash = $2 AND log_index > 0`,
+          [chainId, candidate.tx_hash]
+        )
+        
+        console.log(`Consolidated graduation: ${candidate.tx_hash}, eth=${totalEthWei.toString()}, tokens=${totalTokens.toString()}`)
+      }
+    } catch (e) {
+      console.warn(`Could not consolidate graduation transaction ${candidate.tx_hash}:`, e)
+    }
+  }
 }
 
 // Clean up overlapping records between token_transfers and token_trades
@@ -539,10 +614,10 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
 
 async function processChain(chainId: number, tokens: TokenRow[]) {
   if (tokens.length === 0) return
-
+  
   const provider = providerFor(chainId)
   const latest = await provider.getBlockNumber()
-
+  
   // Build address list & mapping (lowercased)
   const addrToTokenId = new Map<string, number>()
   const addresses: string[] = []
@@ -576,7 +651,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
     console.log(`Chain ${chainId}: up to date (start ${start} > latest ${latest})`)
     return
   }
-
+  
   const addrBatches = chunkAddresses(addresses, ADDR_BATCH_LIMIT)
 
   let chunk = DEFAULT_CHUNK
@@ -586,25 +661,25 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
 
     // Collect logs across address batches
     let allLogs: Log[] = []
-    try {
-      for (const batch of addrBatches) {
-        // Guard: provider.getLogs supports address: string|string[]
-        const logs = await provider.getLogs({
-          address: batch as unknown as string[], // v6 types allow string|string[]
-          topics: [TRANSFER_TOPIC],
-          fromBlock: from,
-          toBlock: to,
-        })
-        allLogs = allLogs.concat(logs)
-      }
-    } catch (e) {
+      try {
+        for (const batch of addrBatches) {
+          // Guard: provider.getLogs supports address: string|string[]
+          const logs = await provider.getLogs({
+            address: batch as unknown as string[], // v6 types allow string|string[]
+            topics: [TRANSFER_TOPIC],
+            fromBlock: from,
+            toBlock: to,
+          })
+          allLogs = allLogs.concat(logs)
+        }
+      } catch (e) {
       if (isRateLimit(e) && chunk > 5000) {
         chunk = Math.floor(chunk / 2)
         console.warn(`Rate limit on getLogs(chain ${chainId}); shrinking chunk to ${chunk} and retrying`)
         from -= (chunk + 1) // retry same window with smaller chunk
-        continue
-      }
-      throw e
+          continue
+        }
+        throw e
     }
 
     // Timestamps per unique block
@@ -619,13 +694,13 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         throw e
       }
     }
-
+    
     // DB transaction for this chunk
     const client = await pool.connect()
     const touchedTokenIds = new Set<number>()
     try {
       await client.query('BEGIN')
-
+      
       for (const log of allLogs) {
         const tokenAddr = (log.address || '').toLowerCase()
         const tokenId = addrToTokenId.get(tokenAddr)
@@ -646,14 +721,6 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         
         try {
           const tx = await provider.getTransaction(log.transactionHash!)
-          
-          // Check if this is a graduation transaction
-          if (tx?.data && tx.data.startsWith('0xd96a094a')) {
-            // This is a graduation transaction - process it as a single record
-            await processGraduationTransaction(client, chainId, tokenId, tokenAddr, tx, bn, ts)
-            continue // Skip individual transfer log processing
-          }
-          
           // Get creator wallet for this token
           const token = tokens.find(t => t.id === tokenId)
           const creatorWallet = token?.creator_wallet || null
@@ -747,9 +814,9 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
           console.log(`Skipping DEX transfer: token ${tokenId}, tx ${log.transactionHash} (exists in token_trades)`)
           continue // Skip this transfer as it's already in token_trades
         }
-
-        await client.query(
-          `INSERT INTO public.token_transfers
+          
+          await client.query(
+            `INSERT INTO public.token_transfers
              (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
            VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12,$13)
            ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
@@ -757,28 +824,28 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
              price_eth_per_token = CASE WHEN EXCLUDED.price_eth_per_token IS NOT NULL THEN EXCLUDED.price_eth_per_token ELSE token_transfers.price_eth_per_token END,
              side = EXCLUDED.side`,
           [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType]
-        )
-
-        if (fromAddr !== ZERO) {
-          await client.query(
-            `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-             VALUES ($1,$2,$3,$4)
-             ON CONFLICT (token_id, holder) DO UPDATE
-             SET balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei`,
+          )
+          
+          if (fromAddr !== ZERO) {
+            await client.query(
+              `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+               VALUES ($1,$2,$3,$4)
+               ON CONFLICT (token_id, holder) DO UPDATE
+               SET balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei`,
             [tokenId, chainId, fromAddr, amount.toString()]
-          )
-        }
-        if (toAddr !== ZERO) {
-          await client.query(
-            `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-             VALUES ($1,$2,$3,$4)
-             ON CONFLICT (token_id, holder) DO UPDATE
-             SET balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei`,
+            )
+          }
+          if (toAddr !== ZERO) {
+            await client.query(
+              `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+               VALUES ($1,$2,$3,$4)
+               ON CONFLICT (token_id, holder) DO UPDATE
+               SET balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei`,
             [tokenId, chainId, toAddr, amount.toString()]
-          )
+            )
+          }
         }
-      }
-
+        
       // hygiene: delete exact zeros (only for touched tokens to keep it cheap)
       if (touchedTokenIds.size > 0) {
         await client.query(
@@ -787,7 +854,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
           [Array.from(touchedTokenIds)]
         )
       }
-
+        
       // recompute holders + bump per-token watermark only for touched tokens
       for (const tokenId of touchedTokenIds) {
         const { rows: [{ holders }] } = await client.query(
@@ -808,7 +875,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
 
       // advance chain cursor regardless of whether there were logs
       await upsertChainCursor(chainId, to)
-
+      
       await client.query('COMMIT')
       console.log(`Chain ${chainId}: +${allLogs.length} logs across ${touchedTokenIds.size} tokens → cursor=${to}`)
     } catch (e) {
@@ -902,6 +969,17 @@ async function main() {
       }
     }
 
+    // 2.5) Consolidate graduation transactions into single records
+    for (const [chainId] of chainsToProcess) {
+      console.log(`\n=== Consolidating graduation transactions: chain ${chainId} ===`)
+      try {
+        await consolidateGraduationTransactions(chainId)
+      } catch (e) {
+        console.error(`Chain ${chainId}: graduation consolidation failed with`, e)
+        // continue to next chain
+      }
+    }
+
     // 3) Aggregations (candles, daily, token summaries) — run for ALL chains
     for (const chainId of byChain.keys()) {
       console.log(`\n=== Aggregations: chain ${chainId} ===`)
@@ -912,7 +990,7 @@ async function main() {
         // continue to next chain
       }
     }
-
+    
     
   } finally {
     await lock.release()
