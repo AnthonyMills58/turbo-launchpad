@@ -332,6 +332,7 @@ last_trade AS (
   ORDER BY tr.token_id, tr.block_time DESC, tr.log_index DESC
 ),
 -- Bonding curve price from token_transfers (pre-graduation)
+-- Only includes payment transfers (buy/creatorBuy) - excludes airdrops, unlocks, sells
 bonding_price AS (
   SELECT DISTINCT ON (tt.token_id)
          tt.token_id, tt.chain_id, tt.price_eth_per_token

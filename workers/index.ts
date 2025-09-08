@@ -262,12 +262,69 @@ function chunkAddresses<T>(arr: T[], size: number): T[][] {
   return out
 }
 
+// Identify the type of transfer based on transaction and addresses
+async function identifyTransferType(
+  tx: ethers.TransactionResponse | null, 
+  fromAddr: string, 
+  toAddr: string, 
+  chainId: number, 
+  tokenAddr: string
+): Promise<string> {
+  if (!tx) return 'OTHER'
+  
+  // Check if it's a contract call (has data)
+  if (tx.data && tx.data !== '0x') {
+    // Try to decode the function call
+    try {
+      // Common function selectors for TurboToken
+      const functionSelectors = {
+        '0x47e7ef24': 'BUY',           // buy(uint256)
+        '0x38ed1739': 'SELL',          // sell(uint256) 
+        '0x4e71d92d': 'CLAIMAIRDROP',  // claimAirdrop()
+        '0x2e1a7d4d': 'UNLOCK',        // unlockCreatorTokens()
+      }
+      
+      const selector = tx.data.slice(0, 10)
+      const functionName = functionSelectors[selector as keyof typeof functionSelectors]
+      
+      if (functionName) {
+        return functionName
+      }
+    } catch {
+      // Ignore decoding errors
+    }
+  }
+  
+  // Check for specific transfer patterns
+  if (fromAddr === '0x0000000000000000000000000000000000000000') {
+    // Check if this is a graduation mint (mint to contract address)
+    if (toAddr === tokenAddr.toLowerCase()) {
+      return 'GRADUATION' // Graduation mint to contract
+    }
+    return 'TRANSFER' // Regular token creation (mint)
+  }
+  
+  if (toAddr === '0x0000000000000000000000000000000000000000') {
+    return 'TRANSFER' // Token destruction (burn)
+  }
+  
+  if (fromAddr === tokenAddr.toLowerCase()) {
+    return 'UNLOCK' // From contract (unlock, etc.)
+  }
+  
+  if (toAddr === tokenAddr.toLowerCase()) {
+    return 'SELL' // To contract (sell, etc.)
+  }
+  
+  return 'TRANSFER' // Regular token transfer
+}
+
 // Backfill price data for existing transfers
 async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcProvider) {
   console.log(`\n=== Backfilling transfer prices for chain ${chainId} ===`)
   
   const { rows } = await pool.query(
-    `SELECT tx_hash, log_index, amount_wei, token_id 
+    `SELECT tx_hash, log_index, amount_wei, token_id, side
      FROM public.token_transfers 
      WHERE chain_id = $1 AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)
      ORDER BY block_number DESC 
@@ -280,18 +337,35 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   for (const row of rows) {
     try {
       const tx = await provider.getTransaction(row.tx_hash)
-      if (tx?.value) {
+      
+      // Get transfer type for this transaction
+      const fromAddr = '0x0000000000000000000000000000000000000000' // We don't have this in backfill, so we'll use a placeholder
+      const toAddr = '0x0000000000000000000000000000000000000000'   // We don't have this in backfill, so we'll use a placeholder
+      const transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, '0x0000000000000000000000000000000000000000')
+      
+      if (tx?.value && tx.value > 0n) {
+        // Buy operation: ETH sent TO contract
         const ethAmount = tx.value
         const price = Number(ethAmount) / Number(row.amount_wei)
         
         await pool.query(
           `UPDATE public.token_transfers 
-           SET amount_eth_wei = $1, price_eth_per_token = $2 
-           WHERE chain_id = $3 AND tx_hash = $4 AND log_index = $5`,
-          [ethAmount.toString(), price, chainId, row.tx_hash, row.log_index]
+           SET amount_eth_wei = $1, price_eth_per_token = $2, side = $3
+           WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6`,
+          [ethAmount.toString(), price, transferType, chainId, row.tx_hash, row.log_index]
         )
         
-        console.log(`Backfilled: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+        console.log(`Backfilled ${transferType}: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+      } else {
+        // Update side field even if we can't get ETH amount
+        await pool.query(
+          `UPDATE public.token_transfers 
+           SET side = $1
+           WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
+          [transferType, chainId, row.tx_hash, row.log_index]
+        )
+        
+        console.log(`Updated side to ${transferType}: token ${row.token_id}, tx ${row.tx_hash}`)
       }
     } catch (e) {
       console.warn(`Could not backfill tx ${row.tx_hash}:`, e)
@@ -403,17 +477,70 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         // Get ETH amount from transaction
         let ethAmount = 0n
         let price = null
+        let isPaymentTransfer = false
+        let transferType = 'OTHER'
+        
         try {
           const tx = await provider.getTransaction(log.transactionHash!)
-          if (tx?.value) {
+          transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr)
+          
+          if (tx?.value && tx.value > 0n) {
+            // Buy operation: ETH sent TO contract
             ethAmount = tx.value
-            // Calculate price: ETH sent / tokens received
+            isPaymentTransfer = true
             if (amount > 0n) {
               price = Number(ethAmount) / Number(amount)
             }
-            console.log(`Token ${tokenId}: tx=${log.transactionHash}, eth=${ethAmount.toString()}, tokens=${amount.toString()}, price=${price}`)
-          } else {
-            console.log(`Token ${tokenId}: tx=${log.transactionHash}, no ETH value (tx.value=${tx?.value})`)
+            console.log(`Token ${tokenId}: BUY tx=${log.transactionHash}, eth=${ethAmount.toString()}, tokens=${amount.toString()}, price=${price}`)
+          } else if (transferType === 'SELL') {
+            // Sell operation: user sends tokens to contract, receives ETH
+            // Try to calculate the sell price by calling getSellPrice at the transaction block
+            try {
+              const receipt = await provider.getTransactionReceipt(log.transactionHash!)
+              if (receipt) {
+                // Call getSellPrice at the block before the transaction
+                // This gives us the price that was used for this sell
+                const blockBeforeTx = receipt.blockNumber - 1
+                
+                try {
+                  // Create interface for TurboToken contract
+                  const turboTokenInterface = new ethers.Interface([
+                    'function getSellPrice(uint256 amount) view returns (uint256)'
+                  ])
+                  
+                  const sellPriceResult = await provider.call({
+                    to: tokenAddr,
+                    data: turboTokenInterface.encodeFunctionData('getSellPrice', [amount.toString()]),
+                    blockTag: blockBeforeTx
+                  })
+                  
+                  if (sellPriceResult && sellPriceResult !== '0x') {
+                    const decoded = turboTokenInterface.decodeFunctionResult('getSellPrice', sellPriceResult)
+                    const sellPrice = BigInt(decoded[0].toString())
+                    
+                    if (sellPrice > 0n) {
+                      ethAmount = sellPrice
+                      isPaymentTransfer = true
+                      price = Number(ethAmount) / Number(amount)
+                      console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, eth=${ethAmount.toString()}, tokens=${amount.toString()}, price=${price}`)
+                    }
+                  }
+                } catch (callError) {
+                  console.log(`Could not call getSellPrice for tx ${log.transactionHash}:`, callError)
+                }
+              }
+            } catch (receiptError) {
+              console.warn(`Could not get receipt for sell tx ${log.transactionHash}:`, receiptError)
+            }
+            
+            if (!isPaymentTransfer) {
+              isPaymentTransfer = true
+              console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, tokens=${amount.toString()} (ETH amount calculation failed)`)
+            }
+          }
+          
+          if (!isPaymentTransfer) {
+            console.log(`Token ${tokenId}: ${transferType} tx=${log.transactionHash}, from=${fromAddr}, to=${toAddr}, amount=${amount.toString()}`)
           }
         } catch (e) {
           // Transaction might not be available, continue without price
@@ -422,12 +549,13 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
 
         await client.query(
           `INSERT INTO public.token_transfers
-             (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token)
-           VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12)
+             (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
+           VALUES ($1,$2,$3,$4, to_timestamp($5), $6,$7,$8,$9,$10,$11,$12,$13)
            ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
              amount_eth_wei = CASE WHEN EXCLUDED.amount_eth_wei IS NOT NULL THEN EXCLUDED.amount_eth_wei ELSE token_transfers.amount_eth_wei END,
-             price_eth_per_token = CASE WHEN EXCLUDED.price_eth_per_token IS NOT NULL THEN EXCLUDED.price_eth_per_token ELSE token_transfers.price_eth_per_token END`,
-          [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), ethAmount.toString(), price]
+             price_eth_per_token = CASE WHEN EXCLUDED.price_eth_per_token IS NOT NULL THEN EXCLUDED.price_eth_per_token ELSE token_transfers.price_eth_per_token END,
+             side = EXCLUDED.side`,
+          [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType]
         )
 
         if (fromAddr !== ZERO) {
