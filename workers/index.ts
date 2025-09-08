@@ -403,9 +403,9 @@ async function consolidateGraduationTransactions(chainId: number) {
       const totalTokens = BigInt(firstBondingCurveOp.amount_wei)
       
       // Calculate price in ETH (totalEthWei / totalTokens)
-      // Since both are in wei, divide by 1e18 to get ETH per token
+      // Since both are in wei, we need to handle division with proper precision
       const priceEthPerToken = totalTokens > 0n 
-        ? Number(totalEthWei / totalTokens) / 1e18
+        ? Number(totalEthWei * BigInt(1e18) / totalTokens) / 1e18
         : 0
       
       // Get transaction details for from/to addresses
