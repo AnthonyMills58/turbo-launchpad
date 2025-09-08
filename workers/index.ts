@@ -284,7 +284,7 @@ async function identifyTransferType(
         '0x3a7e97c6': 'SELL',          // sell(uint256 amount) 
         '0x5b88349d': 'CLAIMAIRDROP',  // claimAirdrop()
         '0xb4105e06': 'UNLOCK',        // unlockCreatorTokens()
-        '0x0ae33023': 'BUY&LOCK',      // creatorBuy(uint256 amount)
+        '0xb34ffc5f': 'BUY&LOCK',      // creatorBuy(uint256)
       }
       
       const selector = tx.data.slice(0, 10)
@@ -307,10 +307,7 @@ async function identifyTransferType(
   // Check for specific transfer patterns using address patterns (more reliable)
   if (fromAddr === '0x0000000000000000000000000000000000000000') {
     // Mint from zero address
-    if (toAddr === tokenAddr.toLowerCase()) {
-      return 'GRADUATION' // Graduation mint to contract
-    }
-    // Check if this is a creator buy (mint to contract, then to creator)
+    // Check if this is a creator buy (mint to contract, then to creator) - CHECK THIS FIRST
     if (tx.value && tx.value > 0n) {
       // Check if transaction is from the creator wallet
       if (creatorWallet && tx.from && tx.from.toLowerCase() === creatorWallet.toLowerCase()) {
@@ -318,6 +315,10 @@ async function identifyTransferType(
         return 'BUY&LOCK' // Creator buy operation
       }
       return 'BUY' // Regular buy (mint to user with ETH)
+    }
+    // Check for graduation (mint to contract without ETH)
+    if (toAddr === tokenAddr.toLowerCase()) {
+      return 'GRADUATION' // Graduation mint to contract
     }
     return 'TRANSFER' // Regular token creation (mint without ETH)
   }
@@ -399,14 +400,14 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
      WHERE chain_id = $1 AND (
        amount_eth_wei IS NULL OR 
        price_eth_per_token IS NULL OR 
-       side IN ('OTHER', 'TRANSFER')
+       side IN ('OTHER', 'TRANSFER', 'GRADUATION')
      )
      ORDER BY block_number DESC 
      LIMIT 100`,
     [chainId]
   )
   
-  console.log(`Found ${rows.length} transfers without price data or with incorrect side values`)
+  console.log(`Found ${rows.length} transfers without price data or with incorrect side values (including GRADUATION that might be BUY&LOCK)`)
   
   for (const row of rows) {
     try {
