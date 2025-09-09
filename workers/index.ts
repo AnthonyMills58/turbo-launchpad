@@ -494,6 +494,212 @@ async function cleanupOverlappingTransfers(chainId: number) {
   }
 }
 
+// Move BUY/SELL records from token_transfers to token_trades (only DEX operations)
+async function moveDexTradesToCorrectTable(tradeRows: any[], chainId: number, provider: ethers.JsonRpcProvider) {
+  for (const row of tradeRows) {
+    try {
+      // Check if this token has a DEX pool (only move DEX operations, not bonding curve)
+      const { rows: poolRows } = await pool.query(
+        'SELECT pair_address FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2',
+        [row.token_id, chainId]
+      )
+      
+      if (poolRows.length === 0) {
+        console.log(`Token ${row.token_id} has no DEX pool, skipping BUY/SELL move (likely bonding curve operation)`)
+        continue
+      }
+      
+      // Check if this operation happened after graduation (DEX operations)
+      const { rows: tokenRows } = await pool.query(
+        'SELECT is_graduated, created_at FROM public.tokens WHERE id = $1',
+        [row.token_id]
+      )
+      
+      if (tokenRows.length === 0) {
+        console.log(`Token ${row.token_id} not found, skipping`)
+        continue
+      }
+      
+      const token = tokenRows[0]
+      
+      // Only move operations that happened after graduation or if token is graduated
+      if (!token.is_graduated) {
+        console.log(`Token ${row.token_id} not graduated, skipping BUY/SELL move (likely bonding curve operation)`)
+        continue
+      }
+      
+      // Get transaction details
+      const tx = await provider.getTransaction(row.tx_hash)
+      if (!tx) {
+        console.log(`Could not get transaction ${row.tx_hash} for BUY/SELL move`)
+        continue
+      }
+      
+      // Insert into token_trades table
+      const insertQuery = `
+        INSERT INTO public.token_trades 
+        (token_id, chain_id, tx_hash, log_index, block_number, block_time, 
+         trader, side, amount_token_wei, amount_eth_wei, price_eth_per_token, src)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'DEX')
+        ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING
+      `
+      
+      await pool.query(insertQuery, [
+        row.token_id,
+        chainId,
+        row.tx_hash,
+        row.log_index,
+        row.block_number,
+        row.block_time,
+        tx.from.toLowerCase(),
+        row.side,
+        row.amount_wei,
+        row.amount_eth_wei,
+        row.price_eth_per_token,
+      ])
+      
+      // Delete from token_transfers table
+      const deleteQuery = `
+        DELETE FROM public.token_transfers 
+        WHERE chain_id = $1 AND tx_hash = $2 AND log_index = $3
+      `
+      
+      await pool.query(deleteQuery, [chainId, row.tx_hash, row.log_index])
+      
+      console.log(`Moved ${row.side} from token_transfers to token_trades: token ${row.token_id}, tx ${row.tx_hash}`)
+      
+    } catch (error) {
+      console.error(`Error moving ${row.side} ${row.tx_hash}:`, error)
+    }
+  }
+}
+
+// Convert TRANSFER records to DEX trades
+async function convertTransfersToDexTrades(transferRows: any[], chainId: number, provider: ethers.JsonRpcProvider) {
+  for (const row of transferRows) {
+    try {
+      // Check if this token has a DEX pool
+      const { rows: poolRows } = await pool.query(
+        'SELECT pair_address FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2',
+        [row.token_id, chainId]
+      )
+      
+      if (poolRows.length === 0) {
+        console.log(`Token ${row.token_id} has no DEX pool, skipping TRANSFER conversion`)
+        continue
+      }
+      
+      const pairAddress = poolRows[0].pair_address
+      
+      // Get the transaction to analyze it
+      const tx = await provider.getTransaction(row.tx_hash)
+      if (!tx) {
+        console.log(`Could not get transaction ${row.tx_hash} for TRANSFER conversion`)
+        continue
+      }
+      
+      // Check if this is a DEX swap by looking for swap events in the transaction
+      const receipt = await provider.getTransactionReceipt(row.tx_hash)
+      if (!receipt) {
+        console.log(`Could not get receipt for ${row.tx_hash}`)
+        continue
+      }
+      
+      // Look for Swap events from the DEX pair
+      const swapTopic = ethers.id('Swap(address,uint256,uint256,uint256,uint256,address)')
+      const swapLogs = receipt.logs.filter(log => 
+        log.address.toLowerCase() === pairAddress.toLowerCase() && 
+        log.topics[0] === swapTopic
+      )
+      
+      if (swapLogs.length === 0) {
+        console.log(`No swap events found for TRANSFER ${row.tx_hash}, skipping`)
+        continue
+      }
+      
+      // Parse the swap event to determine if it's a buy or sell
+      const swapLog = swapLogs[0] // Take the first swap event
+      const swapInterface = new ethers.Interface([
+        'event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)'
+      ])
+      
+      const decoded = swapInterface.parseLog(swapLog)
+      if (!decoded) {
+        console.log(`Could not parse swap event for ${row.tx_hash}`)
+        continue
+      }
+      
+      const { amount0In, amount1In, amount0Out, amount1Out } = decoded.args
+      
+      // Determine if this is a buy or sell based on the swap direction
+      // For a sell: user sends tokens to pair, receives ETH
+      // For a buy: user sends ETH to pair, receives tokens
+      let side: string
+      let ethAmount: bigint
+      let price: number
+      
+      if (amount0In > 0n && amount1Out > 0n) {
+        // Token in, ETH out = SELL
+        side = 'SELL'
+        ethAmount = amount1Out
+        price = Number(ethAmount) / Number(row.amount_wei)
+      } else if (amount1In > 0n && amount0Out > 0n) {
+        // ETH in, Token out = BUY
+        side = 'BUY'
+        ethAmount = amount1In
+        price = Number(ethAmount) / Number(row.amount_wei)
+      } else {
+        console.log(`Could not determine swap direction for ${row.tx_hash}`)
+        continue
+      }
+      
+      // Insert into token_trades table
+      const insertQuery = `
+        INSERT INTO public.token_trades 
+        (token_id, chain_id, tx_hash, log_index, block_number, block_time, 
+         trader, side, amount_token_wei, amount_eth_wei, price_eth_per_token, src)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'DEX')
+        ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING
+      `
+      
+      await pool.query(insertQuery, [
+        row.token_id,
+        chainId,
+        row.tx_hash,
+        row.log_index,
+        receipt.blockNumber,
+        new Date(receipt.blockNumber * 1000), // Approximate timestamp
+        tx.from.toLowerCase(),
+        side,
+        row.amount_wei,
+        ethAmount.toString(),
+        price,
+      ])
+      
+      // Update the token_transfers record to reflect the correct side and amounts
+      const updateQuery = `
+        UPDATE public.token_transfers 
+        SET side = $1, amount_eth_wei = $2, price_eth_per_token = $3
+        WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6
+      `
+      
+      await pool.query(updateQuery, [
+        side,
+        ethAmount.toString(),
+        price,
+        chainId,
+        row.tx_hash,
+        row.log_index
+      ])
+      
+      console.log(`Converted TRANSFER to ${side}: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+      
+    } catch (error) {
+      console.error(`Error converting TRANSFER ${row.tx_hash}:`, error)
+    }
+  }
+}
+
 // Backfill price data for existing transfers
 async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcProvider) {
   console.log(`\n=== Backfilling transfer prices for chain ${chainId} ===`)
@@ -513,6 +719,25 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   )
   
   console.log(`Found ${rows.length} transfers without price data or with incorrect side values (GRADUATION records with existing price data are excluded)`)
+  
+  // First, handle TRANSFER records that are likely DEX trades
+  const transferRows = rows.filter(row => row.side === 'TRANSFER')
+  if (transferRows.length > 0) {
+    console.log(`\n=== Converting ${transferRows.length} TRANSFER records to DEX trades ===`)
+    await convertTransfersToDexTrades(transferRows, chainId, provider)
+  }
+  
+  // Also handle BUY/SELL records that are in token_transfers but should be in token_trades
+  // These are likely DEX operations that were misclassified during initial processing
+  const dexTradeRows = rows.filter(row => 
+    (row.side === 'BUY' || row.side === 'SELL') && 
+    row.amount_eth_wei && 
+    row.price_eth_per_token
+  )
+  if (dexTradeRows.length > 0) {
+    console.log(`\n=== Moving ${dexTradeRows.length} BUY/SELL records from token_transfers to token_trades ===`)
+    await moveDexTradesToCorrectTable(dexTradeRows, chainId, provider)
+  }
   
   for (const row of rows) {
     try {
