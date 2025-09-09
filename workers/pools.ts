@@ -177,18 +177,24 @@ export async function processDexPools(chainId: number): Promise<void> {
       [p.chain_id, p.pair_address]
     )
     
-    let startBlock: number
+    let from: number
     if (hasSnapshots.length === 0) {
-      // No snapshots: start from deployment block (graduation block)
-      // If deployment_block is null, use a reasonable fallback (head - 50000)
-      startBlock = p.deployment_block ?? Math.max(1, head - 50000)
-      console.log(`Pool ${p.pair_address}: no snapshots found, starting from deployment block ${startBlock}`)
+      // No snapshots: start from actual graduation block (from GRADUATION record in token_transfers)
+      // If no graduation record found, fall back to deployment_block or head - 50000
+      const { rows: graduationRows } = await pool.query(
+        `SELECT block_number FROM public.token_transfers 
+         WHERE chain_id = $1 AND token_id = $2 AND side = 'GRADUATION' 
+         ORDER BY block_number ASC LIMIT 1`,
+        [p.chain_id, p.token_id]
+      )
+      
+      const graduationBlock = graduationRows[0]?.block_number ?? p.deployment_block ?? Math.max(1, head - 50000)
+      from = Math.max(1, graduationBlock)
+      console.log(`Pool ${p.pair_address}: no snapshots found, starting from graduation block ${graduationBlock}`)
     } else {
-      // Has snapshots: continue from last processed block
-      startBlock = p.last_processed_block ?? p.deployment_block ?? Math.max(1, head - 50000)
+      // Has snapshots: continue from last processed block + 1
+      from = Math.max(1, (p.last_processed_block ?? 0) + 1)
     }
-    
-    const from = Math.max(1, startBlock)
     
     if (from > head) continue
     const to = Math.min(head, from + DEFAULT_DEX_CHUNK)
