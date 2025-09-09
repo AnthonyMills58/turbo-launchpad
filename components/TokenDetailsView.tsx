@@ -2,7 +2,7 @@
 import { ethers } from 'ethers'
 import { Token } from '@/types/token'
 import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import CreatorBuySection from './CreatorBuySection'
 import PublicBuySection from './PublicBuySection'
@@ -46,6 +46,9 @@ export default function TokenDetailsView({
   const [isEditing, setIsEditing] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [copiedCreator, setCopiedCreator] = useState(false)
+  
+  // Track if we've already synced this token to prevent infinite loops
+  const syncedTokens = useRef(new Set<number>())
 
   const isCreator =
     !!address && address.toLowerCase() === token.creator_wallet.toLowerCase()
@@ -186,6 +189,12 @@ export default function TokenDetailsView({
   useEffect(() => {
     if (!contract_address || !chainId) return
     
+    // Prevent infinite loops - only sync each token once per session
+    if (syncedTokens.current.has(token.id)) {
+      console.log('[TokenDetailsView] Token already synced this session, skipping')
+      return
+    }
+    
     // Two-step process: Check if on DEX, then sync if needed
     const checkAndSyncDex = async () => {
       try {
@@ -203,6 +212,8 @@ export default function TokenDetailsView({
           })
           
           if (response.ok) {
+            // Mark as synced to prevent future calls
+            syncedTokens.current.add(token.id)
             // Trigger a refresh after successful sync
             onRefresh()
           } else {
@@ -210,6 +221,8 @@ export default function TokenDetailsView({
           }
         } else {
           console.log('[TokenDetailsView] Token not on DEX, skipping sync')
+          // Mark as checked even if not on DEX to prevent re-checking
+          syncedTokens.current.add(token.id)
         }
       } catch (error) {
         console.error('Error in checkAndSyncDex:', error)
@@ -217,7 +230,7 @@ export default function TokenDetailsView({
     }
     
     checkAndSyncDex()
-  }, [contract_address, chainId, onRefresh, token])
+  }, [contract_address, chainId, onRefresh, token.id])
 
   // Add error boundary for production debugging
   try {
