@@ -163,120 +163,96 @@ ON CONFLICT (token_id, "interval", ts) DO UPDATE SET
 async function refreshDailyAgg(chainId: number): Promise<void> {
   console.log(`\n=== Daily aggregates: chain ${chainId} ===`)
   
-  const sql = `
-WITH last_day AS (
-  SELECT COALESCE(
-           MAX(day),
-           (SELECT MIN(date(block_time)) - INTERVAL '1 day'
-            FROM public.token_transfers
-            WHERE chain_id = $1)
-         ) AS d
-  FROM public.token_daily_agg
-  WHERE chain_id = $1
-),
-days AS (
-  SELECT generate_series(
-    (SELECT d FROM last_day)::date + 1,
-    (NOW() AT TIME ZONE 'UTC')::date + INTERVAL '1 day',  -- Include today
-    interval '1 day'
-  )::date AS day
-),
-toks AS (
-  SELECT id AS token_id FROM public.tokens WHERE chain_id = $1
-),
-xfers AS (
-  SELECT
-    tt.token_id,
-    (tt.block_time AT TIME ZONE 'UTC')::date AS day,
-    COUNT(*) AS transfers,
-    COUNT(DISTINCT tt.from_address) AS unique_senders,
-    COUNT(DISTINCT tt.to_address)   AS unique_receivers
-  FROM public.token_transfers tt
-  WHERE tt.chain_id = $1
-    AND (tt.block_time AT TIME ZONE 'UTC')::date >= (SELECT COALESCE(MIN(day), (NOW() AT TIME ZONE 'UTC')::date) FROM days)
-  GROUP BY tt.token_id, (tt.block_time AT TIME ZONE 'UTC')::date
-),
-trades AS (
-  SELECT
-    tc.token_id,
-    (tc.ts AT TIME ZONE 'UTC')::date AS day,
-    SUM(tc.trades_count) AS trades_count,
-    COALESCE(SUM(tc.volume_token_wei), 0) AS vol_token_wei,
-    COALESCE(SUM(tc.volume_eth_wei),   0) AS vol_eth_wei,
-    -- For unique traders, we need to get this from token_trades since candles don't have trader info
-    (SELECT COUNT(DISTINCT tr.trader) 
-     FROM public.token_trades tr 
-     WHERE tr.chain_id = $1 
-       AND tr.token_id = tc.token_id 
-       AND (tr.block_time AT TIME ZONE 'UTC')::date = (tc.ts AT TIME ZONE 'UTC')::date
-    ) AS unique_traders
-  FROM public.token_candles tc
-  WHERE tc.chain_id = $1
-    AND (tc.ts AT TIME ZONE 'UTC')::date >= (SELECT COALESCE(MIN(day), (NOW() AT TIME ZONE 'UTC')::date) FROM days)
-  GROUP BY tc.token_id, (tc.ts AT TIME ZONE 'UTC')::date
-),
--- Separate CTE for unique traders to avoid the grouping issue
-unique_traders_by_day AS (
-  SELECT
-    tr.token_id,
-    (tr.block_time AT TIME ZONE 'UTC')::date AS day,
-    COUNT(DISTINCT tr.trader) AS unique_traders
-  FROM public.token_trades tr
-  WHERE tr.chain_id = $1
-    AND (tr.block_time AT TIME ZONE 'UTC')::date >= (SELECT COALESCE(MIN(day), (NOW() AT TIME ZONE 'UTC')::date) FROM days)
-  GROUP BY tr.token_id, (tr.block_time AT TIME ZONE 'UTC')::date
-),
-trades_with_traders AS (
-  SELECT
-    t.token_id,
-    t.day,
-    t.trades_count,
-    t.vol_token_wei,
-    t.vol_eth_wei,
-    COALESCE(ut.unique_traders, 0) AS unique_traders
-  FROM trades t
-  LEFT JOIN unique_traders_by_day ut ON ut.token_id = t.token_id AND ut.day = t.day
-)
-INSERT INTO public.token_daily_agg
-  (token_id, chain_id, "day",
-   transfers, unique_senders, unique_receivers, unique_traders,
-   volume_token_wei, volume_eth_wei, holders_count)
-SELECT
-  tok.token_id,
-  $1 AS chain_id,
-  d.day,
-  COALESCE(x.transfers, 0)        AS transfers,
-  COALESCE(x.unique_senders, 0)   AS unique_senders,
-  COALESCE(x.unique_receivers, 0) AS unique_receivers,
-  COALESCE(tr.unique_traders, 0)  AS unique_traders,
-  COALESCE(tr.vol_token_wei, 0)   AS volume_token_wei,
-  COALESCE(tr.vol_eth_wei, 0)     AS volume_eth_wei,
-  t.holder_count                  AS holders_count
-FROM days d
-CROSS JOIN toks tok
-LEFT JOIN xfers  x  ON x.token_id = tok.token_id AND x.day = d.day
-LEFT JOIN trades_with_traders tr ON tr.token_id = tok.token_id AND tr.day = d.day
-LEFT JOIN public.tokens t ON t.id = tok.token_id
-ON CONFLICT (token_id, "day") DO UPDATE SET
-  transfers        = EXCLUDED.transfers,
-  unique_senders   = EXCLUDED.unique_senders,
-  unique_receivers = EXCLUDED.unique_receivers,
-  unique_traders   = EXCLUDED.unique_traders,
-  volume_token_wei = EXCLUDED.volume_token_wei,
-  volume_eth_wei   = EXCLUDED.volume_eth_wei,
-  holders_count    = EXCLUDED.holders_count;
-  `
-  const result = await pool.query(sql, [chainId])
-  console.log(`Daily aggregates processed: ${result.rowCount} rows inserted/updated`)
+  // Simplified approach: Process each day separately to avoid complex CTE issues
+  const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+  
+  console.log(`Processing daily aggregation for: ${today}`)
+  
+  // Get all tokens for this chain
+  const tokensQuery = `SELECT id FROM public.tokens WHERE chain_id = $1`
+  const { rows: tokens } = await pool.query(tokensQuery, [chainId])
+  console.log(`Found ${tokens.length} tokens to process`)
+  
+  for (const token of tokens) {
+    const tokenId = token.id
+    
+    // Get volume data from candles for this token and day
+    const volumeQuery = `
+      SELECT 
+        SUM(trades_count) AS trades_count,
+        COALESCE(SUM(volume_token_wei), 0) AS vol_token_wei,
+        COALESCE(SUM(volume_eth_wei), 0) AS vol_eth_wei
+      FROM public.token_candles 
+      WHERE token_id = $1 AND chain_id = $2 
+        AND DATE(ts AT TIME ZONE 'UTC') = $3
+    `
+    const { rows: volumeRows } = await pool.query(volumeQuery, [tokenId, chainId, today])
+    const volumeData = volumeRows[0] || { trades_count: 0, vol_token_wei: 0, vol_eth_wei: 0 }
+    
+    // Get unique traders for this token and day
+    const tradersQuery = `
+      SELECT COUNT(DISTINCT trader) AS unique_traders
+      FROM public.token_trades 
+      WHERE token_id = $1 AND chain_id = $2 
+        AND DATE(block_time AT TIME ZONE 'UTC') = $3
+    `
+    const { rows: traderRows } = await pool.query(tradersQuery, [tokenId, chainId, today])
+    const uniqueTraders = traderRows[0]?.unique_traders || 0
+    
+    // Get transfer data for this token and day
+    const transfersQuery = `
+      SELECT 
+        COUNT(*) AS transfers,
+        COUNT(DISTINCT from_address) AS unique_senders,
+        COUNT(DISTINCT to_address) AS unique_receivers
+      FROM public.token_transfers 
+      WHERE token_id = $1 AND chain_id = $2 
+        AND DATE(block_time AT TIME ZONE 'UTC') = $3
+    `
+    const { rows: transferRows } = await pool.query(transfersQuery, [tokenId, chainId, today])
+    const transferData = transferRows[0] || { transfers: 0, unique_senders: 0, unique_receivers: 0 }
+    
+    // Get holder count from tokens table
+    const holderQuery = `SELECT holder_count FROM public.tokens WHERE id = $1`
+    const { rows: holderRows } = await pool.query(holderQuery, [tokenId])
+    const holderCount = holderRows[0]?.holder_count || 0
+    
+    // Insert or update the daily aggregation
+    const insertQuery = `
+      INSERT INTO public.token_daily_agg
+        (token_id, chain_id, "day", transfers, unique_senders, unique_receivers, 
+         unique_traders, volume_token_wei, volume_eth_wei, holders_count)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (token_id, "day") DO UPDATE SET
+        transfers = EXCLUDED.transfers,
+        unique_senders = EXCLUDED.unique_senders,
+        unique_receivers = EXCLUDED.unique_receivers,
+        unique_traders = EXCLUDED.unique_traders,
+        volume_token_wei = EXCLUDED.volume_token_wei,
+        volume_eth_wei = EXCLUDED.volume_eth_wei,
+        holders_count = EXCLUDED.holders_count
+    `
+    
+    await pool.query(insertQuery, [
+      tokenId, chainId, today,
+      transferData.transfers, transferData.unique_senders, transferData.unique_receivers,
+      uniqueTraders, volumeData.vol_token_wei, volumeData.vol_eth_wei, holderCount
+    ])
+    
+    // Log if this token has volume data
+    if (volumeData.vol_eth_wei > 0) {
+      console.log(`Token ${tokenId}: volume_eth_wei = ${volumeData.vol_eth_wei}, trades = ${volumeData.trades_count}`)
+    }
+  }
   
   // Debug: Check what was actually inserted for today
   const debugQuery = `
     SELECT token_id, day, volume_eth_wei, volume_token_wei, unique_traders
     FROM public.token_daily_agg 
-    WHERE chain_id = $1 AND day = CURRENT_DATE
+    WHERE chain_id = $1 AND day = $2
     ORDER BY token_id
   `
-  const { rows: debugRows } = await pool.query(debugQuery, [chainId])
+  const { rows: debugRows } = await pool.query(debugQuery, [chainId, today])
   console.log(`Today's daily aggregations:`, debugRows)
 }
 
