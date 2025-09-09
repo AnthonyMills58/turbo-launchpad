@@ -49,6 +49,8 @@ export default function TokenDetailsView({
   
   // Track if we've already synced this token to prevent infinite loops
   const syncedTokens = useRef(new Set<number>())
+  // Track ongoing sync operations to prevent race conditions
+  const syncingTokens = useRef(new Set<number>())
 
   const isCreator =
     !!address && address.toLowerCase() === token.creator_wallet.toLowerCase()
@@ -195,9 +197,18 @@ export default function TokenDetailsView({
       return
     }
     
+    // Prevent race conditions - don't start new sync if one is already running
+    if (syncingTokens.current.has(token.id)) {
+      console.log('[TokenDetailsView] Token sync already in progress, skipping')
+      return
+    }
+    
     // Two-step process: Check if on DEX, then sync if needed
     const checkAndSyncDex = async () => {
       try {
+        // Mark as syncing to prevent race conditions
+        syncingTokens.current.add(token.id)
+        
         // Step 1: Quick client-side check if token is on DEX
         const isOnDex = await checkIfTokenOnDex(contract_address, chainId)
         
@@ -226,6 +237,9 @@ export default function TokenDetailsView({
         }
       } catch (error) {
         console.error('Error in checkAndSyncDex:', error)
+      } finally {
+        // Always remove from syncing set when done
+        syncingTokens.current.delete(token.id)
       }
     }
     
