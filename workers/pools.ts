@@ -170,41 +170,26 @@ export async function processDexPools(chainId: number): Promise<void> {
 
   for (const rawPool of pools) {
     const p = await ensurePoolDecimals(rawPool, provider)
-    // For new pools (last_processed_block is null), start from token deployment block
-    // If last_processed_block is very old (before deployment), use deployment block instead
-    const isLastProcessedTooOld = p.last_processed_block && p.deployment_block && p.last_processed_block < p.deployment_block
-    const startBlock = isLastProcessedTooOld ? p.deployment_block : (p.last_processed_block ?? p.deployment_block ?? Math.max(1, head - 50000))
-    // Include the startBlock itself (no +1) to ensure graduation block is processed
-    const from = Math.max(1, startBlock ?? Math.max(1, head - 50000))
+    // For pools without snapshots, start from deployment block (graduation block)
+    // For pools with snapshots, continue from last processed block
+    const { rows: hasSnapshots } = await pool.query(
+      `SELECT 1 FROM public.pair_snapshots WHERE chain_id = $1 AND pair_address = $2 LIMIT 1`,
+      [p.chain_id, p.pair_address]
+    )
     
-    // If we detected a wrong last_processed_block, reset it in the database
-    if (isLastProcessedTooOld) {
-      await pool.query(
-        `UPDATE public.dex_pools SET last_processed_block = NULL WHERE chain_id = $1 AND pair_address = $2`,
-        [p.chain_id, p.pair_address]
-      )
-      console.log(`Reset wrong last_processed_block for pool ${p.pair_address}`)
+    let startBlock: number
+    if (hasSnapshots.length === 0) {
+      // No snapshots: start from deployment block (graduation block)
+      // If deployment_block is null, use a reasonable fallback (head - 50000)
+      startBlock = p.deployment_block ?? Math.max(1, head - 50000)
+      console.log(`Pool ${p.pair_address}: no snapshots found, starting from deployment block ${startBlock}`)
+    } else {
+      // Has snapshots: continue from last processed block
+      startBlock = p.last_processed_block ?? p.deployment_block ?? Math.max(1, head - 50000)
     }
     
-    // Reset last_processed_block for pools that might have missed graduation block due to +1 bug
-    // This ensures pools without pair_snapshots get reprocessed from deployment block
-    if (p.last_processed_block && p.deployment_block && p.last_processed_block >= p.deployment_block) {
-      const { rows: snapshotCheck } = await pool.query(
-        `SELECT 1 FROM public.pair_snapshots WHERE chain_id = $1 AND pair_address = $2 LIMIT 1`,
-        [p.chain_id, p.pair_address]
-      )
-      if (snapshotCheck.length === 0) {
-        await pool.query(
-          `UPDATE public.dex_pools SET last_processed_block = NULL WHERE chain_id = $1 AND pair_address = $2`,
-          [p.chain_id, p.pair_address]
-        )
-        console.log(`Reset last_processed_block for pool ${p.pair_address} - no snapshots found, likely missed graduation block`)
-        // Recalculate startBlock after reset
-        const newStartBlock = p.deployment_block ?? Math.max(1, head - 50000)
-        const newFrom = Math.max(1, newStartBlock)
-        console.log(`Pool ${p.pair_address}: reprocessing from block ${newFrom} (was ${from})`)
-      }
-    }
+    const from = Math.max(1, startBlock)
+    
     if (from > head) continue
     const to = Math.min(head, from + DEFAULT_DEX_CHUNK)
     
