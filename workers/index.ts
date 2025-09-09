@@ -626,6 +626,24 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
   const provider = providerFor(chainId)
   const latest = await provider.getBlockNumber()
   
+  // Get LP token addresses to exclude from token_balances
+  const { rows: lpAddresses } = await pool.query<{ pair_address: string }>(
+    `SELECT pair_address FROM public.dex_pools WHERE chain_id = $1`,
+    [chainId]
+  )
+  const lpAddressSet = new Set(lpAddresses.map(row => row.pair_address.toLowerCase()))
+  
+  // Clean up existing LP token addresses from token_balances
+  if (lpAddressSet.size > 0) {
+    const lpAddressesList = Array.from(lpAddressSet).map(addr => `'${addr}'`).join(',')
+    await pool.query(
+      `DELETE FROM public.token_balances 
+       WHERE chain_id = $1 AND LOWER(holder) IN (${lpAddressesList})`,
+      [chainId]
+    )
+    console.log(`Cleaned up ${lpAddressSet.size} LP token addresses from token_balances for chain ${chainId}`)
+  }
+  
   // Build address list & mapping (lowercased)
   const addrToTokenId = new Map<string, number>()
   const addresses: string[] = []
@@ -834,7 +852,8 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
           [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType]
           )
           
-          if (fromAddr !== ZERO) {
+          // Update token balances, but exclude LP token addresses
+          if (fromAddr !== ZERO && !lpAddressSet.has(fromAddr.toLowerCase())) {
             await client.query(
               `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
                VALUES ($1,$2,$3,$4)
@@ -843,7 +862,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
             [tokenId, chainId, fromAddr, amount.toString()]
             )
           }
-          if (toAddr !== ZERO) {
+          if (toAddr !== ZERO && !lpAddressSet.has(toAddr.toLowerCase())) {
             await client.query(
               `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
                VALUES ($1,$2,$3,$4)
@@ -865,12 +884,25 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         
       // recompute holders + bump per-token watermark only for touched tokens
       for (const tokenId of touchedTokenIds) {
-        const { rows: [{ holders }] } = await client.query(
-          `SELECT COUNT(*)::int AS holders
-           FROM public.token_balances
-           WHERE token_id = $1 AND balance_wei::numeric > 0`,
-          [tokenId]
-        )
+        // Exclude LP token addresses from holder count
+        let holderCountQuery: string
+        let holderCountParams: (string | number)[]
+        
+        if (lpAddressSet.size > 0) {
+          const lpAddressesList = Array.from(lpAddressSet).map(addr => `'${addr}'`).join(',')
+          holderCountQuery = `SELECT COUNT(*)::int AS holders
+                             FROM public.token_balances
+                             WHERE token_id = $1 AND balance_wei::numeric > 0 
+                             AND LOWER(holder) NOT IN (${lpAddressesList})`
+          holderCountParams = [tokenId]
+        } else {
+          holderCountQuery = `SELECT COUNT(*)::int AS holders
+                             FROM public.token_balances
+                             WHERE token_id = $1 AND balance_wei::numeric > 0`
+          holderCountParams = [tokenId]
+        }
+        
+        const { rows: [{ holders }] } = await client.query(holderCountQuery, holderCountParams)
         await client.query(
           `UPDATE public.tokens
            SET holder_count = $1,
