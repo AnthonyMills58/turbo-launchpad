@@ -41,6 +41,7 @@ const rpcUrlsByChainId: Record<number, string> = {
 // DISABLED: getTokenHoldersCount function removed
 // Holder count is now only calculated on manual user request via /api/token-holders
 
+
 /**
  * Gets DEX price for a graduated token
  */
@@ -150,8 +151,30 @@ export async function syncTokenState(
       currentPrice = Number(ethers.formatEther(currentPriceRaw))
     }
 
-    const fdv = totalSupply * currentPrice
-    const marketCap = (totalSupply - creatorLockAmount) * currentPrice
+    // FDV and Market Cap calculation
+    let fdv: number
+    let marketCap: number
+    
+    if (graduated) {
+      // For graduated tokens, read FDV and market cap from database (calculated by worker)
+      // This avoids heavy blockchain scanning in sync procedures
+      const { rows } = await db.query(
+        'SELECT fdv, market_cap FROM tokens WHERE id = $1',
+        [tokenId]
+      )
+      fdv = rows[0]?.fdv || 0
+      marketCap = rows[0]?.market_cap || 0
+    } else {
+      // For pre-graduation tokens, calculate FDV and market cap
+      fdv = totalSupply * currentPrice
+      
+      // Simple contract-based calculation (fast)
+      const totalSupplyWei = BigInt(Math.floor(totalSupply * 1e18))
+      const creatorLockWei = BigInt(Math.floor(creatorLockAmount * 1e18))
+      const circulatingSupplyWei = totalSupplyWei - creatorLockWei
+      const circulatingSupply = Number(circulatingSupplyWei) / 1e18
+      marketCap = circulatingSupply * currentPrice
+    }
 
     // Airdrops
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}

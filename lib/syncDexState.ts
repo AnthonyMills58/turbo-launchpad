@@ -3,6 +3,95 @@ import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from './dex'
 import TurboTokenABI from './abi/TurboToken.json'
 import { Token } from '../types/token'
 import { chainsById } from './chains'
+import db from './db'
+
+/**
+ * Gets actual circulating supply by fetching balances from blockchain
+ * Uses a more comprehensive approach to catch all holders
+ */
+async function getCirculatingSupplyFromBlockchain(
+  contractAddress: string, 
+  chainId: number,
+  provider: ethers.JsonRpcProvider
+): Promise<number> {
+  const contract = new ethers.Contract(contractAddress, TurboTokenABI.abi, provider)
+  
+  // Method 1: Get addresses from database (known holders)
+  const { rows: knownAddresses } = await db.query(
+    `SELECT DISTINCT LOWER(holder) as holder
+     FROM public.token_balances 
+     WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)
+     UNION
+     SELECT DISTINCT LOWER(trader) as holder
+     FROM public.token_trades 
+     WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)
+     UNION
+     SELECT DISTINCT LOWER(from_address) as holder
+     FROM public.token_transfers 
+     WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)
+     UNION
+     SELECT DISTINCT LOWER(to_address) as holder
+     FROM public.token_transfers 
+     WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)`,
+    [contractAddress, chainId]
+  )
+
+  // Method 2: Get recent transfer events to catch new addresses
+  const currentBlock = await provider.getBlockNumber()
+  const fromBlock = Math.max(currentBlock - 1000, 0) // Last ~1000 blocks
+  
+  const transferFilter = {
+    address: contractAddress,
+    topics: [
+      ethers.id("Transfer(address,address,uint256)") // Transfer event signature
+    ],
+    fromBlock,
+    toBlock: 'latest'
+  }
+  
+  const recentTransfers = await provider.getLogs(transferFilter)
+  
+  // Extract unique addresses from recent transfers
+  const recentAddresses = new Set<string>()
+  for (const log of recentTransfers) {
+    if (log.topics.length >= 3) {
+      const from = ethers.getAddress('0x' + log.topics[1].slice(26))
+      const to = ethers.getAddress('0x' + log.topics[2].slice(26))
+      recentAddresses.add(from.toLowerCase())
+      recentAddresses.add(to.toLowerCase())
+    }
+  }
+
+  // Combine known addresses with recent addresses
+  const allAddresses = new Set<string>()
+  knownAddresses.forEach(({ holder }) => allAddresses.add(holder))
+  recentAddresses.forEach(addr => allAddresses.add(addr))
+
+  let totalCirculating = 0n
+  let checkedAddresses = 0
+
+  // Fetch current balance for each address from blockchain
+  for (const holder of allAddresses) {
+    try {
+      const balance = await contract.balanceOf(holder)
+      if (balance > 0n) {
+        totalCirculating += balance
+      }
+      checkedAddresses++
+      
+      // Limit to prevent excessive RPC calls
+      if (checkedAddresses > 100) {
+        console.warn(`Reached limit of 100 addresses for ${contractAddress}, some may be missed`)
+        break
+      }
+    } catch (error) {
+      console.warn(`Failed to get balance for ${holder}:`, error)
+    }
+  }
+
+  console.log(`Checked ${checkedAddresses} addresses for ${contractAddress}, total circulating: ${Number(totalCirculating) / 1e18}`)
+  return Number(totalCirculating) / 1e18 // Convert wei to tokens
+}
 
 export async function syncDexState(
   token: Token,
@@ -102,11 +191,13 @@ export async function syncDexState(
       console.log('[syncDexState] ✅ Calculated DEX price (ETH/token):', price)
 
       const totalSupply = await tokenContract.totalSupply()
-      const locked = await tokenContract.lockedBalances(token.creator_wallet)
-      const circulatingSupply = totalSupply - locked
-
+      
+      // FDV: Use totalSupply (includes LP tokens after graduation)
       const fdv = price * Number(ethers.formatUnits(totalSupply, decimals))
-      const marketCap = price * Number(ethers.formatUnits(circulatingSupply, decimals))
+      
+      // Market Cap: Use actual circulating supply from blockchain (like worker logic)
+      const circulatingSupply = await getCirculatingSupplyFromBlockchain(token.contract_address, chainId, provider)
+      const marketCap = price * circulatingSupply
 
       console.log('[syncDexState] FDV (ETH):', fdv)
       console.log('[syncDexState] Market Cap (ETH):', marketCap)
