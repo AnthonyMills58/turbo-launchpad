@@ -239,13 +239,14 @@ ON CONFLICT (token_id, "day") DO UPDATE SET
   await pool.query(sql, [chainId])
 }
 
-// -------------------- 4) Token summary cache (current price, liquidity, FDV, mcap, on_dex) --------------------
+// -------------------- 4) Token summary cache (current price, liquidity, FDV, mcap, volume, on_dex) --------------------
 async function refreshTokenSummariesForChain(chainId: number): Promise<void> {
-  // Updates tokens: current_price, liquidity_eth/usd, fdv, market_cap, on_dex
+  // Updates tokens: current_price, liquidity_eth/usd, fdv, market_cap, volume_24h_eth, on_dex
   // - Price source: latest pair_snapshots (fallback to latest DEX trade price)
   // - Liquidity: from latest snapshot quote reserve
   // - FDV: (total_supply OR supply) * current_price
   // - Market cap: circulating (sum of token_balances) * current_price
+  // - Volume: 24h ETH volume from token_daily_agg (only for graduated tokens)
   
   console.log(`\n=== Token summaries: chain ${chainId} ===`)
   
@@ -375,6 +376,17 @@ has_pool AS (
   SELECT DISTINCT token_id, chain_id
   FROM public.dex_pools
   WHERE chain_id = $1
+),
+-- 24h volume from daily aggregations
+daily_volume AS (
+  SELECT 
+    tda.token_id,
+    tda.volume_eth_wei / power(10::numeric, 18) AS volume_24h_eth,
+    tda.volume_token_wei / power(10::numeric, 18) AS volume_24h_tokens,
+    tda.unique_traders AS traders_24h
+  FROM public.token_daily_agg tda
+  WHERE tda.chain_id = $1 
+    AND tda.day = CURRENT_DATE
 )
 UPDATE public.tokens AS t
 SET
@@ -402,10 +414,20 @@ SET
     WHEN ps.current_price_eth IS NULL OR c.circ_wei IS NULL THEN t.market_cap
     ELSE (c.circ_wei / power(10::numeric, COALESCE(ps.token_decimals, 18))) * ps.current_price_eth
   END,
+  -- 24h volume (only for graduated tokens with trading activity)
+  volume_24h_eth = CASE 
+    WHEN hp.token_id IS NOT NULL THEN dv.volume_24h_eth 
+    ELSE t.volume_24h_eth 
+  END,
+  volume_24h_updated_at = CASE 
+    WHEN hp.token_id IS NOT NULL AND dv.volume_24h_eth IS NOT NULL THEN NOW()
+    ELSE t.volume_24h_updated_at 
+  END,
   updated_at = NOW()
 FROM price_src ps
 LEFT JOIN circ c   ON c.token_id = ps.token_id
 LEFT JOIN has_pool hp ON hp.token_id = ps.token_id AND hp.chain_id = ps.chain_id
+LEFT JOIN daily_volume dv ON dv.token_id = ps.token_id
 WHERE t.id = ps.token_id AND t.chain_id = $1;
   `
   await pool.query(sql, [chainId])
