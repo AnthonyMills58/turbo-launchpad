@@ -161,6 +161,66 @@ export async function discoverDexPools(chainId: number): Promise<void> {
 }
 
 // ---------- 2) Scan pools → pair_snapshots + token_trades ----------
+// Backfill trader addresses in existing token_trades records
+export async function backfillTraderAddresses(chainId: number): Promise<void> {
+  console.log(`\n=== Backfilling trader addresses for chain ${chainId} ===`)
+  
+  // Get all token_trades records that have the router address as trader
+  const { rows: tradesToFix } = await pool.query(
+    `SELECT id, tx_hash, log_index, trader
+     FROM public.token_trades 
+     WHERE chain_id = $1 AND src = 'DEX' AND trader = '0xa6b579684e943f7d00d616a48cf99b5147fc57a5'`,
+    [chainId]
+  )
+  
+  if (tradesToFix.length === 0) {
+    console.log(`No token_trades records need trader address backfill for chain ${chainId}`)
+    return
+  }
+  
+  console.log(`Found ${tradesToFix.length} token_trades records to backfill`)
+  
+  const provider = providerFor(chainId)
+  let updatedCount = 0
+  
+  for (const trade of tradesToFix) {
+    try {
+      // Get the transaction to find the actual Swap event
+      const tx = await provider.getTransaction(trade.tx_hash)
+      if (!tx) continue
+      
+      const receipt = await provider.getTransactionReceipt(trade.tx_hash)
+      if (!receipt) continue
+      
+      // Find the Swap event log that matches our log_index
+      const swapLog = receipt.logs.find(log => 
+        log.index === trade.log_index && 
+        log.topics[0] === SWAP_TOPIC
+      )
+      
+      if (swapLog) {
+        // Extract the correct trader address (to address from Swap event)
+        const correctTrader = ethers.getAddress('0x' + swapLog.topics[2].slice(26))
+        
+        // Update the record
+        await pool.query(
+          `UPDATE public.token_trades 
+           SET trader = $1 
+           WHERE id = $2`,
+          [correctTrader, trade.id]
+        )
+        
+        updatedCount++
+        console.log(`Updated trade ${trade.id}: ${trade.trader} -> ${correctTrader}`)
+      }
+    } catch (error) {
+      console.warn(`Failed to backfill trader for trade ${trade.id}:`, error)
+    }
+  }
+  
+  console.log(`Backfilled trader addresses for ${updatedCount}/${tradesToFix.length} records`)
+}
+
 export async function processDexPools(chainId: number): Promise<void> {
   const provider = providerFor(chainId)
   const pools = await fetchDexPools(chainId)
@@ -264,7 +324,7 @@ export async function processDexPools(chainId: number): Promise<void> {
             ]
           )
         } else if (log.topics[0] === SWAP_TOPIC) {
-          const sender = ethers.getAddress('0x' + log.topics[1].slice(26))
+          const to = ethers.getAddress('0x' + log.topics[2].slice(26))
           const [a0In, a1In, a0Out, a1Out] =
             ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256','uint256'], log.data)
 
@@ -301,7 +361,7 @@ export async function processDexPools(chainId: number): Promise<void> {
             [
               p.token_id, p.chain_id,
               log.transactionHash!, log.index!,
-              bn, block_time, side, sender,
+              bn, block_time, side, to,
               tokenWei.toString(), quoteWei.toString(), price_eth_per_token
             ]
           )
@@ -333,6 +393,7 @@ export async function runPoolsPipelineForChain(chainId: number): Promise<void> {
   try {
     await discoverDexPools(chainId)  // auto-add pools after graduation
     await processDexPools(chainId)   // fill pair_snapshots + token_trades
+    await backfillTraderAddresses(chainId)  // fix historical trader addresses
   } catch (e) {
     console.error(`Pools pipeline error on chain ${chainId}:`, e)
   }
