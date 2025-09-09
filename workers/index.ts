@@ -642,6 +642,42 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
       [chainId]
     )
     console.log(`Cleaned up ${lpAddressSet.size} LP token addresses from token_balances for chain ${chainId}`)
+    
+    // Update holder_count for all tokens on this chain after LP cleanup
+    const { rows: tokenIds } = await pool.query<{ id: number }>(
+      `SELECT id FROM public.tokens WHERE chain_id = $1`,
+      [chainId]
+    )
+    
+    for (const { id: tokenId } of tokenIds) {
+      let holderCountQuery: string
+      let holderCountParams: (string | number)[]
+      
+      if (lpAddressSet.size > 0) {
+        const lpAddressesList = Array.from(lpAddressSet).map(addr => `'${addr}'`).join(',')
+        holderCountQuery = `SELECT COUNT(*)::int AS holders
+                           FROM public.token_balances
+                           WHERE token_id = $1 AND balance_wei::numeric > 0 
+                           AND LOWER(holder) NOT IN (${lpAddressesList})`
+        holderCountParams = [tokenId]
+      } else {
+        holderCountQuery = `SELECT COUNT(*)::int AS holders
+                           FROM public.token_balances
+                           WHERE token_id = $1 AND balance_wei::numeric > 0`
+        holderCountParams = [tokenId]
+      }
+      
+      const { rows: [{ holders }] } = await pool.query(holderCountQuery, holderCountParams)
+      await pool.query(
+        `UPDATE public.tokens
+         SET holder_count = $1,
+             holder_count_updated_at = NOW()
+         WHERE id = $2`,
+        [holders, tokenId]
+      )
+    }
+    
+    console.log(`Updated holder_count for ${tokenIds.length} tokens after LP cleanup for chain ${chainId}`)
   }
   
   // Build address list & mapping (lowercased)
