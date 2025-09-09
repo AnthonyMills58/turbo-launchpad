@@ -2,6 +2,7 @@ import { ethers, type Log } from 'ethers'
 import pool from '../lib/db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
 import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
+import TurboTokenABI from '../lib/abi/TurboToken.json'
 
 // ---------- Config (same style as index.ts) ----------
 const DEFAULT_DEX_CHUNK = Number(process.env.DEX_CHUNK ?? 5_000) // blocks per query window
@@ -283,6 +284,8 @@ export async function processDexPools(chainId: number): Promise<void> {
 
   for (const rawPool of pools) {
     const p = await ensurePoolDecimals(rawPool, provider)
+    const touchedTokenIds = new Set<number>()
+    
     // For pools without snapshots, start from deployment block (graduation block)
     // For pools with snapshots, continue from last processed block
     const { rows: hasSnapshots } = await pool.query(
@@ -428,6 +431,68 @@ export async function processDexPools(chainId: number): Promise<void> {
               tokenWei.toString(), quoteWei.toString(), price_eth_per_token
             ]
           )
+          
+          // Update token balances for DEX trades using current blockchain balance
+          if (p.token_id) {
+            try {
+              // Get token contract address from tokens table
+              const { rows: [tokenRow] } = await client.query(
+                `SELECT contract_address FROM public.tokens WHERE id = $1`,
+                [p.token_id]
+              )
+              
+              if (tokenRow?.contract_address) {
+                const contract = new ethers.Contract(tokenRow.contract_address, TurboTokenABI.abi, provider)
+                const currentBalanceWei = await contract.balanceOf(actualTrader)
+                
+                if (currentBalanceWei > 0n) {
+                  await client.query(
+                    `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+                     VALUES ($1,$2,$3,$4)
+                     ON CONFLICT (token_id, holder) DO UPDATE
+                     SET balance_wei = EXCLUDED.balance_wei`,
+                    [p.token_id, p.chain_id, actualTrader, currentBalanceWei.toString()]
+                  )
+                } else {
+                  // Remove zero balance
+                  await client.query(
+                    `DELETE FROM public.token_balances 
+                     WHERE token_id = $1 AND holder = $2`,
+                    [p.token_id, actualTrader]
+                  )
+                }
+                touchedTokenIds.add(p.token_id)
+              }
+            } catch (error) {
+              console.warn(`Failed to get current balance for trader ${actualTrader} on token ${p.token_id}:`, error)
+            }
+          }
+        }
+      }
+
+      // Clean up zero balances for tokens that had DEX trades
+      if (touchedTokenIds.size > 0) {
+        await client.query(
+          `DELETE FROM public.token_balances
+           WHERE token_id = ANY($1::int[]) AND balance_wei::numeric = 0`,
+          [Array.from(touchedTokenIds)]
+        )
+        
+        // Update holder counts for tokens that had DEX trades
+        for (const tokenId of touchedTokenIds) {
+          const { rows: [{ holders }] } = await client.query(
+            `SELECT COUNT(*)::int AS holders
+             FROM public.token_balances
+             WHERE token_id = $1 AND balance_wei::numeric > 0`,
+            [tokenId]
+          )
+          await client.query(
+            `UPDATE public.tokens
+             SET holder_count = $1,
+                 holder_count_updated_at = NOW()
+             WHERE id = $2`,
+            [holders, tokenId]
+          )
         }
       }
 
@@ -451,12 +516,104 @@ export async function processDexPools(chainId: number): Promise<void> {
   }
 }
 
+async function backfillDexBalances(chainId: number): Promise<void> {
+  console.log(`=== Backfilling DEX balances for chain ${chainId} ===`)
+  
+  // Get all unique traders from DEX trades
+  const { rows: traders } = await pool.query(
+    `SELECT DISTINCT trader FROM public.token_trades 
+     WHERE chain_id = $1 AND src = 'DEX' AND trader IS NOT NULL`,
+    [chainId]
+  )
+  
+  if (traders.length === 0) {
+    console.log(`No DEX traders found for chain ${chainId}`)
+    return
+  }
+  
+  console.log(`Found ${traders.length} unique DEX traders to backfill balances for`)
+  
+  // Get all tokens that have DEX trades
+  const { rows: tokens } = await pool.query(
+    `SELECT DISTINCT t.id, t.contract_address 
+     FROM public.tokens t
+     JOIN public.token_trades tr ON tr.token_id = t.id
+     WHERE t.chain_id = $1 AND tr.src = 'DEX'`,
+    [chainId]
+  )
+  
+  if (tokens.length === 0) {
+    console.log(`No tokens with DEX trades found for chain ${chainId}`)
+    return
+  }
+  
+  const provider = providerFor(chainId)
+  let updatedBalances = 0
+  
+  // For each token, get current balance for each trader using ethers
+  for (const token of tokens) {
+    try {
+      const contract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, provider)
+      
+      for (const trader of traders) {
+        try {
+          // Get current balance from blockchain
+          const balanceWei = await contract.balanceOf(trader.trader)
+          
+          if (balanceWei > 0n) {
+            // Update or insert balance
+            await pool.query(
+              `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+               VALUES ($1,$2,$3,$4)
+               ON CONFLICT (token_id, holder) DO UPDATE
+               SET balance_wei = EXCLUDED.balance_wei`,
+              [token.id, chainId, trader.trader, balanceWei.toString()]
+            )
+            updatedBalances++
+          } else {
+            // Remove zero balance
+            await pool.query(
+              `DELETE FROM public.token_balances 
+               WHERE token_id = $1 AND holder = $2`,
+              [token.id, trader.trader]
+            )
+          }
+        } catch (error) {
+          console.warn(`Failed to get balance for trader ${trader.trader} on token ${token.id}:`, error)
+        }
+      }
+      
+      // Update holder count for this token
+      const { rows: [{ holders }] } = await pool.query(
+        `SELECT COUNT(*)::int AS holders
+         FROM public.token_balances
+         WHERE token_id = $1 AND balance_wei::numeric > 0`,
+        [token.id]
+      )
+      
+      await pool.query(
+        `UPDATE public.tokens
+         SET holder_count = $1,
+             holder_count_updated_at = NOW()
+         WHERE id = $2`,
+        [holders, token.id]
+      )
+      
+    } catch (error) {
+      console.warn(`Failed to process token ${token.id}:`, error)
+    }
+  }
+  
+  console.log(`Backfilled ${updatedBalances} DEX balances for ${tokens.length} tokens`)
+}
+
 // ---------- 3) Convenience: one-shot pipeline per chain ----------
 export async function runPoolsPipelineForChain(chainId: number): Promise<void> {
   try {
     await discoverDexPools(chainId)  // auto-add pools after graduation
     await processDexPools(chainId)   // fill pair_snapshots + token_trades
     await backfillTraderAddresses(chainId)  // fix historical trader addresses
+    await backfillDexBalances(chainId)  // backfill DEX trade balances
   } catch (e) {
     console.error(`Pools pipeline error on chain ${chainId}:`, e)
   }
