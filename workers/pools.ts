@@ -165,12 +165,36 @@ export async function discoverDexPools(chainId: number): Promise<void> {
 export async function backfillTraderAddresses(chainId: number): Promise<void> {
   console.log(`\n=== Backfilling trader addresses for chain ${chainId} ===`)
   
-  // Get all token_trades records that have the router address as trader
+  // Get the router address for this chain
+  const routerAddress = DEX_ROUTER_BY_CHAIN[chainId]
+  if (!routerAddress) {
+    console.log(`No router address configured for chain ${chainId}, skipping trader backfill`)
+    return
+  }
+  
+  // First, let's see what trader addresses we actually have
+  const { rows: allTraders } = await pool.query(
+    `SELECT DISTINCT trader, COUNT(*) as count
+     FROM public.token_trades 
+     WHERE chain_id = $1 AND src = 'DEX'
+     GROUP BY trader
+     ORDER BY count DESC`,
+    [chainId]
+  )
+  
+  console.log(`Current trader addresses in token_trades for chain ${chainId}:`)
+  for (const row of allTraders) {
+    console.log(`  ${row.trader}: ${row.count} trades`)
+  }
+  
+  console.log(`Looking for router address: ${routerAddress}`)
+  
+  // Get all token_trades records that have the router address as trader (case insensitive)
   const { rows: tradesToFix } = await pool.query(
     `SELECT token_id, tx_hash, log_index, trader
      FROM public.token_trades 
-     WHERE chain_id = $1 AND src = 'DEX' AND trader = '0xa6b579684e943f7d00d616a48cf99b5147fc57a5'`,
-    [chainId]
+     WHERE chain_id = $1 AND src = 'DEX' AND LOWER(trader) = LOWER($2)`,
+    [chainId, routerAddress]
   )
   
   if (tradesToFix.length === 0) {
