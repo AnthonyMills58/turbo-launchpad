@@ -504,14 +504,15 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
      WHERE chain_id = $1 AND (
        amount_eth_wei IS NULL OR 
        price_eth_per_token IS NULL OR 
-       side IN ('OTHER', 'TRANSFER', 'GRADUATION')
+       side IN ('OTHER', 'TRANSFER') OR
+       (side = 'GRADUATION' AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL))
      )
      ORDER BY block_number DESC 
      LIMIT 100`,
     [chainId]
   )
   
-  console.log(`Found ${rows.length} transfers without price data or with incorrect side values (including GRADUATION that might be BUY&LOCK)`)
+  console.log(`Found ${rows.length} transfers without price data or with incorrect side values (GRADUATION records with existing price data are excluded)`)
   
   for (const row of rows) {
     try {
@@ -529,7 +530,8 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
       )
       const creatorWallet = tokenRows[0]?.creator_wallet || null
       
-      const transferType = await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr, creatorWallet)
+      // Preserve existing GRADUATION classification - don't override it
+      const transferType = row.side === 'GRADUATION' ? 'GRADUATION' : await identifyTransferType(tx, fromAddr, toAddr, chainId, tokenAddr, creatorWallet)
       
       // Calculate ETH amount and price based on transfer type
       let ethAmount = 0n
@@ -545,6 +547,16 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
           console.log(`Backfilled ${transferType}: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
         } else {
           console.log(`Backfilled ${transferType}: token ${row.token_id}, tx ${row.tx_hash} (no ETH value)`)
+        }
+      } else if (transferType === 'GRADUATION') {
+        // Graduation operation: preserve existing classification and calculate price if needed
+        if (tx?.value && tx.value > 0n) {
+          ethAmount = tx.value
+          isPaymentTransfer = true
+          price = Number(ethAmount) / Number(row.amount_wei)
+          console.log(`Backfilled GRADUATION: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+        } else {
+          console.log(`Backfilled GRADUATION: token ${row.token_id}, tx ${row.tx_hash} (no ETH value)`)
         }
       } else if (transferType === 'SELL') {
         // For SELL operations, try to get the sell price even if tx.value is 0
@@ -818,7 +830,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
            ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
              amount_eth_wei = CASE WHEN EXCLUDED.amount_eth_wei IS NOT NULL THEN EXCLUDED.amount_eth_wei ELSE token_transfers.amount_eth_wei END,
              price_eth_per_token = CASE WHEN EXCLUDED.price_eth_per_token IS NOT NULL THEN EXCLUDED.price_eth_per_token ELSE token_transfers.price_eth_per_token END,
-             side = EXCLUDED.side`,
+             side = CASE WHEN token_transfers.side = 'GRADUATION' THEN token_transfers.side ELSE EXCLUDED.side END`,
           [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType]
           )
           
