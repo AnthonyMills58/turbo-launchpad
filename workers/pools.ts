@@ -547,7 +547,33 @@ async function normalizeAllAddresses(chainId: number): Promise<void> {
     console.log(`Normalized ${transfersFromUpdated || 0} from_address and ${transfersToUpdated || 0} to_address in token_transfers`)
   }
   
-  // Normalize token_balances.holder
+  // Normalize token_balances.holder (handle duplicates by merging)
+  const { rows: balanceDuplicates } = await pool.query(
+    `SELECT token_id, LOWER(holder) as holder_lower, 
+            COUNT(*) as count, 
+            STRING_AGG(holder, ',') as addresses,
+            SUM(balance_wei::numeric) as total_balance
+     FROM public.token_balances 
+     WHERE chain_id = $1
+     GROUP BY token_id, LOWER(holder)
+     HAVING COUNT(*) > 1`,
+    [chainId]
+  )
+  
+  for (const dup of balanceDuplicates) {
+    console.log(`Removing ${dup.count} duplicate holder records for ${dup.holder_lower} on token ${dup.token_id}`)
+    
+    // Delete all duplicate records - we'll let the backfill function get the correct balance from blockchain
+    await pool.query(
+      `DELETE FROM public.token_balances 
+       WHERE chain_id = $1 AND token_id = $2 AND LOWER(holder) = $3`,
+      [chainId, dup.token_id, dup.holder_lower]
+    )
+    
+    console.log(`Deleted duplicate records - correct balance will be fetched from blockchain`)
+  }
+  
+  // Now normalize remaining addresses
   const { rowCount: balancesUpdated } = await pool.query(
     `UPDATE public.token_balances 
      SET holder = LOWER(holder) 
@@ -609,24 +635,32 @@ async function normalizeAllAddresses(chainId: number): Promise<void> {
 async function normalizeAppWideAddresses(): Promise<void> {
   console.log(`=== Normalizing app-wide addresses to lowercase ===`)
   
-  // Normalize media_assets.owner_wallet
-  const { rowCount: mediaUpdated } = await pool.query(
-    `UPDATE public.media_assets 
-     SET owner_wallet = LOWER(owner_wallet) 
-     WHERE owner_wallet != LOWER(owner_wallet)`
-  )
-  if (mediaUpdated && mediaUpdated > 0) {
-    console.log(`Normalized ${mediaUpdated} owner_wallet addresses in media_assets`)
+  // Normalize media_assets.owner_wallet (if table exists)
+  try {
+    const { rowCount: mediaUpdated } = await pool.query(
+      `UPDATE public.media_assets 
+       SET owner_wallet = LOWER(owner_wallet) 
+       WHERE owner_wallet != LOWER(owner_wallet)`
+    )
+    if (mediaUpdated && mediaUpdated > 0) {
+      console.log(`Normalized ${mediaUpdated} owner_wallet addresses in media_assets`)
+    }
+  } catch {
+    console.log(`Skipping media_assets normalization: table may not exist`)
   }
   
-  // Normalize profiles.wallet_address
-  const { rowCount: profilesUpdated } = await pool.query(
-    `UPDATE public.profiles 
-     SET wallet_address = LOWER(wallet_address) 
-     WHERE wallet_address != LOWER(wallet_address)`
-  )
-  if (profilesUpdated && profilesUpdated > 0) {
-    console.log(`Normalized ${profilesUpdated} wallet_address in profiles`)
+  // Normalize profiles.wallet (if table exists)
+  try {
+    const { rowCount: profilesUpdated } = await pool.query(
+      `UPDATE public.profiles 
+       SET wallet = LOWER(wallet) 
+       WHERE wallet != LOWER(wallet)`
+    )
+    if (profilesUpdated && profilesUpdated > 0) {
+      console.log(`Normalized ${profilesUpdated} wallet addresses in profiles`)
+    }
+  } catch {
+    console.log(`Skipping profiles normalization: table may not exist`)
   }
   
   console.log(`App-wide address normalization completed`)
@@ -634,44 +668,6 @@ async function normalizeAppWideAddresses(): Promise<void> {
 
 async function backfillDexBalances(chainId: number): Promise<void> {
   console.log(`=== Backfilling DEX balances for chain ${chainId} ===`)
-  
-  // First, clean up duplicate addresses (case sensitivity issues)
-  console.log('Cleaning up duplicate addresses in token_balances...')
-  const { rows: duplicates } = await pool.query(
-    `SELECT token_id, LOWER(holder) as holder_lower, 
-            COUNT(*) as count, 
-            STRING_AGG(holder, ',') as addresses,
-            SUM(balance_wei::numeric) as total_balance
-     FROM public.token_balances 
-     WHERE chain_id = $1
-     GROUP BY token_id, LOWER(holder)
-     HAVING COUNT(*) > 1`,
-    [chainId]
-  )
-  
-  for (const dup of duplicates) {
-    console.log(`Merging ${dup.count} duplicate records for holder ${dup.holder_lower} on token ${dup.token_id}`)
-    
-    // Delete all duplicate records
-    await pool.query(
-      `DELETE FROM public.token_balances 
-       WHERE chain_id = $1 AND token_id = $2 AND LOWER(holder) = $3`,
-      [chainId, dup.token_id, dup.holder_lower]
-    )
-    
-    // Insert single record with merged balance
-    if (dup.total_balance > 0) {
-      await pool.query(
-        `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-         VALUES ($1,$2,$3,$4)`,
-        [dup.token_id, chainId, dup.holder_lower, dup.total_balance.toString()]
-      )
-    }
-  }
-  
-  if (duplicates.length > 0) {
-    console.log(`Cleaned up ${duplicates.length} duplicate address groups`)
-  }
   
   // Get all unique traders from DEX trades
   const { rows: traders } = await pool.query(
