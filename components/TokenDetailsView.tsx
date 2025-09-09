@@ -16,7 +16,7 @@ import { useSync } from '@/lib/SyncContext'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { formatLargeNumber } from '@/lib/displayFormats'
-import { syncDexState } from '@/lib/syncDexState'
+import { checkIfTokenOnDex } from '@/lib/checkDexListing'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
 import UserProfile from './UserProfile'
@@ -185,7 +185,38 @@ export default function TokenDetailsView({
 
   useEffect(() => {
     if (!contract_address || !chainId) return
-    syncDexState(token, chainId, onRefresh)
+    
+    // Two-step process: Check if on DEX, then sync if needed
+    const checkAndSyncDex = async () => {
+      try {
+        // Step 1: Quick client-side check if token is on DEX
+        const isOnDex = await checkIfTokenOnDex(contract_address, chainId)
+        
+        if (isOnDex) {
+          console.log('[TokenDetailsView] Token is on DEX, syncing state...')
+          
+          // Step 2: Call API to sync DEX state (price, FDV, volume, market cap)
+          const response = await fetch('/api/sync-dex-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, chainId })
+          })
+          
+          if (response.ok) {
+            // Trigger a refresh after successful sync
+            onRefresh()
+          } else {
+            console.error('Failed to sync DEX state:', await response.text())
+          }
+        } else {
+          console.log('[TokenDetailsView] Token not on DEX, skipping sync')
+        }
+      } catch (error) {
+        console.error('Error in checkAndSyncDex:', error)
+      }
+    }
+    
+    checkAndSyncDex()
   }, [contract_address, chainId, onRefresh, token])
 
   // Add error boundary for production debugging
