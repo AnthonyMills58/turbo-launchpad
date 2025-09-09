@@ -167,7 +167,7 @@ export async function backfillTraderAddresses(chainId: number): Promise<void> {
   
   // Get all token_trades records that have the router address as trader
   const { rows: tradesToFix } = await pool.query(
-    `SELECT id, tx_hash, log_index, trader
+    `SELECT token_id, tx_hash, log_index, trader
      FROM public.token_trades 
      WHERE chain_id = $1 AND src = 'DEX' AND trader = '0xa6b579684e943f7d00d616a48cf99b5147fc57a5'`,
     [chainId]
@@ -202,19 +202,19 @@ export async function backfillTraderAddresses(chainId: number): Promise<void> {
         // Extract the correct trader address (to address from Swap event)
         const correctTrader = ethers.getAddress('0x' + swapLog.topics[2].slice(26))
         
-        // Update the record
+        // Update the record using composite key
         await pool.query(
           `UPDATE public.token_trades 
            SET trader = $1 
-           WHERE id = $2`,
-          [correctTrader, trade.id]
+           WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
+          [correctTrader, chainId, trade.tx_hash, trade.log_index]
         )
         
         updatedCount++
-        console.log(`Updated trade ${trade.id}: ${trade.trader} -> ${correctTrader}`)
+        console.log(`Updated trade ${trade.tx_hash}:${trade.log_index}: ${trade.trader} -> ${correctTrader}`)
       }
     } catch (error) {
-      console.warn(`Failed to backfill trader for trade ${trade.id}:`, error)
+      console.warn(`Failed to backfill trader for trade ${trade.tx_hash}:${trade.log_index}:`, error)
     }
   }
   
