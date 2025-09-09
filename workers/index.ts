@@ -4,7 +4,7 @@ import type { Log } from 'ethers'
 import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
-import { runPoolsPipelineForChain } from './pools'
+import { runPoolsPipelineForChain, runAppWideNormalization } from './pools'
 import { runAggPipelineForChain } from './agg'
 
 // -------------------- Config --------------------
@@ -885,7 +885,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
              amount_eth_wei = CASE WHEN EXCLUDED.amount_eth_wei IS NOT NULL THEN EXCLUDED.amount_eth_wei ELSE token_transfers.amount_eth_wei END,
              price_eth_per_token = CASE WHEN EXCLUDED.price_eth_per_token IS NOT NULL THEN EXCLUDED.price_eth_per_token ELSE token_transfers.price_eth_per_token END,
              side = CASE WHEN token_transfers.side = 'GRADUATION' THEN token_transfers.side ELSE EXCLUDED.side END`,
-          [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr, toAddr, amount.toString(), isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType]
+          [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr.toLowerCase(), toAddr.toLowerCase(), amount.toString(), isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType]
           )
           
           // Update token balances, but exclude LP token addresses
@@ -895,7 +895,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
                VALUES ($1,$2,$3,$4)
                ON CONFLICT (token_id, holder) DO UPDATE
                SET balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei`,
-            [tokenId, chainId, fromAddr, amount.toString()]
+            [tokenId, chainId, fromAddr.toLowerCase(), amount.toString()]
             )
           }
           if (toAddr !== ZERO && !lpAddressSet.has(toAddr.toLowerCase())) {
@@ -904,7 +904,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
                VALUES ($1,$2,$3,$4)
                ON CONFLICT (token_id, holder) DO UPDATE
                SET balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei`,
-            [tokenId, chainId, toAddr, amount.toString()]
+            [tokenId, chainId, toAddr.toLowerCase(), amount.toString()]
             )
           }
         }
@@ -1008,6 +1008,15 @@ async function main() {
       }
     } else {
       console.log(`\n⚠️  Health checks disabled - processing all ${byChain.size} chains for ERC-20 scan`)
+    }
+
+    // 0) App-wide address normalization (run ONCE before everything else)
+    console.log(`\n=== App-wide address normalization ===`)
+    try {
+      await runAppWideNormalization()
+    } catch (e) {
+      console.error(`App-wide normalization failed with`, e)
+      // continue anyway - this is not critical for the main pipeline
     }
 
     // 1) Pools pipeline (auto-discovery + DEX logs) — run FIRST to populate token_trades

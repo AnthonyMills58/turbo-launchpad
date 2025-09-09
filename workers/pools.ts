@@ -146,7 +146,7 @@ export async function discoverDexPools(chainId: number): Promise<void> {
          (token_id, chain_id, pair_address, token0, token1, quote_token)
        VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT (chain_id, pair_address) DO NOTHING`,
-      [t.id, chainId, pair, token0, token1, wethAddr]
+      [t.id, chainId, pair.toLowerCase(), token0.toLowerCase(), token1.toLowerCase(), wethAddr.toLowerCase()]
     )
 
     // Optional: reflect on_dex flag and graduation status
@@ -256,12 +256,12 @@ export async function backfillTraderAddresses(chainId: number): Promise<void> {
         // For both BUY and SELL operations, the transaction sender is the actual trader
         const correctTrader = tx.from
         
-        // Update the record using composite key
+        // Update the record using composite key (normalize to lowercase)
         await pool.query(
           `UPDATE public.token_trades 
            SET trader = $1 
            WHERE chain_id = $2 AND tx_hash = $3 AND log_index = $4`,
-          [correctTrader, chainId, trade.tx_hash, trade.log_index]
+          [correctTrader.toLowerCase(), chainId, trade.tx_hash, trade.log_index]
         )
         
         updatedCount++
@@ -427,7 +427,7 @@ export async function processDexPools(chainId: number): Promise<void> {
             [
               p.token_id, p.chain_id,
               log.transactionHash!, log.index!,
-              bn, block_time, side, actualTrader,
+              bn, block_time, side, actualTrader.toLowerCase(),
               tokenWei.toString(), quoteWei.toString(), price_eth_per_token
             ]
           )
@@ -451,14 +451,14 @@ export async function processDexPools(chainId: number): Promise<void> {
                      VALUES ($1,$2,$3,$4)
                      ON CONFLICT (token_id, holder) DO UPDATE
                      SET balance_wei = EXCLUDED.balance_wei`,
-                    [p.token_id, p.chain_id, actualTrader, currentBalanceWei.toString()]
+                    [p.token_id, p.chain_id, actualTrader.toLowerCase(), currentBalanceWei.toString()]
                   )
                 } else {
                   // Remove zero balance
                   await client.query(
                     `DELETE FROM public.token_balances 
                      WHERE token_id = $1 AND holder = $2`,
-                    [p.token_id, actualTrader]
+                    [p.token_id, actualTrader.toLowerCase()]
                   )
                 }
                 touchedTokenIds.add(p.token_id)
@@ -516,8 +516,162 @@ export async function processDexPools(chainId: number): Promise<void> {
   }
 }
 
+async function normalizeAllAddresses(chainId: number): Promise<void> {
+  console.log(`=== Normalizing all addresses to lowercase for chain ${chainId} ===`)
+  
+  // Normalize token_trades.trader
+  const { rowCount: tradesUpdated } = await pool.query(
+    `UPDATE public.token_trades 
+     SET trader = LOWER(trader) 
+     WHERE chain_id = $1 AND trader != LOWER(trader)`,
+    [chainId]
+  )
+  if (tradesUpdated && tradesUpdated > 0) {
+    console.log(`Normalized ${tradesUpdated} trader addresses in token_trades`)
+  }
+  
+  // Normalize token_transfers.from_address and to_address
+  const { rowCount: transfersFromUpdated } = await pool.query(
+    `UPDATE public.token_transfers 
+     SET from_address = LOWER(from_address) 
+     WHERE chain_id = $1 AND from_address != LOWER(from_address)`,
+    [chainId]
+  )
+  const { rowCount: transfersToUpdated } = await pool.query(
+    `UPDATE public.token_transfers 
+     SET to_address = LOWER(to_address) 
+     WHERE chain_id = $1 AND to_address != LOWER(to_address)`,
+    [chainId]
+  )
+  if ((transfersFromUpdated && transfersFromUpdated > 0) || (transfersToUpdated && transfersToUpdated > 0)) {
+    console.log(`Normalized ${transfersFromUpdated || 0} from_address and ${transfersToUpdated || 0} to_address in token_transfers`)
+  }
+  
+  // Normalize token_balances.holder
+  const { rowCount: balancesUpdated } = await pool.query(
+    `UPDATE public.token_balances 
+     SET holder = LOWER(holder) 
+     WHERE chain_id = $1 AND holder != LOWER(holder)`,
+    [chainId]
+  )
+  if (balancesUpdated && balancesUpdated > 0) {
+    console.log(`Normalized ${balancesUpdated} holder addresses in token_balances`)
+  }
+  
+  // Normalize tokens.creator_wallet
+  const { rowCount: tokensUpdated } = await pool.query(
+    `UPDATE public.tokens 
+     SET creator_wallet = LOWER(creator_wallet) 
+     WHERE chain_id = $1 AND creator_wallet != LOWER(creator_wallet)`,
+    [chainId]
+  )
+  if (tokensUpdated && tokensUpdated > 0) {
+    console.log(`Normalized ${tokensUpdated} creator_wallet addresses in tokens`)
+  }
+  
+  // Normalize dex_pools.pair_address
+  const { rowCount: poolsUpdated } = await pool.query(
+    `UPDATE public.dex_pools 
+     SET pair_address = LOWER(pair_address) 
+     WHERE chain_id = $1 AND pair_address != LOWER(pair_address)`,
+    [chainId]
+  )
+  if (poolsUpdated && poolsUpdated > 0) {
+    console.log(`Normalized ${poolsUpdated} pair_address in dex_pools`)
+  }
+  
+  // Normalize dex_pools.token0, token1, quote_token
+  const { rowCount: poolsToken0Updated } = await pool.query(
+    `UPDATE public.dex_pools 
+     SET token0 = LOWER(token0) 
+     WHERE chain_id = $1 AND token0 != LOWER(token0)`,
+    [chainId]
+  )
+  const { rowCount: poolsToken1Updated } = await pool.query(
+    `UPDATE public.dex_pools 
+     SET token1 = LOWER(token1) 
+     WHERE chain_id = $1 AND token1 != LOWER(token1)`,
+    [chainId]
+  )
+  const { rowCount: poolsQuoteUpdated } = await pool.query(
+    `UPDATE public.dex_pools 
+     SET quote_token = LOWER(quote_token) 
+     WHERE chain_id = $1 AND quote_token != LOWER(quote_token)`,
+    [chainId]
+  )
+  if ((poolsToken0Updated && poolsToken0Updated > 0) || (poolsToken1Updated && poolsToken1Updated > 0) || (poolsQuoteUpdated && poolsQuoteUpdated > 0)) {
+    console.log(`Normalized ${poolsToken0Updated || 0} token0, ${poolsToken1Updated || 0} token1, ${poolsQuoteUpdated || 0} quote_token in dex_pools`)
+  }
+  
+  console.log(`Address normalization completed for chain ${chainId}`)
+}
+
+async function normalizeAppWideAddresses(): Promise<void> {
+  console.log(`=== Normalizing app-wide addresses to lowercase ===`)
+  
+  // Normalize media_assets.owner_wallet
+  const { rowCount: mediaUpdated } = await pool.query(
+    `UPDATE public.media_assets 
+     SET owner_wallet = LOWER(owner_wallet) 
+     WHERE owner_wallet != LOWER(owner_wallet)`
+  )
+  if (mediaUpdated && mediaUpdated > 0) {
+    console.log(`Normalized ${mediaUpdated} owner_wallet addresses in media_assets`)
+  }
+  
+  // Normalize profiles.wallet_address
+  const { rowCount: profilesUpdated } = await pool.query(
+    `UPDATE public.profiles 
+     SET wallet_address = LOWER(wallet_address) 
+     WHERE wallet_address != LOWER(wallet_address)`
+  )
+  if (profilesUpdated && profilesUpdated > 0) {
+    console.log(`Normalized ${profilesUpdated} wallet_address in profiles`)
+  }
+  
+  console.log(`App-wide address normalization completed`)
+}
+
 async function backfillDexBalances(chainId: number): Promise<void> {
   console.log(`=== Backfilling DEX balances for chain ${chainId} ===`)
+  
+  // First, clean up duplicate addresses (case sensitivity issues)
+  console.log('Cleaning up duplicate addresses in token_balances...')
+  const { rows: duplicates } = await pool.query(
+    `SELECT token_id, LOWER(holder) as holder_lower, 
+            COUNT(*) as count, 
+            STRING_AGG(holder, ',') as addresses,
+            SUM(balance_wei::numeric) as total_balance
+     FROM public.token_balances 
+     WHERE chain_id = $1
+     GROUP BY token_id, LOWER(holder)
+     HAVING COUNT(*) > 1`,
+    [chainId]
+  )
+  
+  for (const dup of duplicates) {
+    console.log(`Merging ${dup.count} duplicate records for holder ${dup.holder_lower} on token ${dup.token_id}`)
+    
+    // Delete all duplicate records
+    await pool.query(
+      `DELETE FROM public.token_balances 
+       WHERE chain_id = $1 AND token_id = $2 AND LOWER(holder) = $3`,
+      [chainId, dup.token_id, dup.holder_lower]
+    )
+    
+    // Insert single record with merged balance
+    if (dup.total_balance > 0) {
+      await pool.query(
+        `INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+         VALUES ($1,$2,$3,$4)`,
+        [dup.token_id, chainId, dup.holder_lower, dup.total_balance.toString()]
+      )
+    }
+  }
+  
+  if (duplicates.length > 0) {
+    console.log(`Cleaned up ${duplicates.length} duplicate address groups`)
+  }
   
   // Get all unique traders from DEX trades
   const { rows: traders } = await pool.query(
@@ -567,7 +721,7 @@ async function backfillDexBalances(chainId: number): Promise<void> {
                VALUES ($1,$2,$3,$4)
                ON CONFLICT (token_id, holder) DO UPDATE
                SET balance_wei = EXCLUDED.balance_wei`,
-              [token.id, chainId, trader.trader, balanceWei.toString()]
+              [token.id, chainId, trader.trader.toLowerCase(), balanceWei.toString()]
             )
             updatedBalances++
           } else {
@@ -575,7 +729,7 @@ async function backfillDexBalances(chainId: number): Promise<void> {
             await pool.query(
               `DELETE FROM public.token_balances 
                WHERE token_id = $1 AND holder = $2`,
-              [token.id, trader.trader]
+              [token.id, trader.trader.toLowerCase()]
             )
           }
         } catch (error) {
@@ -610,11 +764,21 @@ async function backfillDexBalances(chainId: number): Promise<void> {
 // ---------- 3) Convenience: one-shot pipeline per chain ----------
 export async function runPoolsPipelineForChain(chainId: number): Promise<void> {
   try {
+    await normalizeAllAddresses(chainId)  // normalize all addresses to lowercase FIRST
     await discoverDexPools(chainId)  // auto-add pools after graduation
     await processDexPools(chainId)   // fill pair_snapshots + token_trades
     await backfillTraderAddresses(chainId)  // fix historical trader addresses
     await backfillDexBalances(chainId)  // backfill DEX trade balances
   } catch (e) {
     console.error(`Pools pipeline error on chain ${chainId}:`, e)
+  }
+}
+
+// Run app-wide normalization once (not per chain)
+export async function runAppWideNormalization(): Promise<void> {
+  try {
+    await normalizeAppWideAddresses()  // normalize app-wide tables
+  } catch (e) {
+    console.error(`App-wide normalization error:`, e)
   }
 }
