@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     const result = await pool.query(
       `UPDATE tokens
        SET on_dex = true,
+           is_graduated = true,
            dex_listing_url = $1
        WHERE contract_address = $2`,
       [dexUrl, contractAddress]

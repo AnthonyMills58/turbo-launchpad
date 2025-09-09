@@ -148,10 +148,10 @@ export async function discoverDexPools(chainId: number): Promise<void> {
       [t.id, chainId, pair, token0, token1, wethAddr]
     )
 
-    // Optional: reflect on_dex flag
+    // Optional: reflect on_dex flag and graduation status
     await pool.query(
       `UPDATE public.tokens
-       SET on_dex = TRUE, updated_at = NOW()
+       SET on_dex = TRUE, is_graduated = TRUE, updated_at = NOW()
        WHERE id = $1 AND (on_dex IS DISTINCT FROM TRUE)`,
       [t.id]
     )
