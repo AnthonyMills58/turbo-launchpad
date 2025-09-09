@@ -214,6 +214,28 @@ trades AS (
   WHERE tc.chain_id = $1
     AND (tc.ts AT TIME ZONE 'UTC')::date >= (SELECT COALESCE(MIN(day), (NOW() AT TIME ZONE 'UTC')::date) FROM days)
   GROUP BY tc.token_id, (tc.ts AT TIME ZONE 'UTC')::date
+),
+-- Separate CTE for unique traders to avoid the grouping issue
+unique_traders_by_day AS (
+  SELECT
+    tr.token_id,
+    (tr.block_time AT TIME ZONE 'UTC')::date AS day,
+    COUNT(DISTINCT tr.trader) AS unique_traders
+  FROM public.token_trades tr
+  WHERE tr.chain_id = $1
+    AND (tr.block_time AT TIME ZONE 'UTC')::date >= (SELECT COALESCE(MIN(day), (NOW() AT TIME ZONE 'UTC')::date) FROM days)
+  GROUP BY tr.token_id, (tr.block_time AT TIME ZONE 'UTC')::date
+),
+trades_with_traders AS (
+  SELECT
+    t.token_id,
+    t.day,
+    t.trades_count,
+    t.vol_token_wei,
+    t.vol_eth_wei,
+    COALESCE(ut.unique_traders, 0) AS unique_traders
+  FROM trades t
+  LEFT JOIN unique_traders_by_day ut ON ut.token_id = t.token_id AND ut.day = t.day
 )
 INSERT INTO public.token_daily_agg
   (token_id, chain_id, "day",
@@ -233,7 +255,7 @@ SELECT
 FROM days d
 CROSS JOIN toks tok
 LEFT JOIN xfers  x  ON x.token_id = tok.token_id AND x.day = d.day
-LEFT JOIN trades tr ON tr.token_id = tok.token_id AND tr.day = d.day
+LEFT JOIN trades_with_traders tr ON tr.token_id = tok.token_id AND tr.day = d.day
 LEFT JOIN public.tokens t ON t.id = tok.token_id
 ON CONFLICT (token_id, "day") DO UPDATE SET
   transfers        = EXCLUDED.transfers,
