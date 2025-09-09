@@ -415,6 +415,9 @@ export default function TokenPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const selectedId = searchParams.get('selected') // 🔁 now using token ID instead of symbol
+  
+  // Debug logging
+  console.log('[TokenPageContent] selectedId from URL:', selectedId)
 
   const [tokens, setTokens] = useState<Token[]>([])
   const [activeToken, setActiveToken] = useState<Token | null>(null)
@@ -478,6 +481,7 @@ export default function TokenPageContent() {
       setTokens(baseTokens)
 
       const found = baseTokens.find(t => t.id.toString() === selectedId)
+      console.log('[TokenPageContent] Found token for selectedId:', selectedId, '->', found?.id)
       setActiveToken(found ?? null)
       
       // Fetch holder count for the selected token if it exists
@@ -514,7 +518,7 @@ export default function TokenPageContent() {
   }
 
   const backToList = () => {
-    router.push('/')
+    router.push('/') // Navigate to home without selected parameter
   }
 
   useEffect(() => {

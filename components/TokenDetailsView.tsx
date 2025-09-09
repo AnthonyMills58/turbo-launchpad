@@ -51,6 +51,10 @@ export default function TokenDetailsView({
   const syncedTokens = useRef(new Set<number>())
   // Track ongoing sync operations to prevent race conditions
   const syncingTokens = useRef(new Set<number>())
+  // Track last sync time to add debouncing
+  const lastSyncTime = useRef<number>(0)
+  // Track if component is still mounted
+  const isMounted = useRef(true)
 
   const isCreator =
     !!address && address.toLowerCase() === token.creator_wallet.toLowerCase()
@@ -191,6 +195,13 @@ export default function TokenDetailsView({
   useEffect(() => {
     if (!contract_address || !chainId) return
     
+    // Add debouncing - prevent sync if called too recently
+    const now = Date.now()
+    if (now - lastSyncTime.current < 2000) { // 2 second debounce
+      console.log('[TokenDetailsView] Debouncing sync call, too recent')
+      return
+    }
+    
     // Prevent infinite loops - only sync each token once per session
     if (syncedTokens.current.has(token.id)) {
       console.log('[TokenDetailsView] Token already synced this session, skipping')
@@ -203,12 +214,16 @@ export default function TokenDetailsView({
       return
     }
     
+    console.log('[TokenDetailsView] Starting DEX sync for token', token.id, 'at', new Date().toISOString())
+    
     // Two-step process: Check if on DEX, then sync if needed
     const checkAndSyncDex = async () => {
       try {
         // Mark as syncing to prevent race conditions
         syncingTokens.current.add(token.id)
+        lastSyncTime.current = Date.now()
         
+        console.log('[TokenDetailsView] Checking if token is on DEX...')
         // Step 1: Quick client-side check if token is on DEX
         const isOnDex = await checkIfTokenOnDex(contract_address, chainId)
         
@@ -225,8 +240,13 @@ export default function TokenDetailsView({
           if (response.ok) {
             // Mark as synced to prevent future calls
             syncedTokens.current.add(token.id)
-            // Trigger a refresh after successful sync
-            onRefresh()
+            console.log('[TokenDetailsView] DEX sync successful, calling onRefresh...')
+            // Only call onRefresh if component is still mounted
+            if (isMounted.current) {
+              onRefresh()
+            } else {
+              console.log('[TokenDetailsView] Component unmounted, skipping onRefresh')
+            }
           } else {
             console.error('Failed to sync DEX state:', await response.text())
           }
@@ -245,6 +265,13 @@ export default function TokenDetailsView({
     
     checkAndSyncDex()
   }, [contract_address, chainId, onRefresh, token.id])
+
+  // Cleanup effect to track component unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
 
   // Add error boundary for production debugging
   try {
