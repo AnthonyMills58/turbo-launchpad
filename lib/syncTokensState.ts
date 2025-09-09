@@ -2,6 +2,7 @@ import { ethers, formatUnits } from 'ethers'
 import TurboTokenABI from './abi/TurboToken.json'
 import db from './db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from './chains'
+import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from './dex'
 
 type SyncFields = {
   current_price: number
@@ -39,6 +40,47 @@ const rpcUrlsByChainId: Record<number, string> = {
 
 // DISABLED: getTokenHoldersCount function removed
 // Holder count is now only calculated on manual user request via /api/token-holders
+
+/**
+ * Gets DEX price for a graduated token
+ */
+async function getDexPrice(contractAddress: string, chainId: number): Promise<number> {
+  const rpcUrl = rpcUrlsByChainId[chainId]
+  if (!rpcUrl) throw new Error(`Unsupported chain ID: ${chainId}`)
+
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const routerAddress = DEX_ROUTER_BY_CHAIN[chainId]
+  const router = new ethers.Contract(routerAddress, routerAbi, provider)
+
+  const factoryAddress = await router.factory()
+  const wethAddress = await router.WETH()
+  const factory = new ethers.Contract(factoryAddress, factoryAbi, provider)
+  const pairAddress = await factory.getPair(contractAddress, wethAddress)
+
+  if (!pairAddress || pairAddress === ethers.ZeroAddress) {
+    throw new Error('No DEX pair found')
+  }
+
+  const pair = new ethers.Contract(pairAddress, pairAbi, provider)
+  const [reserve0, reserve1] = await pair.getReserves()
+  const token0 = await pair.token0()
+
+  const isWeth0 = token0.toLowerCase() === wethAddress.toLowerCase()
+  const reserveETH = isWeth0 ? reserve0 : reserve1
+  const reserveToken = isWeth0 ? reserve1 : reserve0
+
+  const tokenContract = new ethers.Contract(contractAddress, TurboTokenABI.abi, provider)
+  const decimals = await tokenContract.decimals()
+
+  const tokenAmount = Number(ethers.formatUnits(reserveToken, decimals))
+  const ethAmount = Number(ethers.formatUnits(reserveETH, 18))
+
+  if (tokenAmount === 0) {
+    throw new Error('Token reserve is 0')
+  }
+
+  return ethAmount / tokenAmount
+}
 
 /**
  * Syncs a token's on-chain state to the database
@@ -86,13 +128,27 @@ export async function syncTokenState(
     // Now: Holder count only fetched on manual user request
 
     const totalSupply = Number(totalSupplyRaw) / 1e18
-    const currentPrice = Number(ethers.formatEther(currentPriceRaw))
     const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
     const basePrice = Number(tokenInfoRaw._basePrice)
     const slope = Number(tokenInfoRaw._slope)
     const graduated = tokenInfoRaw._graduated as boolean
     const airdrop_allocations_sum = parseFloat(ethers.formatUnits(unclaimedAirdropAmountRaw, 18))
+
+    // Price calculation: DEX price for graduated tokens, contract price for non-graduated
+    let currentPrice: number
+    if (graduated) {
+      // For graduated tokens, try to get DEX price
+      try {
+        currentPrice = await getDexPrice(contractAddress, chainId)
+      } catch (error) {
+        console.warn(`Failed to get DEX price for graduated token ${contractAddress}, falling back to contract price:`, error)
+        currentPrice = Number(ethers.formatEther(currentPriceRaw))
+      }
+    } else {
+      // For non-graduated tokens, use contract bonding curve price
+      currentPrice = Number(ethers.formatEther(currentPriceRaw))
+    }
 
     const fdv = totalSupply * currentPrice
     const marketCap = (totalSupply - creatorLockAmount) * currentPrice
