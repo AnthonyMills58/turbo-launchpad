@@ -189,6 +189,34 @@ export async function backfillTraderAddresses(chainId: number): Promise<void> {
   
   console.log(`Looking for router address: ${routerAddress}`)
   
+  // First, clean up any reverted transactions from existing records
+  const providerForCleanup = providerFor(chainId)
+  const { rows: allTrades } = await pool.query(
+    `SELECT tx_hash FROM public.token_trades WHERE chain_id = $1 AND src = 'DEX'`,
+    [chainId]
+  )
+  
+  let revertedCount = 0
+  for (const trade of allTrades) {
+    try {
+      const receipt = await providerForCleanup.getTransactionReceipt(trade.tx_hash)
+      if (receipt && receipt.status !== 1) {
+        await pool.query(
+          `DELETE FROM public.token_trades WHERE chain_id = $1 AND tx_hash = $2`,
+          [chainId, trade.tx_hash]
+        )
+        revertedCount++
+        console.log(`Removed reverted transaction: ${trade.tx_hash}`)
+      }
+    } catch (error) {
+      console.warn(`Failed to check transaction status for ${trade.tx_hash}:`, error)
+    }
+  }
+  
+  if (revertedCount > 0) {
+    console.log(`Cleaned up ${revertedCount} reverted transactions`)
+  }
+  
   // Get all token_trades records that have the router address as trader (case insensitive)
   const { rows: tradesToFix } = await pool.query(
     `SELECT token_id, tx_hash, log_index, trader
@@ -352,6 +380,13 @@ export async function processDexPools(chainId: number): Promise<void> {
           // Get the actual trader from the transaction sender, not the Swap event 'to' address
           const tx = await provider.getTransaction(log.transactionHash!)
           const actualTrader = tx?.from || ethers.getAddress('0x' + log.topics[2].slice(26))
+          
+          // Check if transaction was successful (not reverted)
+          const receipt = await provider.getTransactionReceipt(log.transactionHash!)
+          if (receipt && receipt.status !== 1) {
+            console.log(`Skipping reverted transaction: ${log.transactionHash}`)
+            continue
+          }
           
           const [a0In, a1In, a0Out, a1Out] =
             ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256','uint256'], log.data)
