@@ -50,6 +50,12 @@ export type Token = {
   holder_count?: number
   holder_count_updated_at?: string
   
+  // Volume and liquidity tracking
+  volume_24h_eth?: number
+  volume_24h_updated_at?: string
+  liquidity_eth?: number
+  liquidity_usd?: number
+  
 }
 
 

@@ -161,6 +161,8 @@ ON CONFLICT (token_id, "interval", ts) DO UPDATE SET
 
 // -------------------- 3) Daily aggregates --------------------
 async function refreshDailyAgg(chainId: number): Promise<void> {
+  console.log(`\n=== Daily aggregates: chain ${chainId} ===`)
+  
   const sql = `
 WITH last_day AS (
   SELECT COALESCE(
@@ -175,7 +177,7 @@ WITH last_day AS (
 days AS (
   SELECT generate_series(
     (SELECT d FROM last_day)::date + 1,
-    (NOW() AT TIME ZONE 'UTC')::date,
+    (NOW() AT TIME ZONE 'UTC')::date + INTERVAL '1 day',  -- Include today
     interval '1 day'
   )::date AS day
 ),
@@ -196,16 +198,22 @@ xfers AS (
 ),
 trades AS (
   SELECT
-    tr.token_id,
-    (tr.block_time AT TIME ZONE 'UTC')::date AS day,
-    COUNT(*) AS trades_count,
-    COALESCE(SUM(tr.amount_token_wei), 0) AS vol_token_wei,
-    COALESCE(SUM(tr.amount_eth_wei),   0) AS vol_eth_wei,
-    COUNT(DISTINCT tr.trader) AS unique_traders
-  FROM public.token_trades tr
-  WHERE tr.chain_id = $1
-    AND (tr.block_time AT TIME ZONE 'UTC')::date >= (SELECT COALESCE(MIN(day), (NOW() AT TIME ZONE 'UTC')::date) FROM days)
-  GROUP BY tr.token_id, (tr.block_time AT TIME ZONE 'UTC')::date
+    tc.token_id,
+    (tc.ts AT TIME ZONE 'UTC')::date AS day,
+    SUM(tc.trades_count) AS trades_count,
+    COALESCE(SUM(tc.volume_token_wei), 0) AS vol_token_wei,
+    COALESCE(SUM(tc.volume_eth_wei),   0) AS vol_eth_wei,
+    -- For unique traders, we need to get this from token_trades since candles don't have trader info
+    (SELECT COUNT(DISTINCT tr.trader) 
+     FROM public.token_trades tr 
+     WHERE tr.chain_id = $1 
+       AND tr.token_id = tc.token_id 
+       AND (tr.block_time AT TIME ZONE 'UTC')::date = (tc.ts AT TIME ZONE 'UTC')::date
+    ) AS unique_traders
+  FROM public.token_candles tc
+  WHERE tc.chain_id = $1
+    AND (tc.ts AT TIME ZONE 'UTC')::date >= (SELECT COALESCE(MIN(day), (NOW() AT TIME ZONE 'UTC')::date) FROM days)
+  GROUP BY tc.token_id, (tc.ts AT TIME ZONE 'UTC')::date
 )
 INSERT INTO public.token_daily_agg
   (token_id, chain_id, "day",
@@ -236,7 +244,18 @@ ON CONFLICT (token_id, "day") DO UPDATE SET
   volume_eth_wei   = EXCLUDED.volume_eth_wei,
   holders_count    = EXCLUDED.holders_count;
   `
-  await pool.query(sql, [chainId])
+  const result = await pool.query(sql, [chainId])
+  console.log(`Daily aggregates processed: ${result.rowCount} rows inserted/updated`)
+  
+  // Debug: Check what was actually inserted for today
+  const debugQuery = `
+    SELECT token_id, day, volume_eth_wei, volume_token_wei, unique_traders
+    FROM public.token_daily_agg 
+    WHERE chain_id = $1 AND day = CURRENT_DATE
+    ORDER BY token_id
+  `
+  const { rows: debugRows } = await pool.query(debugQuery, [chainId])
+  console.log(`Today's daily aggregations:`, debugRows)
 }
 
 // -------------------- 4) Token summary cache (current price, liquidity, FDV, mcap, volume, on_dex) --------------------
@@ -294,6 +313,23 @@ async function refreshTokenSummariesForChain(chainId: number): Promise<void> {
     bonding_price: r.bonding_price,
     final_price: r.snapshot_price || r.trade_price || r.bonding_price || (r.base_price ? (Number(r.base_price) / 1e18).toString() : null)
   })))
+  
+  // Debug: Check daily volume data before update
+  const volumeDebugQuery = `
+    SELECT 
+      tda.token_id,
+      tda.day,
+      tda.volume_eth_wei,
+      tda.volume_eth_wei / power(10::numeric, 18) AS volume_24h_eth,
+      tda.unique_traders
+    FROM public.token_daily_agg tda
+    WHERE tda.chain_id = $1 
+      AND tda.day = CURRENT_DATE
+      AND tda.volume_eth_wei > 0
+    ORDER BY tda.token_id
+  `
+  const { rows: volumeDebugRows } = await pool.query(volumeDebugQuery, [chainId])
+  console.log('Daily volume data for today:', volumeDebugRows)
   
   const sql = `
 WITH ep AS (
@@ -430,7 +466,18 @@ LEFT JOIN has_pool hp ON hp.token_id = ps.token_id AND hp.chain_id = ps.chain_id
 LEFT JOIN daily_volume dv ON dv.token_id = ps.token_id
 WHERE t.id = ps.token_id AND t.chain_id = $1;
   `
-  await pool.query(sql, [chainId])
+  const result = await pool.query(sql, [chainId])
+  console.log(`Token summaries updated: ${result.rowCount} rows`)
+  
+  // Debug: Check final volume values
+  const finalVolumeQuery = `
+    SELECT id, name, volume_24h_eth, volume_24h_updated_at, on_dex
+    FROM public.tokens 
+    WHERE chain_id = $1 AND volume_24h_eth IS NOT NULL
+    ORDER BY id
+  `
+  const { rows: finalVolumeRows } = await pool.query(finalVolumeQuery, [chainId])
+  console.log('Final volume values in tokens table:', finalVolumeRows)
 }
 
 // -------------------- Public API --------------------

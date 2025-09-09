@@ -327,7 +327,13 @@ const TokenCard = memo(({
             <div className="bg-[#23263a] rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Volume</span>
-                <span className="text-sm font-semibold text-white">—</span>
+                <span className="text-sm font-semibold text-white">
+                  {token.volume_24h_eth !== undefined && token.volume_24h_eth !== null && usdPrice ? (
+                    formatUSDValue(token.volume_24h_eth, usdPrice)
+                  ) : (
+                    '—'
+                  )}
+                </span>
               </div>
             </div>
             
@@ -335,7 +341,13 @@ const TokenCard = memo(({
             <div className="bg-[#23263a] rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Liquidity</span>
-                <span className="text-sm font-semibold text-white">—</span>
+                <span className="text-sm font-semibold text-white">
+                  {token.liquidity_eth !== undefined && token.liquidity_eth !== null && usdPrice ? (
+                    formatUSDValue(token.liquidity_eth, usdPrice)
+                  ) : (
+                    '—'
+                  )}
+                </span>
               </div>
             </div>
           </div>
