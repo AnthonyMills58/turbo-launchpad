@@ -223,8 +223,9 @@ export async function backfillTraderAddresses(chainId: number): Promise<void> {
       )
       
       if (swapLog) {
-        // Extract the correct trader address (to address from Swap event)
-        const correctTrader = ethers.getAddress('0x' + swapLog.topics[2].slice(26))
+        // The real trader is the transaction sender, not the 'to' address in Swap event
+        // For both BUY and SELL operations, the transaction sender is the actual trader
+        const correctTrader = tx.from
         
         // Update the record using composite key
         await pool.query(
@@ -348,7 +349,10 @@ export async function processDexPools(chainId: number): Promise<void> {
             ]
           )
         } else if (log.topics[0] === SWAP_TOPIC) {
-          const to = ethers.getAddress('0x' + log.topics[2].slice(26))
+          // Get the actual trader from the transaction sender, not the Swap event 'to' address
+          const tx = await provider.getTransaction(log.transactionHash!)
+          const actualTrader = tx?.from || ethers.getAddress('0x' + log.topics[2].slice(26))
+          
           const [a0In, a1In, a0Out, a1Out] =
             ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256','uint256'], log.data)
 
@@ -385,7 +389,7 @@ export async function processDexPools(chainId: number): Promise<void> {
             [
               p.token_id, p.chain_id,
               log.transactionHash!, log.index!,
-              bn, block_time, side, to,
+              bn, block_time, side, actualTrader,
               tokenWei.toString(), quoteWei.toString(), price_eth_per_token
             ]
           )
