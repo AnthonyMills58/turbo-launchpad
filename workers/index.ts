@@ -547,26 +547,40 @@ async function consolidateGraduationTransactions(chainId: number) {
 async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
   
-  // First, clean up duplicate records in token_trades with 1970 timestamps
+  // First, clean up duplicate records in token_trades
+  // Keep records with 1970 timestamps (they have correct data) and remove duplicates with proper timestamps
   const { rows: duplicateCount } = await pool.query(
     `SELECT COUNT(*) as count
-     FROM public.token_trades 
-     WHERE chain_id = $1 AND block_time < '1980-01-01'`,
+     FROM (
+       SELECT tx_hash, log_index, COUNT(*) as cnt
+       FROM public.token_trades 
+       WHERE chain_id = $1
+       GROUP BY tx_hash, log_index
+       HAVING COUNT(*) > 1
+     ) duplicates`,
     [chainId]
   )
   
   const duplicateCountNum = parseInt(duplicateCount[0].count)
-  console.log(`Found ${duplicateCountNum} records with 1970 timestamps in token_trades`)
+  console.log(`Found ${duplicateCountNum} duplicate records in token_trades`)
   
   if (duplicateCountNum > 0) {
-    // Remove records with 1970 timestamps (these are likely duplicates or errors)
+    // Remove duplicate records, keeping the ones with 1970 timestamps (they have correct data)
     const { rowCount: removedDuplicates } = await pool.query(
       `DELETE FROM public.token_trades 
-       WHERE chain_id = $1 AND block_time < '1980-01-01'`,
+       WHERE chain_id = $1 
+       AND (tx_hash, log_index) IN (
+         SELECT tx_hash, log_index
+         FROM public.token_trades 
+         WHERE chain_id = $1
+         GROUP BY tx_hash, log_index
+         HAVING COUNT(*) > 1
+       )
+       AND block_time >= '1980-01-01'`,
       [chainId]
     )
     
-    console.log(`Removed ${removedDuplicates} records with 1970 timestamps from token_trades`)
+    console.log(`Removed ${removedDuplicates} duplicate records with proper timestamps from token_trades`)
   }
   
   // Count overlapping records first
