@@ -353,7 +353,7 @@ async function identifyTransferType(
 async function consolidateGraduationTransactions(chainId: number) {
   console.log(`\n=== Consolidating graduation transactions for chain ${chainId} ===`)
   
-  // Find all transactions with multiple records (these are graduation transactions)
+  // Find all transactions with multiple records in token_transfers (these are graduation transactions)
   const { rows: graduationCandidates } = await pool.query(
     `SELECT 
        tx_hash,
@@ -370,8 +370,27 @@ async function consolidateGraduationTransactions(chainId: number) {
     [chainId]
   )
   
-  console.log(`Found ${graduationCandidates.length} graduation transactions (tx_hash with multiple records)`)
+  console.log(`Found ${graduationCandidates.length} graduation transactions in token_transfers (tx_hash with multiple records)`)
   
+  // Also find graduation transactions that have been moved to token_trades
+  const { rows: tradesGraduationCandidates } = await pool.query(
+    `SELECT 
+       tx_hash,
+       COUNT(*) as record_count,
+       MIN(block_number) as block_number,
+       MIN(block_time) as block_time,
+       MIN(token_id) as token_id
+     FROM public.token_trades 
+     WHERE chain_id = $1
+     GROUP BY tx_hash
+     HAVING COUNT(*) > 1
+     ORDER BY block_number DESC`,
+    [chainId]
+  )
+  
+  console.log(`Found ${tradesGraduationCandidates.length} graduation transactions in token_trades (tx_hash with multiple records)`)
+  
+  // Process graduation transactions from token_transfers
   for (const candidate of graduationCandidates) {
     try {
       // Get all transfer records for this transaction
@@ -382,7 +401,7 @@ async function consolidateGraduationTransactions(chainId: number) {
         [chainId, candidate.tx_hash]
       )
       
-      console.log(`Consolidating graduation transaction: ${candidate.tx_hash} (${transfers.length} records)`)
+      console.log(`Consolidating graduation transaction from token_transfers: ${candidate.tx_hash} (${transfers.length} records)`)
       
       // Find the first bonding curve operation (BUY or BUY&LOCK) that triggered graduation
       // This is the mint to user with ETH value (could be regular BUY or creator BUY&LOCK)
@@ -444,9 +463,82 @@ async function consolidateGraduationTransactions(chainId: number) {
         [chainId, candidate.tx_hash]
       )
       
-      console.log(`Consolidated graduation: ${candidate.tx_hash}, eth=${totalEthWei.toString()}, tokens=${totalTokens.toString()}`)
+      console.log(`Consolidated graduation from token_transfers: ${candidate.tx_hash}, eth=${totalEthWei.toString()}, tokens=${totalTokens.toString()}`)
     } catch (e) {
       console.warn(`Could not consolidate graduation transaction ${candidate.tx_hash}:`, e)
+    }
+  }
+  
+  // Process graduation transactions from token_trades
+  for (const candidate of tradesGraduationCandidates) {
+    try {
+      // Get all trade records for this transaction
+      const { rows: trades } = await pool.query(
+        `SELECT * FROM public.token_trades 
+         WHERE chain_id = $1 AND tx_hash = $2 
+         ORDER BY log_index`,
+        [chainId, candidate.tx_hash]
+      )
+      
+      console.log(`Consolidating graduation transaction from token_trades: ${candidate.tx_hash} (${trades.length} records)`)
+      
+      // Find the first trade that represents the actual graduation (usually a BUY)
+      const firstTrade = trades.find(t => t.side === 'BUY')
+      
+      if (!firstTrade) {
+        console.log(`No BUY trade found in graduation transaction: ${candidate.tx_hash}`)
+        continue
+      }
+      
+      // Get token contract address
+      const { rows: tokenRows } = await pool.query(
+        'SELECT contract_address FROM public.tokens WHERE id = $1',
+        [candidate.token_id]
+      )
+      
+      if (tokenRows.length === 0) {
+        console.log(`Token ${candidate.token_id} not found for graduation consolidation`)
+        continue
+      }
+      
+      const contractAddress = tokenRows[0].contract_address
+      
+      // Create single graduation record in token_transfers
+      await pool.query(
+        `INSERT INTO public.token_transfers
+           (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+           amount_eth_wei = EXCLUDED.amount_eth_wei,
+           price_eth_per_token = EXCLUDED.price_eth_per_token,
+           side = EXCLUDED.side`,
+        [
+          candidate.token_id, 
+          chainId, 
+          contractAddress, 
+          candidate.block_number, 
+          candidate.block_time, 
+          candidate.tx_hash, 
+          0, // Use log_index 0 for consolidated record
+          firstTrade.trader, 
+          contractAddress, // To contract (graduation target)
+          firstTrade.amount_token_wei, 
+          firstTrade.amount_eth_wei, 
+          firstTrade.price_eth_per_token,
+          'GRADUATION'
+        ]
+      )
+      
+      // Remove all trade records for this graduation transaction
+      await pool.query(
+        `DELETE FROM public.token_trades 
+         WHERE chain_id = $1 AND tx_hash = $2`,
+        [chainId, candidate.tx_hash]
+      )
+      
+      console.log(`Consolidated graduation from token_trades: ${candidate.tx_hash}, eth=${firstTrade.amount_eth_wei}, tokens=${firstTrade.amount_token_wei}`)
+    } catch (e) {
+      console.warn(`Could not consolidate graduation transaction from token_trades ${candidate.tx_hash}:`, e)
     }
   }
 }
