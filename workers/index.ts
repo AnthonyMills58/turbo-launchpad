@@ -430,15 +430,19 @@ async function consolidateGraduationTransactions(chainId: number) {
       // Get transaction details for from/to addresses
       const firstTransfer = transfers[0]
       
-      // Create single graduation record
+      // Remove ALL records with same tx_hash (including UNLOCK records)
+      // Then insert only the GRADUATION record
+      await pool.query(
+        `DELETE FROM public.token_transfers 
+         WHERE chain_id = $1 AND tx_hash = $2`,
+        [chainId, candidate.tx_hash]
+      )
+      
+      // Now insert the GRADUATION record
       await pool.query(
         `INSERT INTO public.token_transfers
            (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-         ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
-           amount_eth_wei = EXCLUDED.amount_eth_wei,
-           price_eth_per_token = EXCLUDED.price_eth_per_token,
-           side = EXCLUDED.side`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [
           candidate.token_id, 
           chainId, 
@@ -455,33 +459,6 @@ async function consolidateGraduationTransactions(chainId: number) {
           'GRADUATION'
         ]
       )
-      
-      // Remove ALL individual transfer records with same tx_hash (including UNLOCK records)
-      // Keep only the GRADUATION record we just created (log_index = 0)
-      
-      // Debug: Check what records exist before deletion
-      const { rows: beforeDelete } = await pool.query(
-        `SELECT log_index, side, amount_wei FROM public.token_transfers 
-         WHERE chain_id = $1 AND tx_hash = $2 ORDER BY log_index`,
-        [chainId, candidate.tx_hash]
-      )
-      console.log(`Before deletion for ${candidate.tx_hash}:`, beforeDelete)
-      
-      const deleteResult = await pool.query(
-        `DELETE FROM public.token_transfers 
-         WHERE chain_id = $1 AND tx_hash = $2 AND log_index != 0`,
-        [chainId, candidate.tx_hash]
-      )
-      
-      console.log(`Deleted ${deleteResult.rowCount} records for graduation ${candidate.tx_hash}`)
-      
-      // Debug: Check what records exist after deletion
-      const { rows: afterDelete } = await pool.query(
-        `SELECT log_index, side, amount_wei FROM public.token_transfers 
-         WHERE chain_id = $1 AND tx_hash = $2 ORDER BY log_index`,
-        [chainId, candidate.tx_hash]
-      )
-      console.log(`After deletion for ${candidate.tx_hash}:`, afterDelete)
       
       console.log(`Consolidated graduation from token_transfers: ${candidate.tx_hash}, eth=${totalEthWei.toString()}, tokens=${totalTokens.toString()}`)
     } catch (e) {
