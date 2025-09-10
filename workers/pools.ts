@@ -424,7 +424,7 @@ export async function processDexPools(chainId: number): Promise<void> {
                 block_number, block_time, side, trader,
                 amount_token_wei, amount_eth_wei, price_eth_per_token)
              VALUES ($1,$2,'DEX',$3,$4,$5,$6,$7,$8,$9,$10,$11)
-             ON CONFLICT DO NOTHING`,
+             ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
             [
               p.token_id, p.chain_id,
               log.transactionHash!, log.index!,
