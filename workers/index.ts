@@ -5,11 +5,10 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { runPoolsPipelineForChain, runAppWideNormalization } from './pools'
 import { runAggPipelineForChain } from './agg'
-// Processing modules - will be integrated after removing duplicate functions
-// import { processTransferLogs } from './processing/transferProcessor'
-// import { consolidateGraduationTransactions } from './processing/graduationProcessor'
-// import { cleanupOverlappingTransfers } from './processing/cleanupProcessor'
-// import { moveDexTradesToCorrectTable, convertTransfersToDexTrades } from './processing/dexProcessor'
+// import { processTransferLogs } from './processing/transferProcessor' // Will be used in Phase 4
+import { consolidateGraduationTransactions as consolidateGraduationTransactionsModule } from './processing/graduationProcessor'
+import { cleanupOverlappingTransfers as cleanupOverlappingTransfersModule } from './processing/cleanupProcessor'
+import { moveDexTradesToCorrectTable as moveDexTradesToCorrectTableModule, convertTransfersToDexTrades as convertTransfersToDexTradesModule } from './processing/dexProcessor'
 import { 
   TRANSFER_TOPIC, 
   ZERO, 
@@ -1651,6 +1650,55 @@ main().catch(err => {
   console.error(err)
   process.exit(1)
 })
+
+// ==================== PROCESSING MODULE WRAPPERS ====================
+// These functions delegate to the processing modules for cleaner code organization
+
+// Wrapper for graduation consolidation
+export async function consolidateGraduationTransactionsWrapper(chainId: number) {
+  return await consolidateGraduationTransactionsModule(chainId)
+}
+
+// Wrapper for cleanup operations
+export async function cleanupOverlappingTransfersWrapper(chainId: number) {
+  return await cleanupOverlappingTransfersModule(chainId)
+}
+
+// Wrapper for DEX trade operations
+export async function moveDexTradesToCorrectTableWrapper(
+  tradeRows: Array<{
+    token_id: number
+    tx_hash: string
+    log_index: number
+    side: string
+    amount_wei: string
+    amount_eth_wei: string
+    price_eth_per_token: number
+    block_number: number
+    block_time: Date
+  }>,
+  chainId: number,
+  provider: ethers.JsonRpcProvider
+) {
+  return await moveDexTradesToCorrectTableModule(tradeRows, chainId, provider)
+}
+
+// Wrapper for transfer conversion
+export async function convertTransfersToDexTradesWrapper(
+  transferRows: Array<{
+    token_id: number
+    tx_hash: string
+    log_index: number
+    amount_wei: string
+    block_number: number
+    block_time: Date
+    contract_address: string
+  }>,
+  chainId: number,
+  provider: ethers.JsonRpcProvider
+) {
+  return await convertTransfersToDexTradesModule(transferRows, chainId, provider)
+}
 
 
 
