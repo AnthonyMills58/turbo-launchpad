@@ -898,11 +898,11 @@ async function convertTransfersToDexTrades(transferRows: { token_id: number; tx_
         if (amount1Out > 0n && amount0In > 0n) { 
           side = 'BUY';  
           ethAmount = amount0In; 
-          price = Number(ethAmount) / Number(row.amount_wei)
+        price = Number(ethAmount) / Number(row.amount_wei)
         } else { 
           side = 'SELL'; 
           ethAmount = amount0Out; 
-          price = Number(ethAmount) / Number(row.amount_wei)
+        price = Number(ethAmount) / Number(row.amount_wei)
         }
       } else {
         // quote = token1, token = token0
@@ -962,11 +962,11 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   
   const baseQuery = `
     SELECT tx_hash, log_index, amount_wei, token_id, side, from_address, to_address, contract_address, amount_eth_wei, price_eth_per_token, block_number, block_time
-    FROM public.token_transfers 
-    WHERE chain_id = $1 AND (
-      amount_eth_wei IS NULL OR 
-      price_eth_per_token IS NULL OR 
-      side IN ('OTHER', 'TRANSFER') OR
+     FROM public.token_transfers 
+     WHERE chain_id = $1 AND (
+       amount_eth_wei IS NULL OR 
+       price_eth_per_token IS NULL OR 
+       side IN ('OTHER', 'TRANSFER') OR
       (side = 'GRADUATION' AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)) OR
       (side = 'BUY' AND amount_eth_wei IS NOT NULL AND price_eth_per_token IS NOT NULL)
     )
@@ -985,7 +985,7 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   const transferRows = rows.filter(row => row.side === 'TRANSFER')
   if (transferRows.length > 0) {
     console.log(`\n=== Converting ${transferRows.length} TRANSFER records to DEX trades ===`)
-    await convertTransfersToDexTrades(transferRows, chainId, provider)
+    await convertTransfersToDexTradesWrapper(transferRows, chainId, provider)
   }
   
   // Also handle BUY records that are in token_transfers but should be in token_trades
@@ -1004,7 +1004,7 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   
   if (dexTradeRows.length > 0) {
     console.log(`\n=== Moving ${dexTradeRows.length} BUY records from token_transfers to token_trades ===`)
-    await moveDexTradesToCorrectTable(dexTradeRows, chainId, provider)
+    await moveDexTradesToCorrectTableWrapper(dexTradeRows, chainId, provider)
   }
   
   console.log(`\n=== Processing ${rows.length} remaining records in main loop ===`)
@@ -1598,7 +1598,7 @@ async function main() {
     for (const [chainId] of chainsToProcess) {
       console.log(`\n=== Consolidating graduation transactions: chain ${chainId} ===`)
       try {
-        await consolidateGraduationTransactions(chainId)
+        await consolidateGraduationTransactionsWrapper(chainId)
       } catch (e) {
         console.error(`Chain ${chainId}: graduation consolidation failed with`, e)
         // continue to next chain
@@ -1620,7 +1620,7 @@ async function main() {
     for (const [chainId] of chainsToProcess) {
       console.log(`\n=== Cleanup overlapping transfers: chain ${chainId} ===`)
       try {
-        await cleanupOverlappingTransfers(chainId)
+        await cleanupOverlappingTransfersWrapper(chainId)
       } catch (e) {
         console.error(`Chain ${chainId}: cleanup failed with`, e)
         // continue to next chain
