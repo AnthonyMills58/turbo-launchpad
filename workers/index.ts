@@ -456,7 +456,7 @@ async function consolidateGraduationTransactions(chainId: number) {
         ]
       )
       
-      // Remove the individual transfer records (including UNLOCK records from same tx)
+      // Remove ALL individual transfer records with same tx_hash (including UNLOCK records)
       await pool.query(
         `DELETE FROM public.token_transfers 
          WHERE chain_id = $1 AND tx_hash = $2 AND log_index > 0`,
@@ -548,14 +548,14 @@ async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
   
   // First, clean up duplicate records in token_trades
-  // For duplicates, keep the one with the highest block_number (most recent/correct)
+  // For duplicates with same tx_hash, log_index, block_number, amount - keep the one with proper timestamp
   const { rows: duplicateCount } = await pool.query(
     `SELECT COUNT(*) as count
      FROM (
-       SELECT tx_hash, log_index, COUNT(*) as cnt
+       SELECT tx_hash, log_index, block_number, amount_token_wei, COUNT(*) as cnt
        FROM public.token_trades 
        WHERE chain_id = $1
-       GROUP BY tx_hash, log_index
+       GROUP BY tx_hash, log_index, block_number, amount_token_wei
        HAVING COUNT(*) > 1
      ) duplicates`,
     [chainId]
@@ -565,28 +565,22 @@ async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`Found ${duplicateCountNum} duplicate records in token_trades`)
   
   if (duplicateCountNum > 0) {
-    // Remove duplicate records, keeping the one with the highest block_number
+    // Remove duplicate records, keeping the one with proper timestamp (not 1970)
     const { rowCount: removedDuplicates } = await pool.query(
       `DELETE FROM public.token_trades 
        WHERE chain_id = $1 
-       AND (tx_hash, log_index) IN (
-         SELECT tx_hash, log_index
+       AND (tx_hash, log_index, block_number, amount_token_wei) IN (
+         SELECT tx_hash, log_index, block_number, amount_token_wei
          FROM public.token_trades 
          WHERE chain_id = $1
-         GROUP BY tx_hash, log_index
+         GROUP BY tx_hash, log_index, block_number, amount_token_wei
          HAVING COUNT(*) > 1
        )
-       AND (tx_hash, log_index, block_number) NOT IN (
-         SELECT tx_hash, log_index, MAX(block_number)
-         FROM public.token_trades 
-         WHERE chain_id = $1
-         GROUP BY tx_hash, log_index
-         HAVING COUNT(*) > 1
-       )`,
+       AND block_time < '1980-01-01'`,
       [chainId]
     )
     
-    console.log(`Removed ${removedDuplicates} duplicate records from token_trades, keeping highest block_number`)
+    console.log(`Removed ${removedDuplicates} duplicate records with 1970 timestamps from token_trades`)
   }
   
   // Count overlapping records first
