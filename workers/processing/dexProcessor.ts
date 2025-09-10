@@ -88,25 +88,24 @@ export async function moveDexTradesToCorrectTable(
       // Insert into token_trades table
       const insertQuery = `
         INSERT INTO public.token_trades
-          (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_token_wei, amount_eth_wei, price_eth_per_token, side)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          (token_id, chain_id, src, tx_hash, log_index, block_number, block_time, side, trader, amount_token_wei, amount_eth_wei, price_eth_per_token)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING
       `
       
       await pool.query(insertQuery, [
         row.token_id,
         chainId,
-        tx.to, // Contract address from transaction
-        row.block_number,
-        row.block_time,
+        'DEX', // src
         row.tx_hash,
         row.log_index,
-        tx.from, // From address from transaction
-        tx.to,   // To address from transaction
+        row.block_number,
+        row.block_time,
+        row.side,
+        tx.from, // trader (user address)
         row.amount_wei,
         row.amount_eth_wei,
-        row.price_eth_per_token,
-        row.side
+        row.price_eth_per_token
       ])
       
       // Remove from token_transfers
@@ -281,23 +280,22 @@ export async function convertTransfersToDexTrades(
       // Insert into token_trades
       await pool.query(
         `INSERT INTO public.token_trades
-          (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_token_wei, amount_eth_wei, price_eth_per_token, side)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          (token_id, chain_id, src, tx_hash, log_index, block_number, block_time, side, trader, amount_token_wei, amount_eth_wei, price_eth_per_token)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
         [
           row.token_id,
           chainId,
-          row.contract_address,
-          row.block_number,
-          row.block_time,
+          'DEX', // src
           row.tx_hash,
           row.log_index,
-          tx.from,
-          tx.to,
+          row.block_number,
+          row.block_time,
+          side,
+          tx.from, // trader (user address)
           row.amount_wei,
           ethAmount.toString(),
-          price,
-          side
+          price
         ]
       )
       
