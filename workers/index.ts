@@ -5,6 +5,11 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { runPoolsPipelineForChain, runAppWideNormalization } from './pools'
 import { runAggPipelineForChain } from './agg'
+// Processing modules will be integrated in next step
+// import { processTransferLogs } from './processing/transferProcessor'
+// import { consolidateGraduationTransactions } from './processing/graduationProcessor'
+// import { cleanupOverlappingTransfers } from './processing/cleanupProcessor'
+// import { moveDexTradesToCorrectTable, convertTransfersToDexTrades } from './processing/dexProcessor'
 import { 
   TRANSFER_TOPIC, 
   ZERO, 
