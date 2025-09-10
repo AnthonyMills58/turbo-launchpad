@@ -706,13 +706,14 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   console.log(`\n=== Backfilling transfer prices for chain ${chainId} ===`)
   
   const { rows } = await pool.query(
-    `SELECT tx_hash, log_index, amount_wei, token_id, side, from_address, to_address, contract_address
+    `SELECT tx_hash, log_index, amount_wei, token_id, side, from_address, to_address, contract_address, amount_eth_wei, price_eth_per_token, block_number, block_time
      FROM public.token_transfers 
      WHERE chain_id = $1 AND (
        amount_eth_wei IS NULL OR 
        price_eth_per_token IS NULL OR 
        side IN ('OTHER', 'TRANSFER') OR
-       (side = 'GRADUATION' AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL))
+       (side = 'GRADUATION' AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)) OR
+       (side = 'BUY' AND amount_eth_wei IS NOT NULL AND price_eth_per_token IS NOT NULL)
      )
      ORDER BY block_number DESC 
      LIMIT 100`,
@@ -728,21 +729,22 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
     await convertTransfersToDexTrades(transferRows, chainId, provider)
   }
   
-  // Also handle BUY/SELL records that are in token_transfers but should be in token_trades
-  // These are likely DEX operations that were misclassified during initial processing
+  // Also handle BUY records that are in token_transfers but should be in token_trades
+  // These are DEX operations that were misclassified during initial processing
+  // Note: SELL operations in token_transfers are bonding curve operations, not DEX
   const dexTradeRows = rows.filter(row => 
-    (row.side === 'BUY' || row.side === 'SELL') && 
+    row.side === 'BUY' && 
     row.amount_eth_wei && 
     row.price_eth_per_token
   )
   
-  console.log(`\n=== Found ${dexTradeRows.length} BUY/SELL records to potentially move ===`)
+  console.log(`\n=== Found ${dexTradeRows.length} BUY records to potentially move ===`)
   for (const row of dexTradeRows) {
     console.log(`  ${row.side}: token ${row.token_id}, tx ${row.tx_hash}, block ${row.block_number}, eth ${row.amount_eth_wei}, price ${row.price_eth_per_token}`)
   }
   
   if (dexTradeRows.length > 0) {
-    console.log(`\n=== Moving ${dexTradeRows.length} BUY/SELL records from token_transfers to token_trades ===`)
+    console.log(`\n=== Moving ${dexTradeRows.length} BUY records from token_transfers to token_trades ===`)
     await moveDexTradesToCorrectTable(dexTradeRows, chainId, provider)
   }
   
