@@ -241,8 +241,8 @@ export async function convertTransfersToDexTrades(
         continue
       }
       
-      const pool = poolInfo[0]
-      const isQuoteToken0 = pool.quote_token.toLowerCase() === pool.token0.toLowerCase()
+      const poolData = poolInfo[0]
+      const isQuoteToken0 = poolData.quote_token.toLowerCase() === poolData.token0.toLowerCase()
       
       // Determine if this is a buy or sell based on swap amounts
       let side: string
