@@ -326,6 +326,7 @@ async function identifyTransferType(
 // Consolidate graduation transactions into single records
 // NOTE: This function has been moved to processing/graduationProcessor.ts
 // The wrapper function consolidateGraduationTransactionsWrapper() is used instead
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function consolidateGraduationTransactions(chainId: number) {
   console.log(`\n=== Consolidating graduation transactions for chain ${chainId} ===`)
   
@@ -519,6 +520,7 @@ async function consolidateGraduationTransactions(chainId: number) {
 // Clean up overlapping records between token_transfers and token_trades
 // NOTE: This function has been moved to processing/cleanupProcessor.ts
 // The wrapper function cleanupOverlappingTransfersWrapper() is used instead
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
   
@@ -684,6 +686,7 @@ async function cleanupOverlappingTransfers(chainId: number) {
 // Move BUY/SELL records from token_transfers to token_trades (only DEX operations)
 // NOTE: This function has been moved to processing/dexProcessor.ts
 // The wrapper function moveDexTradesToCorrectTableWrapper() is used instead
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function moveDexTradesToCorrectTable(tradeRows: { token_id: number; tx_hash: string; log_index: number; side: string; amount_wei: string; amount_eth_wei: string; price_eth_per_token: number; block_number: number; block_time: Date }[], chainId: number, provider: ethers.JsonRpcProvider) {
   console.log(`\n=== Moving ${tradeRows.length} BUY/SELL records from token_transfers to token_trades ===`)
   
@@ -792,6 +795,7 @@ async function moveDexTradesToCorrectTable(tradeRows: { token_id: number; tx_has
 // Convert TRANSFER records to DEX trades
 // NOTE: This function has been moved to processing/dexProcessor.ts
 // The wrapper function convertTransfersToDexTradesWrapper() is used instead
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function convertTransfersToDexTrades(transferRows: { token_id: number; tx_hash: string; log_index: number; amount_wei: string; block_number: number; block_time: Date; contract_address: string }[], chainId: number, provider: ethers.JsonRpcProvider) {
   for (const row of transferRows) {
     try {
