@@ -548,7 +548,7 @@ async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
   
   // First, clean up duplicate records in token_trades
-  // Keep records with 1970 timestamps (they have correct data) and remove duplicates with proper timestamps
+  // For duplicates, keep the one with the highest block_number (most recent/correct)
   const { rows: duplicateCount } = await pool.query(
     `SELECT COUNT(*) as count
      FROM (
@@ -565,7 +565,7 @@ async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`Found ${duplicateCountNum} duplicate records in token_trades`)
   
   if (duplicateCountNum > 0) {
-    // Remove duplicate records, keeping the ones with 1970 timestamps (they have correct data)
+    // Remove duplicate records, keeping the one with the highest block_number
     const { rowCount: removedDuplicates } = await pool.query(
       `DELETE FROM public.token_trades 
        WHERE chain_id = $1 
@@ -576,11 +576,17 @@ async function cleanupOverlappingTransfers(chainId: number) {
          GROUP BY tx_hash, log_index
          HAVING COUNT(*) > 1
        )
-       AND block_time >= '1980-01-01'`,
+       AND (tx_hash, log_index, block_number) NOT IN (
+         SELECT tx_hash, log_index, MAX(block_number)
+         FROM public.token_trades 
+         WHERE chain_id = $1
+         GROUP BY tx_hash, log_index
+         HAVING COUNT(*) > 1
+       )`,
       [chainId]
     )
     
-    console.log(`Removed ${removedDuplicates} duplicate records with proper timestamps from token_trades`)
+    console.log(`Removed ${removedDuplicates} duplicate records from token_trades, keeping highest block_number`)
   }
   
   // Count overlapping records first
