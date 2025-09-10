@@ -72,13 +72,13 @@ export async function POST(req: NextRequest) {
         name, symbol, description, image, twitter, telegram, website,
         supply, raise_target, dex, curve_type,
         creator_wallet, contract_address, chain_id,
-        min_token_age_for_unlock_seconds, token_logo_asset_id, deployment_block
+        min_token_age_for_unlock_seconds, token_logo_asset_id, deployment_block, last_processed_block
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11,
         $12, $13, $14,
-        $15, $16, $17
+        $15, $16, $17, $18
       )
       RETURNING id
       `,
@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
         minAgeSecs,
         logoAssetId ?? null,
         deploymentBlock ?? null,
+        deploymentBlock ?? null, // last_processed_block = deployment_block
       ]
     )
 
