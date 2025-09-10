@@ -273,6 +273,11 @@ export default function CreateTokenForm() {
 
       await contract.waitForDeployment()
       const contractAddress = await contract.getAddress()
+      
+      // Get the deployment block number from the deployment transaction
+      const deploymentTx = contract.deploymentTransaction()
+      const deploymentBlock = deploymentTx ? await deploymentTx.wait() : null
+      const deploymentBlockNumber = deploymentBlock?.blockNumber || null
 
       const typedContract = new ethers.Contract(
         contract.target as string,
@@ -295,6 +300,7 @@ export default function CreateTokenForm() {
         contractAddress,
         chainId,
         logoAssetId: finalLogoAssetId, // <— NEW: include logo asset ID
+        deploymentBlock: deploymentBlockNumber, // <— NEW: include deployment block
       }
 
       const res = await fetch('/api/create-token', {
