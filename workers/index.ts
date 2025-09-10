@@ -705,20 +705,24 @@ async function convertTransfersToDexTrades(transferRows: { token_id: number; tx_
 async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcProvider) {
   console.log(`\n=== Backfilling transfer prices for chain ${chainId} ===`)
   
-  const { rows } = await pool.query(
-    `SELECT tx_hash, log_index, amount_wei, token_id, side, from_address, to_address, contract_address, amount_eth_wei, price_eth_per_token, block_number, block_time
-     FROM public.token_transfers 
-     WHERE chain_id = $1 AND (
-       amount_eth_wei IS NULL OR 
-       price_eth_per_token IS NULL OR 
-       side IN ('OTHER', 'TRANSFER') OR
-       (side = 'GRADUATION' AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)) OR
-       (side = 'BUY' AND amount_eth_wei IS NOT NULL AND price_eth_per_token IS NOT NULL)
-     )
-     ORDER BY block_number DESC 
-     LIMIT 100`,
-    [chainId]
-  )
+  const baseQuery = `
+    SELECT tx_hash, log_index, amount_wei, token_id, side, from_address, to_address, contract_address, amount_eth_wei, price_eth_per_token, block_number, block_time
+    FROM public.token_transfers 
+    WHERE chain_id = $1 AND (
+      amount_eth_wei IS NULL OR 
+      price_eth_per_token IS NULL OR 
+      side IN ('OTHER', 'TRANSFER') OR
+      (side = 'GRADUATION' AND (amount_eth_wei IS NULL OR price_eth_per_token IS NULL)) OR
+      (side = 'BUY' AND amount_eth_wei IS NOT NULL AND price_eth_per_token IS NOT NULL)
+    )
+  `
+  
+  const tokenFilter = ONLY_TOKEN_ID ? ' AND token_id = $2' : ''
+  const orderLimit = ' ORDER BY block_number DESC LIMIT 100'
+  const sql = baseQuery + tokenFilter + orderLimit
+  const params = ONLY_TOKEN_ID ? [chainId, ONLY_TOKEN_ID] : [chainId]
+  
+  const { rows } = await pool.query(sql, params)
   
   console.log(`Found ${rows.length} transfers without price data or with incorrect side values (GRADUATION records with existing price data are excluded)`)
   
