@@ -495,9 +495,13 @@ async function cleanupOverlappingTransfers(chainId: number) {
 }
 
 // Move BUY/SELL records from token_transfers to token_trades (only DEX operations)
-async function moveDexTradesToCorrectTable(tradeRows: any[], chainId: number, provider: ethers.JsonRpcProvider) {
+async function moveDexTradesToCorrectTable(tradeRows: { token_id: number; tx_hash: string; log_index: number; side: string; amount_wei: string; amount_eth_wei: string; price_eth_per_token: number; block_number: number; block_time: Date }[], chainId: number, provider: ethers.JsonRpcProvider) {
+  console.log(`\n=== Moving ${tradeRows.length} BUY/SELL records from token_transfers to token_trades ===`)
+  
   for (const row of tradeRows) {
     try {
+      console.log(`Processing ${row.side} operation: token ${row.token_id}, tx ${row.tx_hash}, log_index ${row.log_index}`)
+      
       // Check if this token has a DEX pool (only move DEX operations, not bonding curve)
       const { rows: poolRows } = await pool.query(
         'SELECT pair_address FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2',
@@ -505,9 +509,11 @@ async function moveDexTradesToCorrectTable(tradeRows: any[], chainId: number, pr
       )
       
       if (poolRows.length === 0) {
-        console.log(`Token ${row.token_id} has no DEX pool, skipping BUY/SELL move (likely bonding curve operation)`)
+        console.log(`Token ${row.token_id} has no DEX pool, skipping ${row.side} move (likely bonding curve operation)`)
         continue
       }
+      
+      console.log(`Token ${row.token_id} has DEX pool: ${poolRows[0].pair_address}`)
       
       // Check if this operation happened after graduation (DEX operations)
       const { rows: tokenRows } = await pool.query(
@@ -521,19 +527,22 @@ async function moveDexTradesToCorrectTable(tradeRows: any[], chainId: number, pr
       }
       
       const token = tokenRows[0]
+      console.log(`Token ${row.token_id} graduation status: is_graduated=${token.is_graduated}`)
       
       // Only move operations that happened after graduation or if token is graduated
       if (!token.is_graduated) {
-        console.log(`Token ${row.token_id} not graduated, skipping BUY/SELL move (likely bonding curve operation)`)
+        console.log(`Token ${row.token_id} not graduated, skipping ${row.side} move (likely bonding curve operation)`)
         continue
       }
       
       // Get transaction details
       const tx = await provider.getTransaction(row.tx_hash)
       if (!tx) {
-        console.log(`Could not get transaction ${row.tx_hash} for BUY/SELL move`)
+        console.log(`Could not get transaction ${row.tx_hash} for ${row.side} move`)
         continue
       }
+      
+      console.log(`Got transaction details for ${row.side} move: tx=${row.tx_hash}, from=${tx.from}`)
       
       // Insert into token_trades table
       const insertQuery = `
@@ -564,9 +573,9 @@ async function moveDexTradesToCorrectTable(tradeRows: any[], chainId: number, pr
         WHERE chain_id = $1 AND tx_hash = $2 AND log_index = $3
       `
       
-      await pool.query(deleteQuery, [chainId, row.tx_hash, row.log_index])
+      const deleteResult = await pool.query(deleteQuery, [chainId, row.tx_hash, row.log_index])
       
-      console.log(`Moved ${row.side} from token_transfers to token_trades: token ${row.token_id}, tx ${row.tx_hash}`)
+      console.log(`Successfully moved ${row.side} from token_transfers to token_trades: token ${row.token_id}, tx ${row.tx_hash}, deleted ${deleteResult.rowCount} records`)
       
     } catch (error) {
       console.error(`Error moving ${row.side} ${row.tx_hash}:`, error)
@@ -575,7 +584,7 @@ async function moveDexTradesToCorrectTable(tradeRows: any[], chainId: number, pr
 }
 
 // Convert TRANSFER records to DEX trades
-async function convertTransfersToDexTrades(transferRows: any[], chainId: number, provider: ethers.JsonRpcProvider) {
+async function convertTransfersToDexTrades(transferRows: { token_id: number; tx_hash: string; log_index: number; amount_wei: string; block_number: number; block_time: Date; contract_address: string }[], chainId: number, provider: ethers.JsonRpcProvider) {
   for (const row of transferRows) {
     try {
       // Check if this token has a DEX pool
@@ -676,23 +685,15 @@ async function convertTransfersToDexTrades(transferRows: any[], chainId: number,
         price,
       ])
       
-      // Update the token_transfers record to reflect the correct side and amounts
-      const updateQuery = `
-        UPDATE public.token_transfers 
-        SET side = $1, amount_eth_wei = $2, price_eth_per_token = $3
-        WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6
+      // Delete the original TRANSFER record since it's now properly represented in token_trades
+      const deleteQuery = `
+        DELETE FROM public.token_transfers 
+        WHERE chain_id = $1 AND tx_hash = $2 AND log_index = $3
       `
       
-      await pool.query(updateQuery, [
-        side,
-        ethAmount.toString(),
-        price,
-        chainId,
-        row.tx_hash,
-        row.log_index
-      ])
+      await pool.query(deleteQuery, [chainId, row.tx_hash, row.log_index])
       
-      console.log(`Converted TRANSFER to ${side}: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
+      console.log(`Converted TRANSFER to ${side} and removed from token_transfers: token ${row.token_id}, tx ${row.tx_hash}, eth ${ethAmount.toString()}, price ${price}`)
       
     } catch (error) {
       console.error(`Error converting TRANSFER ${row.tx_hash}:`, error)
