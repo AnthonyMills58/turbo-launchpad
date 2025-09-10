@@ -8,15 +8,16 @@ import { RainbowKitProvider, getDefaultConfig } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
 
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
+import { getRpcUrl } from '@/lib/providers'
 
 const config = getDefaultConfig({
   appName: 'Turbo Launch',
   projectId: 'YOUR_WALLETCONNECT_PROJECT_ID', // replace this!
   chains: [megaethMainnet, megaethTestnet, sepoliaTestnet],
   transports: {
-    [megaethMainnet.id]: http(megaethMainnet.rpcUrls.default.http[0]),
-    [megaethTestnet.id]: http(megaethTestnet.rpcUrls.default.http[0]),
-    [sepoliaTestnet.id]: http(sepoliaTestnet.rpcUrls.default.http[0]),
+    [megaethMainnet.id]: http(getRpcUrl(megaethMainnet.id)),
+    [megaethTestnet.id]: http(getRpcUrl(megaethTestnet.id)),
+    [sepoliaTestnet.id]: http(getRpcUrl(sepoliaTestnet.id)),
   },
 
 })
