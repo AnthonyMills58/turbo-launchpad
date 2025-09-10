@@ -458,11 +458,30 @@ async function consolidateGraduationTransactions(chainId: number) {
       
       // Remove ALL individual transfer records with same tx_hash (including UNLOCK records)
       // Keep only the GRADUATION record we just created (log_index = 0)
-      await pool.query(
+      
+      // Debug: Check what records exist before deletion
+      const { rows: beforeDelete } = await pool.query(
+        `SELECT log_index, side, amount_wei FROM public.token_transfers 
+         WHERE chain_id = $1 AND tx_hash = $2 ORDER BY log_index`,
+        [chainId, candidate.tx_hash]
+      )
+      console.log(`Before deletion for ${candidate.tx_hash}:`, beforeDelete)
+      
+      const deleteResult = await pool.query(
         `DELETE FROM public.token_transfers 
          WHERE chain_id = $1 AND tx_hash = $2 AND log_index != 0`,
         [chainId, candidate.tx_hash]
       )
+      
+      console.log(`Deleted ${deleteResult.rowCount} records for graduation ${candidate.tx_hash}`)
+      
+      // Debug: Check what records exist after deletion
+      const { rows: afterDelete } = await pool.query(
+        `SELECT log_index, side, amount_wei FROM public.token_transfers 
+         WHERE chain_id = $1 AND tx_hash = $2 ORDER BY log_index`,
+        [chainId, candidate.tx_hash]
+      )
+      console.log(`After deletion for ${candidate.tx_hash}:`, afterDelete)
       
       console.log(`Consolidated graduation from token_transfers: ${candidate.tx_hash}, eth=${totalEthWei.toString()}, tokens=${totalTokens.toString()}`)
     } catch (e) {
