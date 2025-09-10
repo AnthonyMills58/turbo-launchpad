@@ -591,13 +591,14 @@ async function cleanupOverlappingTransfers(chainId: number) {
   }
   
   // Then, clean up any remaining duplicate records in token_trades
+  // Look for duplicates with same tx_hash (different log_index, block_number, etc.)
   const { rows: duplicateCount } = await pool.query(
     `SELECT COUNT(*) as count
      FROM (
-       SELECT tx_hash, log_index, COUNT(*) as cnt
+       SELECT tx_hash, COUNT(*) as cnt
        FROM public.token_trades 
        WHERE chain_id = $1
-       GROUP BY tx_hash, log_index
+       GROUP BY tx_hash
        HAVING COUNT(*) > 1
      ) duplicates`,
     [chainId]
@@ -607,22 +608,22 @@ async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`Found ${duplicateCountNum} duplicate records in token_trades`)
   
   if (duplicateCountNum > 0) {
-    // Remove duplicate records, keeping the one with the highest block_number
+    // Remove duplicate records, keeping the one with the highest log_index (most specific)
     const { rowCount: removedDuplicates } = await pool.query(
       `DELETE FROM public.token_trades 
        WHERE chain_id = $1 
-       AND (tx_hash, log_index) IN (
-         SELECT tx_hash, log_index
+       AND tx_hash IN (
+         SELECT tx_hash
          FROM public.token_trades 
          WHERE chain_id = $1
-         GROUP BY tx_hash, log_index
+         GROUP BY tx_hash
          HAVING COUNT(*) > 1
        )
-       AND (tx_hash, log_index, block_number) NOT IN (
-         SELECT tx_hash, log_index, MAX(block_number)
+       AND (tx_hash, log_index) NOT IN (
+         SELECT tx_hash, MAX(log_index)
          FROM public.token_trades 
          WHERE chain_id = $1
-         GROUP BY tx_hash, log_index
+         GROUP BY tx_hash
          HAVING COUNT(*) > 1
        )`,
       [chainId]
