@@ -60,17 +60,25 @@ const TokenCard = memo(({
     return 0 // Return 0 if no current_price, same as TokenDetailsView showing "–"
   }
 
-  // Get FDV value - for DEX tokens use token.fdv, for In Progress calculate from bonding curve
+  // Get FDV value - for DEX tokens use token.fdv, for In Progress use eth_raised
   const getFDV = (): number | null => {
     if (token.on_dex && token.fdv !== undefined) {
       // On DEX: use synced FDV from DEX data
       return Number(token.fdv)
-    } else if (!token.on_dex && token.supply) {
-      // In Progress: calculate FDV from bonding curve price and total supply
-      const pricePerToken = getNumericPrice()
-      return pricePerToken * token.supply
+    } else if (!token.on_dex) {
+      // In Progress: use eth_raised (total funds raised)
+      return Number(token.eth_raised) || 0
     }
     return null
+  }
+
+  // Get the label for the FDV/Cap field
+  const getFDVLabel = (): string => {
+    if (token.on_dex) {
+      return 'FDV'
+    } else {
+      return 'Cap'
+    }
   }
 
   // Format USD value using MetaMask style formatting for small values, K/M/B for larger values
@@ -272,13 +280,13 @@ const TokenCard = memo(({
             </div>
           </div>
           
-          {/* FDV */}
+          {/* FDV/Cap */}
           <div className="bg-[#23263a] rounded-lg p-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">FDV</span>
+              <span className="text-xs text-gray-400">{getFDVLabel()}</span>
               <div className="text-sm font-semibold text-white text-right">
                 <div>
-                  {usdPrice && getFDV() ? (
+                  {usdPrice && getFDV() !== null ? (
                     formatUSDValue(getFDV()!, usdPrice)
                   ) : (
                     '—'
