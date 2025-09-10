@@ -4,8 +4,7 @@
 import { ethers } from 'ethers'
 import type { Log } from 'ethers'
 import type { PoolClient } from 'pg'
-import pool from '../../lib/db'
-import { TRANSFER_TOPIC, ZERO } from '../core/config'
+import { ZERO } from '../core/config'
 import { sleep, isRateLimit } from '../core/rateLimiting'
 import { providerFor } from '../core/providers'
 
@@ -14,16 +13,6 @@ type TokenRow = {
   chain_id: number
   contract_address: string | null
   creator_wallet: string | null
-}
-
-type TransferLog = {
-  tokenId: number
-  fromAddr: string
-  toAddr: string
-  amount: bigint
-  blockNumber: number
-  transactionHash: string
-  logIndex: number
 }
 
 export async function processTransferLogs(
@@ -90,7 +79,6 @@ export async function processTransferLogs(
       // Calculate ETH amount and price
       let ethAmount = 0n
       let price = null
-      let isPaymentTransfer = false
       
       if (transferType === 'BUY') {
         // Buy operation: user sends ETH to contract, receives tokens
@@ -98,7 +86,6 @@ export async function processTransferLogs(
         if (ethAmount > 0n) {
           price = Number(ethAmount) / Number(amount)
         }
-        isPaymentTransfer = true
         console.log(`Token ${tokenId}: BUY tx=${log.transactionHash}, eth=${ethAmount.toString()}, tokens=${amount.toString()}, price=${price}`)
       } else if (transferType === 'SELL') {
         // Sell operation: user sends tokens to contract, receives ETH
@@ -138,10 +125,9 @@ export async function processTransferLogs(
                 blockTag: blockBeforeTx
               })
               
-              if (sellPriceWei && sellPriceWei !== '0x') {
-                ethAmount = BigInt(sellPriceWei)
-                price = Number(ethAmount) / Number(amount)
-                isPaymentTransfer = true
+                  if (sellPriceWei && sellPriceWei !== '0x') {
+                    ethAmount = BigInt(sellPriceWei)
+                    price = Number(ethAmount) / Number(amount)
                 console.log(`Token ${tokenId}: SELL tx=${log.transactionHash}, eth=${ethAmount.toString()}, tokens=${amount.toString()}, price=${price}`)
               }
             } catch (e) {
@@ -155,13 +141,11 @@ export async function processTransferLogs(
         // Graduation: contract mints tokens to itself (will be consolidated later)
         ethAmount = 0n
         price = null
-        isPaymentTransfer = false
         console.log(`Token ${tokenId}: GRADUATION tx=${log.transactionHash}, tokens=${amount.toString()}`)
       } else {
         // Other transfer (airdrop, etc.)
         ethAmount = 0n
         price = null
-        isPaymentTransfer = false
       }
       
       // Insert transfer record

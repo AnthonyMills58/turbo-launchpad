@@ -1,9 +1,7 @@
 // Cleanup operations for overlapping records
 // Extracted from workers/index.ts
 
-import { ethers } from 'ethers'
 import pool from '../../lib/db'
-import { sleep, isRateLimit } from '../core/rateLimiting'
 import { providerFor } from '../core/providers'
 
 export async function cleanupOverlappingTransfers(chainId: number) {

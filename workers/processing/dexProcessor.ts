@@ -4,7 +4,6 @@
 import { ethers } from 'ethers'
 import pool from '../../lib/db'
 import { sleep, isRateLimit } from '../core/rateLimiting'
-import { providerFor } from '../core/providers'
 
 export async function moveDexTradesToCorrectTable(
   tradeRows: Array<{
