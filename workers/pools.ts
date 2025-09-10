@@ -413,6 +413,14 @@ export async function processDexPools(chainId: number): Promise<void> {
             if (n0Out > 0n && n1In > 0n) { side = 'BUY';  tokenWei = n0Out; quoteWei = n1In }
             else                          { side = 'SELL'; tokenWei = n0In;  quoteWei = n1Out }
           }
+          
+          // Debug: Log suspicious cases where amounts are equal
+          if (tokenWei === quoteWei) {
+            console.log(`SUSPICIOUS: tokenWei === quoteWei for tx ${log.transactionHash}`)
+            console.log(`  isQuoteToken0: ${isQuoteToken0}`)
+            console.log(`  n0In: ${n0In}, n1In: ${n1In}, n0Out: ${n0Out}, n1Out: ${n1Out}`)
+            console.log(`  side: ${side}, tokenWei: ${tokenWei}, quoteWei: ${quoteWei}`)
+          }
 
           const price_eth_per_token =
             (Number(quoteWei) / 10 ** (p.quote_decimals ?? 18)) /
