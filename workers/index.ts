@@ -745,7 +745,24 @@ async function moveDexTradesToCorrectTable(tradeRows: { token_id: number; tx_has
       }
       
       // Get transaction details
-      const tx = await provider.getTransaction(row.tx_hash)
+      let tx
+      let attempts = 0
+      while (true) {
+        try {
+          tx = await provider.getTransaction(row.tx_hash)
+          await sleep(HEADER_SLEEP_MS)
+          break
+        } catch (e) {
+          attempts++
+          if (isRateLimit(e) && attempts <= 5) {
+            const backoff = Math.min(1000 * attempts, 5000)
+            await sleep(backoff)
+            continue
+          }
+          throw e
+        }
+      }
+      
       if (!tx) {
         console.log(`Could not get transaction ${row.tx_hash} for ${row.side} move`)
         continue
@@ -810,14 +827,48 @@ async function convertTransfersToDexTrades(transferRows: { token_id: number; tx_
       const pairAddress = poolRows[0].pair_address
       
       // Get the transaction to analyze it
-      const tx = await provider.getTransaction(row.tx_hash)
+      let tx
+      let attempts = 0
+      while (true) {
+        try {
+          tx = await provider.getTransaction(row.tx_hash)
+          await sleep(HEADER_SLEEP_MS)
+          break
+        } catch (e) {
+          attempts++
+          if (isRateLimit(e) && attempts <= 5) {
+            const backoff = Math.min(1000 * attempts, 5000)
+            await sleep(backoff)
+            continue
+          }
+          throw e
+        }
+      }
+      
       if (!tx) {
         console.log(`Could not get transaction ${row.tx_hash} for TRANSFER conversion`)
         continue
       }
       
       // Check if this is a DEX swap by looking for swap events in the transaction
-      const receipt = await provider.getTransactionReceipt(row.tx_hash)
+      let receipt
+      let receiptAttempts = 0
+      while (true) {
+        try {
+          receipt = await provider.getTransactionReceipt(row.tx_hash)
+          await sleep(HEADER_SLEEP_MS)
+          break
+        } catch (e) {
+          receiptAttempts++
+          if (isRateLimit(e) && receiptAttempts <= 5) {
+            const backoff = Math.min(1000 * receiptAttempts, 5000)
+            await sleep(backoff)
+            continue
+          }
+          throw e
+        }
+      }
+      
       if (!receipt) {
         console.log(`Could not get receipt for ${row.tx_hash}`)
         continue
@@ -986,7 +1037,23 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   for (const row of rows) {
     try {
       console.log(`Processing record: ${row.side} token ${row.token_id}, tx ${row.tx_hash}, block ${row.block_number}`)
-      const tx = await provider.getTransaction(row.tx_hash)
+      let tx
+      let attempts = 0
+      while (true) {
+        try {
+          tx = await provider.getTransaction(row.tx_hash)
+          await sleep(HEADER_SLEEP_MS)
+          break
+        } catch (e) {
+          attempts++
+          if (isRateLimit(e) && attempts <= 5) {
+            const backoff = Math.min(1000 * attempts, 5000)
+            await sleep(backoff)
+            continue
+          }
+          throw e
+        }
+      }
       
       // Get transfer type for this transaction using actual addresses from the database
       const fromAddr = row.from_address || '0x0000000000000000000000000000000000000000'
@@ -1032,7 +1099,24 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
         // For SELL operations, try to get the sell price even if tx.value is 0
         // This handles the case where the sell price calculation failed during initial processing
         try {
-          const receipt = await provider.getTransactionReceipt(row.tx_hash)
+          let receipt
+          let receiptAttempts = 0
+          while (true) {
+            try {
+              receipt = await provider.getTransactionReceipt(row.tx_hash)
+              await sleep(HEADER_SLEEP_MS)
+              break
+            } catch (e) {
+              receiptAttempts++
+              if (isRateLimit(e) && receiptAttempts <= 5) {
+                const backoff = Math.min(1000 * receiptAttempts, 5000)
+                await sleep(backoff)
+                continue
+              }
+              throw e
+            }
+          }
+          
           if (receipt) {
             const blockBeforeTx = receipt.blockNumber - 1
             
@@ -1252,7 +1336,24 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
         let transferType = 'OTHER'
         
         try {
-          const tx = await provider.getTransaction(log.transactionHash!)
+          let tx
+          let attempts = 0
+          while (true) {
+            try {
+              tx = await provider.getTransaction(log.transactionHash!)
+              await sleep(HEADER_SLEEP_MS)
+              break
+            } catch (e) {
+              attempts++
+              if (isRateLimit(e) && attempts <= 5) {
+                const backoff = Math.min(1000 * attempts, 5000)
+                await sleep(backoff)
+                continue
+              }
+              throw e
+            }
+          }
+          
           // Get creator wallet for this token
           const token = tokens.find(t => t.id === tokenId)
           const creatorWallet = token?.creator_wallet || null
@@ -1275,7 +1376,24 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
             // Sell operation: user sends tokens to contract, receives ETH
             // Try to calculate the sell price by calling getSellPrice at the transaction block
             try {
-              const receipt = await provider.getTransactionReceipt(log.transactionHash!)
+              let receipt
+              let attempts = 0
+              while (true) {
+                try {
+                  receipt = await provider.getTransactionReceipt(log.transactionHash!)
+                  await sleep(HEADER_SLEEP_MS)
+                  break
+                } catch (e) {
+                  attempts++
+                  if (isRateLimit(e) && attempts <= 5) {
+                    const backoff = Math.min(1000 * attempts, 5000)
+                    await sleep(backoff)
+                    continue
+                  }
+                  throw e
+                }
+              }
+              
               if (receipt) {
                 // Call getSellPrice at the block before the transaction
                 // This gives us the price that was used for this sell
