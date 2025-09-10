@@ -151,7 +151,7 @@ async function consolidateFromTrades(
       firstTrade.block_time, 
       candidate.tx_hash, 
       0, // Use log_index 0 for consolidated record
-      firstTrade.from_address, 
+      firstTrade.trader, 
       contractAddress, // To contract (graduation target)
       firstTrade.amount_token_wei, 
       firstTrade.amount_eth_wei, 
