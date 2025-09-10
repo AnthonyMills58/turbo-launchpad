@@ -457,9 +457,10 @@ async function consolidateGraduationTransactions(chainId: number) {
       )
       
       // Remove ALL individual transfer records with same tx_hash (including UNLOCK records)
+      // Keep only the GRADUATION record we just created (log_index = 0)
       await pool.query(
         `DELETE FROM public.token_transfers 
-         WHERE chain_id = $1 AND tx_hash = $2 AND log_index > 0`,
+         WHERE chain_id = $1 AND tx_hash = $2 AND log_index != 0`,
         [chainId, candidate.tx_hash]
       )
       
