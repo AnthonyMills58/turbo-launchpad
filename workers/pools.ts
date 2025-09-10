@@ -1,28 +1,9 @@
 import { ethers, type Log } from 'ethers'
 import pool from '../lib/db'
-import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
 import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
 import TurboTokenABI from '../lib/abi/TurboToken.json'
-
-// ---------- Config (same style as index.ts) ----------
-const DEFAULT_DEX_CHUNK = Number(process.env.DEX_CHUNK ?? 5_000) // blocks per query window
-
-// Event topics
-const SWAP_TOPIC = ethers.id('Swap(address,uint256,uint256,uint256,uint256,address)')
-const SYNC_TOPIC = ethers.id('Sync(uint112,uint112)')
-
-// Reuse env RPCs like index.ts
-const rpcByChain: Record<number, string> = {
-  6342: process.env.MEGAETH_RPC_URL ?? megaethTestnet.rpcUrls.default.http[0],
-  9999: process.env.MEGAETH_MAINNET_RPC ?? megaethMainnet.rpcUrls.default.http[0],
-  11155111: process.env.SEPOLIA_RPC_URL ?? sepoliaTestnet.rpcUrls.default.http[0],
-}
-
-function providerFor(chainId: number) {
-  const url = rpcByChain[chainId]
-  if (!url) throw new Error(`No RPC for chain ${chainId}`)
-  return new ethers.JsonRpcProvider(url, { chainId, name: `chain-${chainId}` })
-}
+import { DEFAULT_DEX_CHUNK, SWAP_TOPIC, SYNC_TOPIC } from './core/config'
+import { providerFor } from './core/providers'
 
 // ---------- DB shapes ----------
 type TokenRow = {

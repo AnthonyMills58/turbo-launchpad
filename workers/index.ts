@@ -3,53 +3,23 @@ import { ethers } from 'ethers'
 import type { Log } from 'ethers'
 import type { PoolClient } from 'pg'
 import pool from '../lib/db'
-import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '../lib/chains'
 import { runPoolsPipelineForChain, runAppWideNormalization } from './pools'
 import { runAggPipelineForChain } from './agg'
-
-// -------------------- Config --------------------
-const TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)')
-const ZERO = '0x0000000000000000000000000000000000000000'
-
-// Optional: limit to one token for smoke tests (NOT used in chain-batched mode)
-const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : undefined
-
-// Tunables
-const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000)         // blocks per query
-const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15)       // ms between getBlock calls
-const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
-const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 200)) // addresses per getLogs
-const SKIP_HEALTH_CHECK = process.env.SKIP_HEALTH_CHECK === 'true'      // skip chain health checks
-const HEALTH_CHECK_TIMEOUT = Number(process.env.HEALTH_CHECK_TIMEOUT ?? 10000) // health check timeout in ms
-
-// Singleton advisory lock (prevent overlapping runs)
-const LOCK_NS = 42
-const LOCK_ID = 1
-
-// RPCs per chain (prefer env override, fall back to lib/chains)
-const rpcByChain: Record<number, string> = {
-  6342: process.env.MEGAETH_RPC_URL ?? megaethTestnet.rpcUrls.default.http[0],
-  9999: process.env.MEGAETH_MAINNET_RPC ?? megaethMainnet.rpcUrls.default.http[0],
-  11155111: process.env.SEPOLIA_RPC_URL ?? sepoliaTestnet.rpcUrls.default.http[0],
-}
-
-function providerFor(chainId: number) {
-  const url = rpcByChain[chainId]
-  if (!url) throw new Error(`No RPC for chain ${chainId}`)
-  return new ethers.JsonRpcProvider(url, { chainId, name: `chain-${chainId}` })
-}
-
-function sleep(ms: number) {
-  return new Promise(res => setTimeout(res, ms))
-}
-
-type RpcLikeError = { code?: number; message?: string; error?: { code?: number; message?: string } }
-function isRateLimit(err: unknown): boolean {
-  const e = err as RpcLikeError
-  const code = e?.code ?? e?.error?.code
-  const msg = (e?.message ?? e?.error?.message ?? '').toLowerCase()
-  return code === -32016 || msg.includes('rate limit')
-}
+import { 
+  TRANSFER_TOPIC, 
+  ZERO, 
+  ONLY_TOKEN_ID, 
+  DEFAULT_CHUNK, 
+  HEADER_SLEEP_MS, 
+  REORG_CUSHION, 
+  ADDR_BATCH_LIMIT, 
+  SKIP_HEALTH_CHECK, 
+  HEALTH_CHECK_TIMEOUT, 
+  LOCK_NS, 
+  LOCK_ID 
+} from './core/config'
+import { sleep, isRateLimit } from './core/rateLimiting'
+import { providerFor } from './core/providers'
 
 async function findBlockByTimestamp(p: ethers.JsonRpcProvider, targetTsSec: number) {
   let lo = 0
