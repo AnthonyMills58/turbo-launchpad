@@ -547,15 +547,57 @@ async function consolidateGraduationTransactions(chainId: number) {
 async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
   
-  // First, clean up duplicate records in token_trades
-  // For duplicates with same tx_hash, log_index, block_number, amount - keep the one with proper timestamp
+  // First, fix timestamps in token_trades (many records have 1970 timestamps that need correction)
+  const { rows: wrongTimestampCount } = await pool.query(
+    `SELECT COUNT(*) as count
+     FROM public.token_trades 
+     WHERE chain_id = $1 AND block_time < '1980-01-01'`,
+    [chainId]
+  )
+  
+  const wrongTimestampCountNum = parseInt(wrongTimestampCount[0].count)
+  console.log(`Found ${wrongTimestampCountNum} records with 1970 timestamps in token_trades`)
+  
+  if (wrongTimestampCountNum > 0) {
+    // Fix timestamps by getting the correct block timestamp from the blockchain
+    const { rows: wrongTimestampRecords } = await pool.query(
+      `SELECT DISTINCT block_number FROM public.token_trades 
+       WHERE chain_id = $1 AND block_time < '1980-01-01'`,
+      [chainId]
+    )
+    
+    console.log(`Fixing timestamps for ${wrongTimestampRecords.length} blocks`)
+    
+    for (const record of wrongTimestampRecords) {
+      try {
+        const provider = providerFor(chainId)
+        const block = await provider.getBlock(record.block_number)
+        if (block) {
+          const correctTimestamp = new Date(Number(block.timestamp) * 1000)
+          
+          await pool.query(
+            `UPDATE public.token_trades 
+             SET block_time = $1 
+             WHERE chain_id = $2 AND block_number = $3 AND block_time < '1980-01-01'`,
+            [correctTimestamp, chainId, record.block_number]
+          )
+          
+          console.log(`Fixed timestamp for block ${record.block_number}: ${correctTimestamp}`)
+        }
+      } catch (e) {
+        console.warn(`Could not fix timestamp for block ${record.block_number}:`, e)
+      }
+    }
+  }
+  
+  // Then, clean up any remaining duplicate records in token_trades
   const { rows: duplicateCount } = await pool.query(
     `SELECT COUNT(*) as count
      FROM (
-       SELECT tx_hash, log_index, block_number, amount_token_wei, COUNT(*) as cnt
+       SELECT tx_hash, log_index, COUNT(*) as cnt
        FROM public.token_trades 
        WHERE chain_id = $1
-       GROUP BY tx_hash, log_index, block_number, amount_token_wei
+       GROUP BY tx_hash, log_index
        HAVING COUNT(*) > 1
      ) duplicates`,
     [chainId]
@@ -565,22 +607,28 @@ async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`Found ${duplicateCountNum} duplicate records in token_trades`)
   
   if (duplicateCountNum > 0) {
-    // Remove duplicate records, keeping the one with proper timestamp (not 1970)
+    // Remove duplicate records, keeping the one with the highest block_number
     const { rowCount: removedDuplicates } = await pool.query(
       `DELETE FROM public.token_trades 
        WHERE chain_id = $1 
-       AND (tx_hash, log_index, block_number, amount_token_wei) IN (
-         SELECT tx_hash, log_index, block_number, amount_token_wei
+       AND (tx_hash, log_index) IN (
+         SELECT tx_hash, log_index
          FROM public.token_trades 
          WHERE chain_id = $1
-         GROUP BY tx_hash, log_index, block_number, amount_token_wei
+         GROUP BY tx_hash, log_index
          HAVING COUNT(*) > 1
        )
-       AND block_time < '1980-01-01'`,
+       AND (tx_hash, log_index, block_number) NOT IN (
+         SELECT tx_hash, log_index, MAX(block_number)
+         FROM public.token_trades 
+         WHERE chain_id = $1
+         GROUP BY tx_hash, log_index
+         HAVING COUNT(*) > 1
+       )`,
       [chainId]
     )
     
-    console.log(`Removed ${removedDuplicates} duplicate records with 1970 timestamps from token_trades`)
+    console.log(`Removed ${removedDuplicates} duplicate records from token_trades`)
   }
   
   // Count overlapping records first
