@@ -818,26 +818,47 @@ async function convertTransfersToDexTrades(transferRows: { token_id: number; tx_
       
       const { amount0In, amount1In, amount0Out, amount1Out } = decoded.args
       
-      // Determine if this is a buy or sell based on the swap direction
-      // For a sell: user sends tokens to pair, receives ETH
-      // For a buy: user sends ETH to pair, receives tokens
+      // Get pool info to determine token order (same logic as main DEX processing)
+      const { rows: poolInfo } = await pool.query(
+        'SELECT token0, token1, quote_token FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2',
+        [row.token_id, chainId]
+      )
+      
+      if (poolInfo.length === 0) {
+        console.log(`No pool info found for token ${row.token_id}`)
+        continue
+      }
+      
+      const p = poolInfo[0]
+      const isQuoteToken0 = p.quote_token.toLowerCase() === p.token0.toLowerCase()
+      
+      // Determine if this is a buy or sell based on the swap direction (same logic as main DEX processing)
       let side: string
       let ethAmount: bigint
       let price: number
       
-      if (amount0In > 0n && amount1Out > 0n) {
-        // Token in, ETH out = SELL
-        side = 'SELL'
-        ethAmount = amount1Out
-        price = Number(ethAmount) / Number(row.amount_wei)
-      } else if (amount1In > 0n && amount0Out > 0n) {
-        // ETH in, Token out = BUY
-        side = 'BUY'
-        ethAmount = amount1In
-        price = Number(ethAmount) / Number(row.amount_wei)
+      if (isQuoteToken0) {
+        // quote = token0, token = token1
+        if (amount1Out > 0n && amount0In > 0n) { 
+          side = 'BUY';  
+          ethAmount = amount0In; 
+          price = Number(ethAmount) / Number(row.amount_wei)
+        } else { 
+          side = 'SELL'; 
+          ethAmount = amount0Out; 
+          price = Number(ethAmount) / Number(row.amount_wei)
+        }
       } else {
-        console.log(`Could not determine swap direction for ${row.tx_hash}`)
-        continue
+        // quote = token1, token = token0
+        if (amount0Out > 0n && amount1In > 0n) { 
+          side = 'BUY';  
+          ethAmount = amount1In; 
+          price = Number(ethAmount) / Number(row.amount_wei)
+        } else { 
+          side = 'SELL'; 
+          ethAmount = amount1Out; 
+          price = Number(ethAmount) / Number(row.amount_wei)
+        }
       }
       
       // Insert into token_trades table
