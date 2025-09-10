@@ -544,7 +544,42 @@ async function consolidateGraduationTransactions(chainId: number) {
 async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
   
-  // First, fix timestamps in token_trades (many records have 1970 timestamps that need correction)
+  // First, remove UNLOCK records that have duplicates with same tx_hash
+  const { rows: unlockDuplicates } = await pool.query(
+    `SELECT COUNT(*) as count
+     FROM public.token_transfers t1
+     JOIN (
+       SELECT token_id, tx_hash 
+       FROM public.token_transfers 
+       WHERE chain_id = $1
+       GROUP BY token_id, tx_hash 
+       HAVING COUNT(*) > 1
+     ) t2 ON t1.token_id = t2.token_id AND t1.tx_hash = t2.tx_hash
+     WHERE t1.chain_id = $1 AND t1.side = 'UNLOCK'`,
+    [chainId]
+  )
+  
+  const unlockDuplicatesCount = parseInt(unlockDuplicates[0].count)
+  console.log(`Found ${unlockDuplicatesCount} UNLOCK records with duplicates`)
+  
+  if (unlockDuplicatesCount > 0) {
+    const { rowCount: removedUnlocks } = await pool.query(
+      `DELETE FROM public.token_transfers 
+       WHERE chain_id = $1 AND side = 'UNLOCK' 
+       AND (token_id, tx_hash) IN (
+         SELECT token_id, tx_hash 
+         FROM public.token_transfers 
+         WHERE chain_id = $1
+         GROUP BY token_id, tx_hash 
+         HAVING COUNT(*) > 1
+       )`,
+      [chainId]
+    )
+    
+    console.log(`Removed ${removedUnlocks} UNLOCK records with duplicates`)
+  }
+  
+  // Then, fix timestamps in token_trades (many records have 1970 timestamps that need correction)
   const { rows: wrongTimestampCount } = await pool.query(
     `SELECT COUNT(*) as count
      FROM public.token_trades 
