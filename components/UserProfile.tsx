@@ -96,8 +96,8 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
   return (
     <div 
       className={`relative inline-block ${className}`}
-      onMouseEnter={() => profile && setShowTooltip(true)}
-      onMouseLeave={() => profile && setShowTooltip(false)}
+      onMouseEnter={() => profile && displayName && setShowTooltip(true)}
+      onMouseLeave={() => profile && displayName && setShowTooltip(false)}
     >
       <div className={`flex items-center space-x-2 ${centerAlign ? 'justify-center' : ''}`}>
         {showCreatorLabel && (
@@ -125,38 +125,53 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
            <div className={`flex flex-col ${centerAlign ? 'items-center text-center' : ''}`}>
              {layout === 'compact' ? (
                <>
-                 {/* Line 1: Creator name */}
-                 <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-sm">
-                   <span className="text-gray-400">by</span>
-                   {displayName && (
-                     <span 
-                       className="text-gray-400 truncate max-w-[80px]"
-                       title={displayName}
-                     >
-                       {displayName}
-                     </span>
-                   )}
-                 </div>
-                 {/* Line 2: Address with copy icon */}
-                 <div className={`flex items-center gap-2 text-xs text-gray-400 ${centerAlign ? 'justify-center' : ''}`}>
-                   <span className="font-mono">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
-                   <button
-                     onClick={(e) => {
-                       e.stopPropagation()
-                       copyToClipboard(wallet)
-                     }}
-                     className="hover:text-white transition-colors"
-                     title="Copy wallet address"
-                   >
-                     <Copy size={12} />
-                   </button>
-                   {copied && <span className="text-green-400 text-xs">Copied!</span>}
-                 </div>
-                 {/* Line 3: Time */}
-                 {createdTime && (
-                   <span className="text-sm text-gray-400">
-                     {createdTime}
-                   </span>
+                 {displayName ? (
+                   <>
+                     {/* Line 1: Creator name (when profile exists) */}
+                     <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-sm">
+                       <span className="text-gray-400">by</span>
+                       <span 
+                         className="text-gray-400 truncate max-w-[80px]"
+                         title={displayName}
+                       >
+                         {displayName}
+                       </span>
+                     </div>
+                     {/* Line 2: Time only (address removed) */}
+                     {createdTime && (
+                       <span className="text-sm text-gray-400">
+                         {createdTime}
+                       </span>
+                     )}
+                   </>
+                 ) : (
+                   <>
+                     {/* Line 1: Centered "by" (when no profile exists) */}
+                     <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-1 text-sm">
+                       <span className="text-gray-400">by</span>
+                     </div>
+                     {/* Line 2: Address with copy icon (when no profile exists) */}
+                     <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+                       <span className="font-mono">{wallet.slice(0, 4)}...{wallet.slice(-4)}</span>
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation()
+                           copyToClipboard(wallet)
+                         }}
+                         className="hover:text-white transition-colors"
+                         title="Copy wallet address"
+                       >
+                         <Copy size={12} />
+                       </button>
+                       {copied && <span className="text-green-400 text-xs">Copied!</span>}
+                     </div>
+                     {/* Line 3: Time (when no profile exists) */}
+                     {createdTime && (
+                       <span className="text-sm text-gray-400">
+                         {createdTime}
+                       </span>
+                     )}
+                   </>
                  )}
                </>
              ) : (
@@ -191,35 +206,57 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
       </div>
 
              {/* Tooltip */}
-       {showTooltip && profile && (
-         <div className="absolute z-[9999] top-full right-0 transform translate-x-0 mt-2 px-3 py-2 bg-[#1b1e2b] border-2 border-purple-400/30 rounded-xl shadow-2xl shadow-purple-500/20 text-white text-xs min-w-52 max-w-80 w-fit transition-all duration-200 ease-in-out opacity-100">
-           <div className="flex justify-center mb-2">
-             {hasAvatar && profile ? (
-               <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 bg-gray-700 ring-2 ring-purple-400/20 shadow-lg">
-                 <img
-                   src={`/api/media/${profile.avatar_asset_id}?v=thumb`}
-                   alt={profile.display_name || 'User'}
-                   className="w-full h-full object-cover object-center"
-                 />
+       {showTooltip && profile && displayName && (
+         <div className="absolute z-[9999] top-full right-0 transform translate-x-0 mt-2 px-4 py-3 bg-[#1b1e2b] border-2 border-purple-400/30 rounded-xl shadow-2xl shadow-purple-500/20 text-white text-xs min-w-64 max-w-80 w-fit transition-all duration-200 ease-in-out opacity-100">
+           <div className="flex items-start gap-4">
+             {/* Left side: 1.5x bigger avatar */}
+             <div className="flex-shrink-0">
+               {hasAvatar && profile ? (
+                 <div className="w-24 h-24 rounded-full overflow-hidden flex-shrink-0 bg-gray-700 ring-2 ring-purple-400/20 shadow-lg">
+                   <img
+                     src={`/api/media/${profile.avatar_asset_id}?v=thumb`}
+                     alt={profile.display_name || 'User'}
+                     className="w-full h-full object-cover object-center"
+                   />
+                 </div>
+               ) : (
+                 <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl text-white shadow-lg ring-2 ring-purple-400/20">
+                   {wallet[0].toUpperCase()}
+                 </div>
+               )}
+             </div>
+             
+             {/* Right side: Profile info */}
+             <div className="flex-1 min-w-0">
+               {displayName && (
+                 <div className="text-white text-sm font-bold mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent truncate">
+                   {displayName}
+                 </div>
+               )}
+               
+               {/* Creator address with copy functionality */}
+               <div className="flex items-center justify-center gap-2 text-xs text-gray-400 mb-2">
+                 <span className="font-mono">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+                 <button
+                   onClick={(e) => {
+                     e.stopPropagation()
+                     copyToClipboard(wallet)
+                   }}
+                   className="hover:text-white transition-colors"
+                   title="Copy wallet address"
+                 >
+                   <Copy size={12} />
+                 </button>
+                 {copied && <span className="text-green-400 text-xs">Copied!</span>}
                </div>
-             ) : (
-               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-xl text-white shadow-lg ring-2 ring-purple-400/20">
-                 {wallet[0].toUpperCase()}
-               </div>
-             )}
+               
+               {profile?.bio && (
+                 <div className="text-gray-300 text-xs break-words leading-tight line-clamp-3">
+                   {profile.bio}
+                 </div>
+               )}
+             </div>
            </div>
-           {displayName && (
-             <div className="text-white text-xs font-bold text-center mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-               {displayName}
-             </div>
-           )}
-           {profile?.bio && (
-             <div className="text-gray-300 text-xs break-words text-center leading-tight">
-               {profile.bio.length > 80 
-                 ? `${profile.bio.substring(0, 80)}...` 
-                 : profile.bio}
-             </div>
-           )}
            {/* Arrow */}
            <div className="absolute top-0 right-4 transform translate-x-0 -translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-[#1b1e2b]"></div>
          </div>

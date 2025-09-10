@@ -83,7 +83,7 @@ const TokenCard = memo(({
 
   // Format USD value using MetaMask style formatting for small values, K/M/B for larger values
   const formatUSDValue = (ethValue: number, usdPrice: number | null) => {
-    if (!usdPrice) return '—'
+    if (!usdPrice || ethValue === 0 || ethValue === null) return '—'
     const usdValue = ethValue * usdPrice
     
     // For very small values (< $0.001), use MetaMask formatting
@@ -336,7 +336,7 @@ const TokenCard = memo(({
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Volume</span>
                 <span className="text-sm font-semibold text-white">
-                  {token.volume_24h_eth !== undefined && token.volume_24h_eth !== null && usdPrice ? (
+                  {token.volume_24h_eth !== undefined && token.volume_24h_eth !== null && token.volume_24h_eth > 0 && usdPrice ? (
                     formatUSDValue(token.volume_24h_eth, usdPrice)
                   ) : (
                     '—'
@@ -350,7 +350,7 @@ const TokenCard = memo(({
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Liquidity</span>
                 <span className="text-sm font-semibold text-white">
-                  {token.liquidity_eth !== undefined && token.liquidity_eth !== null && usdPrice ? (
+                  {token.liquidity_eth !== undefined && token.liquidity_eth !== null && token.liquidity_eth > 0 && usdPrice ? (
                     formatUSDValue(token.liquidity_eth, usdPrice)
                   ) : (
                     '—'
