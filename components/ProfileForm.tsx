@@ -35,10 +35,13 @@ export default function ProfileForm() {
     if (!address) return
     
     try {
+      console.log('🔄 Loading profile for wallet:', address)
       const response = await fetch(`/api/profile?wallet=${address}`)
       if (response.ok) {
         const profile = await response.json()
+        console.log('📋 Profile API response:', profile)
         if (profile.success && profile.profile) {
+          console.log('✅ Setting profile data:', profile.profile)
           setForm({
             displayName: profile.profile.display_name || '',
             bio: profile.profile.bio || ''
@@ -47,10 +50,14 @@ export default function ProfileForm() {
             setAvatarAssetId(profile.profile.avatar_asset_id)
             setCurrentAvatarUrl(`/api/media/${profile.profile.avatar_asset_id}?v=thumb`)
           }
+        } else {
+          console.log('⚠️ No profile found or profile is null')
         }
+      } else {
+        console.error('❌ Profile API error:', response.status, response.statusText)
       }
     } catch (error) {
-      console.error('Failed to load profile:', error)
+      console.error('❌ Failed to load profile:', error)
     }
   }, [address])
 
@@ -168,6 +175,13 @@ export default function ProfileForm() {
     }
 
     try {
+      console.log('💾 Saving profile with data:', {
+        wallet: address,
+        displayName: form.displayName,
+        bio: form.bio,
+        avatarAssetId: finalAvatarAssetId,
+      })
+      
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,8 +195,12 @@ export default function ProfileForm() {
 
       if (!res.ok) {
         const err = await res.json()
+        console.error('❌ Save profile failed:', err)
         throw new Error(err.message || 'Failed to save profile')
       }
+
+      const saveResult = await res.json()
+      console.log('✅ Profile saved successfully:', saveResult)
 
       setSuccess(true)
       setError(null)
@@ -191,8 +209,10 @@ export default function ProfileForm() {
       setSelectedFile(null)
       setAvatarPreview(null)
       
-      // Reload profile to get updated data
-      await loadProfile()
+      // Add a small delay to ensure database transaction is committed
+      setTimeout(async () => {
+        await loadProfile()
+      }, 100)
     } catch (err) {
       console.error('Failed to save profile:', err)
       setError(err instanceof Error ? err.message : 'Something went wrong')

@@ -69,6 +69,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Wallet address is required' }, { status: 400 })
     }
 
+    // Normalize wallet address to lowercase
+    const normalizedWallet = wallet.toLowerCase()
+    
     // Upsert profile (insert if not exists, update if exists)
     const result = await db.query(
       `INSERT INTO profiles (wallet, display_name, bio, avatar_asset_id) 
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
          bio = EXCLUDED.bio, 
          avatar_asset_id = EXCLUDED.avatar_asset_id
        RETURNING wallet, display_name, bio, avatar_asset_id`,
-      [wallet, displayName || null, bio || null, avatarAssetId || null]
+      [normalizedWallet, displayName || null, bio || null, avatarAssetId || null]
     )
 
     const profile = result.rows[0]
