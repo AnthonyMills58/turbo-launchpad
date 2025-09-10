@@ -93,6 +93,9 @@ export async function moveDexTradesToCorrectTable(
         ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING
       `
       
+      // Determine trader based on operation type
+      const trader = row.side === 'BUY' ? tx.from : tx.to
+      
       await pool.query(insertQuery, [
         row.token_id,
         chainId,
@@ -102,7 +105,7 @@ export async function moveDexTradesToCorrectTable(
         row.block_number,
         row.block_time,
         row.side,
-        tx.from, // trader (user address)
+        trader, // trader (user who performed the operation)
         row.amount_wei,
         row.amount_eth_wei,
         row.price_eth_per_token
@@ -292,7 +295,7 @@ export async function convertTransfersToDexTrades(
           row.block_number,
           row.block_time,
           side,
-          tx.from, // trader (user address)
+          side === 'BUY' ? tx.from : tx.to, // trader (user who performed the operation)
           row.amount_wei,
           ethAmount.toString(),
           price
