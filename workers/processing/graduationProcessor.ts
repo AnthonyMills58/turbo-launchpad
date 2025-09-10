@@ -6,11 +6,11 @@ import pool from '../../lib/db'
 export async function consolidateGraduationTransactions(chainId: number) {
   console.log(`\n=== Consolidating graduation transactions for chain ${chainId} ===`)
   
-  // Find graduation candidates from token_transfers
+  // Find graduation candidates from token_transfers (transactions with multiple records)
   const { rows: transferCandidates } = await pool.query(
     `SELECT token_id, tx_hash, COUNT(*) as count
      FROM public.token_transfers 
-     WHERE chain_id = $1 AND side = 'GRADUATION'
+     WHERE chain_id = $1
      GROUP BY token_id, tx_hash
      HAVING COUNT(*) > 1`,
     [chainId]
