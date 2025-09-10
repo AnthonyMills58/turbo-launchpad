@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { runPoolsPipelineForChain, runAppWideNormalization } from './pools'
 import { runAggPipelineForChain } from './agg'
-// Processing modules will be integrated in next step
+// Processing modules - will be integrated after removing duplicate functions
 // import { processTransferLogs } from './processing/transferProcessor'
 // import { consolidateGraduationTransactions } from './processing/graduationProcessor'
 // import { cleanupOverlappingTransfers } from './processing/cleanupProcessor'
