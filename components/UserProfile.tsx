@@ -207,7 +207,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
 
              {/* Tooltip */}
        {showTooltip && profile && displayName && (
-         <div className="absolute z-[9999] top-full right-0 transform translate-x-0 mt-1 px-4 py-3 bg-[#1b1e2b] border-2 border-purple-400/30 rounded-xl shadow-2xl shadow-purple-500/20 text-white text-xs min-w-64 max-w-80 w-fit transition-all duration-200 ease-in-out opacity-100">
+         <div className="absolute z-[9999] top-full right-0 transform translate-x-0 -mt-3 px-4 py-3 bg-[#1b1e2b] border-2 border-purple-400/30 rounded-xl shadow-2xl shadow-purple-500/20 text-white text-xs min-w-64 max-w-80 w-fit transition-all duration-200 ease-in-out opacity-100">
            <div className="flex items-start gap-4">
              {/* Left side: 1.5x bigger avatar */}
              <div className="flex-shrink-0">
