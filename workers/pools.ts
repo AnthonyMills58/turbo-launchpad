@@ -391,25 +391,6 @@ export async function processDexPools(chainId: number): Promise<void> {
             continue
           }
           
-          // Skip graduation transactions - they should be handled by ERC-20 processing and consolidation
-          // Graduation transactions typically happen around the same time as pool creation
-          // and involve multiple log events. We can identify them by checking if this is
-          // the first few blocks after pool creation or if there are multiple swap events in the same transaction
-          const { rows: poolCreationCheck } = await client.query(
-            `SELECT deployment_block FROM public.tokens t
-             JOIN public.dex_pools dp ON dp.token_id = t.id
-             WHERE dp.chain_id = $1 AND dp.pair_address = $2`,
-            [p.chain_id, p.pair_address]
-          )
-          
-          if (poolCreationCheck.length > 0) {
-            const deploymentBlock = poolCreationCheck[0].deployment_block
-            // Skip if this is within 100 blocks of deployment (likely graduation)
-            if (deploymentBlock && bn <= deploymentBlock + 100) {
-              console.log(`Skipping potential graduation transaction in DEX processing: ${log.transactionHash} (block ${bn}, deployment ${deploymentBlock})`)
-              continue
-            }
-          }
           
           const [a0In, a1In, a0Out, a1Out] =
             ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','uint256','uint256'], log.data)

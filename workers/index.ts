@@ -1259,29 +1259,7 @@ async function main() {
       // continue anyway - this is not critical for the main pipeline
     }
 
-    // 1) Pools pipeline (auto-discovery + DEX logs) — run FIRST to populate token_trades
-    for (const [chainId] of chainsToProcess) {
-      console.log(`\n=== Pools pipeline: chain ${chainId} ===`)
-      try {
-        await runPoolsPipelineForChain(chainId)
-      } catch (e) {
-        console.error(`Chain ${chainId}: pools pipeline failed with`, e)
-        // continue to next chain
-      }
-    }
-
-    // 1.5) Clean up any overlapping records between token_transfers and token_trades
-    for (const [chainId] of chainsToProcess) {
-      console.log(`\n=== Cleanup overlapping transfers: chain ${chainId} ===`)
-      try {
-        await cleanupOverlappingTransfers(chainId)
-      } catch (e) {
-        console.error(`Chain ${chainId}: cleanup failed with`, e)
-        // continue to next chain
-      }
-    }
-
-    // 2) ERC-20 transfers/balances/holders — run AFTER pools to avoid DEX overlap
+    // 1) ERC-20 transfers/balances/holders — run FIRST to populate token_transfers
     for (const [chainId, tokens] of chainsToProcess) {
       console.log(`\n=== ERC-20 scan: chain ${chainId} (${tokens.length} tokens) ===`)
       try {
@@ -1294,13 +1272,35 @@ async function main() {
       }
     }
 
-    // 2.5) Consolidate graduation transactions into single records
+    // 1.5) Consolidate graduation transactions into single records — run BEFORE DEX processing
     for (const [chainId] of chainsToProcess) {
       console.log(`\n=== Consolidating graduation transactions: chain ${chainId} ===`)
       try {
         await consolidateGraduationTransactions(chainId)
       } catch (e) {
         console.error(`Chain ${chainId}: graduation consolidation failed with`, e)
+        // continue to next chain
+      }
+    }
+
+    // 2) Pools pipeline (auto-discovery + DEX logs) — run AFTER consolidation to avoid interfering with graduation
+    for (const [chainId] of chainsToProcess) {
+      console.log(`\n=== Pools pipeline: chain ${chainId} ===`)
+      try {
+        await runPoolsPipelineForChain(chainId)
+      } catch (e) {
+        console.error(`Chain ${chainId}: pools pipeline failed with`, e)
+        // continue to next chain
+      }
+    }
+
+    // 2.5) Clean up any overlapping records between token_transfers and token_trades
+    for (const [chainId] of chainsToProcess) {
+      console.log(`\n=== Cleanup overlapping transfers: chain ${chainId} ===`)
+      try {
+        await cleanupOverlappingTransfers(chainId)
+      } catch (e) {
+        console.error(`Chain ${chainId}: cleanup failed with`, e)
         // continue to next chain
       }
     }
