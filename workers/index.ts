@@ -735,13 +735,21 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
     row.amount_eth_wei && 
     row.price_eth_per_token
   )
+  
+  console.log(`\n=== Found ${dexTradeRows.length} BUY/SELL records to potentially move ===`)
+  for (const row of dexTradeRows) {
+    console.log(`  ${row.side}: token ${row.token_id}, tx ${row.tx_hash}, block ${row.block_number}, eth ${row.amount_eth_wei}, price ${row.price_eth_per_token}`)
+  }
+  
   if (dexTradeRows.length > 0) {
     console.log(`\n=== Moving ${dexTradeRows.length} BUY/SELL records from token_transfers to token_trades ===`)
     await moveDexTradesToCorrectTable(dexTradeRows, chainId, provider)
   }
   
+  console.log(`\n=== Processing ${rows.length} remaining records in main loop ===`)
   for (const row of rows) {
     try {
+      console.log(`Processing record: ${row.side} token ${row.token_id}, tx ${row.tx_hash}, block ${row.block_number}`)
       const tx = await provider.getTransaction(row.tx_hash)
       
       // Get transfer type for this transaction using actual addresses from the database
