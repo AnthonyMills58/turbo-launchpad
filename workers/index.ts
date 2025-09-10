@@ -456,7 +456,7 @@ async function consolidateGraduationTransactions(chainId: number) {
         ]
       )
       
-      // Remove the individual transfer records
+      // Remove the individual transfer records (including UNLOCK records from same tx)
       await pool.query(
         `DELETE FROM public.token_transfers 
          WHERE chain_id = $1 AND tx_hash = $2 AND log_index > 0`,
@@ -546,6 +546,28 @@ async function consolidateGraduationTransactions(chainId: number) {
 // Clean up overlapping records between token_transfers and token_trades
 async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
+  
+  // First, clean up duplicate records in token_trades with 1970 timestamps
+  const { rows: duplicateCount } = await pool.query(
+    `SELECT COUNT(*) as count
+     FROM public.token_trades 
+     WHERE chain_id = $1 AND block_time < '1980-01-01'`,
+    [chainId]
+  )
+  
+  const duplicateCountNum = parseInt(duplicateCount[0].count)
+  console.log(`Found ${duplicateCountNum} records with 1970 timestamps in token_trades`)
+  
+  if (duplicateCountNum > 0) {
+    // Remove records with 1970 timestamps (these are likely duplicates or errors)
+    const { rowCount: removedDuplicates } = await pool.query(
+      `DELETE FROM public.token_trades 
+       WHERE chain_id = $1 AND block_time < '1980-01-01'`,
+      [chainId]
+    )
+    
+    console.log(`Removed ${removedDuplicates} records with 1970 timestamps from token_trades`)
+  }
   
   // Count overlapping records first
   const { rows: overlapCount } = await pool.query(
