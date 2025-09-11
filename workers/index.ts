@@ -8,7 +8,7 @@ import { runAggPipelineForChain } from './agg'
 // import { processTransferLogs } from './processing/transferProcessor' // Will be used in Phase 4
 import { consolidateGraduationTransactions as consolidateGraduationTransactionsModule } from './processing/graduationProcessor'
 import { cleanupOverlappingTransfers as cleanupOverlappingTransfersModule } from './processing/cleanupProcessor'
-import { moveDexTradesToCorrectTable as moveDexTradesToCorrectTableModule, convertTransfersToDexTrades as convertTransfersToDexTradesModule } from './processing/dexProcessor'
+import { markDexOperationsInTransfers as markDexOperationsInTransfersModule, convertTransfersToDexTrades as convertTransfersToDexTradesModule } from './processing/dexProcessor'
 import { 
   TRANSFER_TOPIC, 
   ZERO, 
@@ -373,7 +373,7 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
   
   if (dexTradeRows.length > 0) {
     console.log(`\n=== Moving ${dexTradeRows.length} BUY records from token_transfers to token_trades ===`)
-    await moveDexTradesToCorrectTableWrapper(dexTradeRows, chainId, provider)
+    await markDexOperationsInTransfersWrapper(dexTradeRows, chainId, provider)
   }
   
   console.log(`\n=== Processing ${rows.length} remaining records in main loop ===`)
@@ -1034,8 +1034,8 @@ export async function cleanupOverlappingTransfersWrapper(chainId: number) {
 }
 
 // Wrapper for DEX trade operations
-export async function moveDexTradesToCorrectTableWrapper(
-  tradeRows: Array<{
+export async function markDexOperationsInTransfersWrapper(
+  transferRows: Array<{
     token_id: number
     tx_hash: string
     log_index: number
@@ -1049,7 +1049,7 @@ export async function moveDexTradesToCorrectTableWrapper(
   chainId: number,
   provider: ethers.JsonRpcProvider
 ) {
-  return await moveDexTradesToCorrectTableModule(tradeRows, chainId, provider)
+  return await markDexOperationsInTransfersModule(transferRows, chainId, provider)
 }
 
 // Wrapper for transfer conversion

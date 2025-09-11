@@ -5,8 +5,8 @@ import { ethers } from 'ethers'
 import pool from '../../lib/db'
 import { sleep, isRateLimit } from '../core/rateLimiting'
 
-export async function moveDexTradesToCorrectTable(
-  tradeRows: Array<{
+export async function markDexOperationsInTransfers(
+  transferRows: Array<{
     token_id: number
     tx_hash: string
     log_index: number
@@ -20,20 +20,20 @@ export async function moveDexTradesToCorrectTable(
   chainId: number,
   provider: ethers.JsonRpcProvider
 ) {
-  console.log(`\n=== Moving ${tradeRows.length} BUY/SELL records from token_transfers to token_trades ===`)
+  console.log(`\n=== Marking ${transferRows.length} BUY/SELL records as DEX operations ===`)
   
-  for (const row of tradeRows) {
+  for (const row of transferRows) {
     try {
       console.log(`Processing ${row.side} operation: token ${row.token_id}, tx ${row.tx_hash}, log_index ${row.log_index}`)
       
-      // Check if this token has a DEX pool (only move DEX operations, not bonding curve)
+      // Check if this token has a DEX pool (only mark DEX operations, not bonding curve)
       const { rows: poolRows } = await pool.query(
         'SELECT pair_address FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2',
         [row.token_id, chainId]
       )
       
       if (poolRows.length === 0) {
-        console.log(`Token ${row.token_id} has no DEX pool, skipping ${row.side} move (likely bonding curve operation)`)
+        console.log(`Token ${row.token_id} has no DEX pool, skipping ${row.side} mark (likely bonding curve operation)`)
         continue
       }
       
@@ -53,9 +53,9 @@ export async function moveDexTradesToCorrectTable(
       const token = tokenRows[0]
       console.log(`Token ${row.token_id} graduation status: is_graduated=${token.is_graduated}`)
       
-      // Only move operations that happened after graduation or if token is graduated
+      // Only mark operations that happened after graduation or if token is graduated
       if (!token.is_graduated) {
-        console.log(`Token ${row.token_id} not graduated, skipping ${row.side} move (likely bonding curve operation)`)
+        console.log(`Token ${row.token_id} not graduated, skipping ${row.side} mark (likely bonding curve operation)`)
         continue
       }
       
@@ -79,11 +79,11 @@ export async function moveDexTradesToCorrectTable(
       }
       
       if (!tx) {
-        console.log(`Could not get transaction ${row.tx_hash} for ${row.side} move`)
+        console.log(`Could not get transaction ${row.tx_hash} for ${row.side} mark`)
         continue
       }
       
-      console.log(`Got transaction details for ${row.side} move: tx=${row.tx_hash}, from=${tx.from}`)
+      console.log(`Got transaction details for ${row.side} mark: tx=${row.tx_hash}, from=${tx.from}`)
       
       // Update token_transfers to mark as DEX operation
       const updateQuery = `
@@ -94,10 +94,10 @@ export async function moveDexTradesToCorrectTable(
       
       await pool.query(updateQuery, [chainId, row.tx_hash, row.log_index])
       
-      console.log(`Moved ${row.side} operation: token ${row.token_id}, tx ${row.tx_hash}`)
+      console.log(`Marked ${row.side} operation as DEX: token ${row.token_id}, tx ${row.tx_hash}`)
       
     } catch (error) {
-      console.error(`Error moving ${row.side} operation for token ${row.token_id}, tx ${row.tx_hash}:`, error)
+      console.error(`Error marking ${row.side} operation for token ${row.token_id}, tx ${row.tx_hash}:`, error)
     }
   }
 }

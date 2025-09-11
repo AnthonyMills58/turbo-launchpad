@@ -14,8 +14,8 @@ export const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID)
 
 // Tunables
 export const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 50000)         // blocks per query
-export const DEFAULT_DEX_CHUNK = Number(process.env.DEX_CHUNK ?? 5_000)        // blocks per DEX query
-export const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 15)       // ms between getBlock calls
+export const DEFAULT_DEX_CHUNK = Number(process.env.DEX_CHUNK ?? 1_000)        // blocks per DEX query (reduced for rate limiting)
+export const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 100)      // ms between getBlock calls (increased for rate limiting)
 export const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
 export const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 200)) // addresses per getLogs
 export const SKIP_HEALTH_CHECK = process.env.SKIP_HEALTH_CHECK === 'true'      // skip chain health checks

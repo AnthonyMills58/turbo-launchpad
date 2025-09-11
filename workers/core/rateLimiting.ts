@@ -18,7 +18,7 @@ export function isRateLimit(err: unknown): boolean {
 
 export async function withRateLimit<T>(
   rpcCall: () => Promise<T>,
-  maxAttempts: number = 5
+  maxAttempts: number = 10
 ): Promise<T> {
   let attempts = 0
   while (true) {
@@ -29,7 +29,8 @@ export async function withRateLimit<T>(
     } catch (e) {
       attempts++
       if (isRateLimit(e) && attempts <= maxAttempts) {
-        const backoff = Math.min(1000 * attempts, 5000)
+        const backoff = Math.min(2000 * attempts, 10000) // Increased backoff
+        console.log(`Rate limit hit, retrying in ${backoff}ms (attempt ${attempts}/${maxAttempts})`)
         await sleep(backoff)
         continue
       }
