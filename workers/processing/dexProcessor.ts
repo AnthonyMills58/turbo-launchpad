@@ -85,37 +85,14 @@ export async function moveDexTradesToCorrectTable(
       
       console.log(`Got transaction details for ${row.side} move: tx=${row.tx_hash}, from=${tx.from}`)
       
-      // Insert into token_trades table
-      const insertQuery = `
-        INSERT INTO public.token_trades
-          (token_id, chain_id, src, tx_hash, log_index, block_number, block_time, side, trader, amount_token_wei, amount_eth_wei, price_eth_per_token)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING
+      // Update token_transfers to mark as DEX operation
+      const updateQuery = `
+        UPDATE public.token_transfers 
+        SET src = 'DEX'
+        WHERE chain_id = $1 AND tx_hash = $2 AND log_index = $3
       `
       
-      // Determine trader based on operation type
-      const trader = row.side === 'BUY' ? tx.from : tx.to
-      
-      await pool.query(insertQuery, [
-        row.token_id,
-        chainId,
-        'DEX', // src
-        row.tx_hash,
-        row.log_index,
-        row.block_number,
-        row.block_time,
-        row.side,
-        trader, // trader (user who performed the operation)
-        row.amount_wei,
-        row.amount_eth_wei,
-        row.price_eth_per_token
-      ])
-      
-      // Remove from token_transfers
-      await pool.query(
-        'DELETE FROM public.token_transfers WHERE chain_id = $1 AND tx_hash = $2 AND log_index = $3',
-        [chainId, row.tx_hash, row.log_index]
-      )
+      await pool.query(updateQuery, [chainId, row.tx_hash, row.log_index])
       
       console.log(`Moved ${row.side} operation: token ${row.token_id}, tx ${row.tx_hash}`)
       
@@ -280,32 +257,19 @@ export async function convertTransfersToDexTrades(
         }
       }
       
-      // Insert into token_trades
+      // Update token_transfers to mark as DEX operation and update side/price
       await pool.query(
-        `INSERT INTO public.token_trades
-          (token_id, chain_id, src, tx_hash, log_index, block_number, block_time, side, trader, amount_token_wei, amount_eth_wei, price_eth_per_token)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
+        `UPDATE public.token_transfers 
+         SET src = 'DEX', side = $1, amount_eth_wei = $2, price_eth_per_token = $3
+         WHERE chain_id = $4 AND tx_hash = $5 AND log_index = $6`,
         [
-          row.token_id,
-          chainId,
-          'DEX', // src
-          row.tx_hash,
-          row.log_index,
-          row.block_number,
-          row.block_time,
           side,
-          side === 'BUY' ? tx.from : tx.to, // trader (user who performed the operation)
-          row.amount_wei,
           ethAmount.toString(),
-          price
+          price,
+          chainId,
+          row.tx_hash,
+          row.log_index
         ]
-      )
-      
-      // Remove from token_transfers
-      await pool.query(
-        'DELETE FROM public.token_transfers WHERE chain_id = $1 AND tx_hash = $2 AND log_index = $3',
-        [chainId, row.tx_hash, row.log_index]
       )
       
       console.log(`Converted TRANSFER to ${side}: token ${row.token_id}, tx ${row.tx_hash}, eth=${ethAmount.toString()}, price=${price}`)

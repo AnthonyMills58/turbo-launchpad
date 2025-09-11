@@ -407,18 +407,22 @@ export async function processDexPools(chainId: number): Promise<void> {
             (Number(quoteWei) / 10 ** (p.quote_decimals ?? 18)) /
             (Number(tokenWei) / 10 ** (p.token_decimals ?? 18))
 
+          // Determine from_address and to_address based on side
+          const from_address = side === 'BUY' ? p.pair_address : actualTrader.toLowerCase()
+          const to_address = side === 'BUY' ? actualTrader.toLowerCase() : p.pair_address
+          
           await client.query(
-            `INSERT INTO public.token_trades
-               (token_id, chain_id, src, tx_hash, log_index,
-                block_number, block_time, side, trader,
-                amount_token_wei, amount_eth_wei, price_eth_per_token)
-             VALUES ($1,$2,'DEX',$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            `INSERT INTO public.token_transfers
+               (token_id, chain_id, contract_address, tx_hash, log_index,
+                block_number, block_time, from_address, to_address,
+                amount_wei, amount_eth_wei, price_eth_per_token, side, src)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
              ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING`,
             [
-              p.token_id, p.chain_id,
+              p.token_id, p.chain_id, p.pair_address,
               log.transactionHash!, log.index!,
-              bn, block_time, side, actualTrader.toLowerCase(),
-              tokenWei.toString(), quoteWei.toString(), price_eth_per_token
+              bn, block_time, from_address, to_address,
+              tokenWei.toString(), quoteWei.toString(), price_eth_per_token, side, 'DEX'
             ]
           )
           
