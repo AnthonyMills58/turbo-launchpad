@@ -815,7 +815,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
            ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
              amount_eth_wei = CASE WHEN EXCLUDED.amount_eth_wei IS NOT NULL THEN EXCLUDED.amount_eth_wei ELSE token_transfers.amount_eth_wei END,
              price_eth_per_token = CASE WHEN EXCLUDED.price_eth_per_token IS NOT NULL THEN EXCLUDED.price_eth_per_token ELSE token_transfers.price_eth_per_token END,
-             side = CASE WHEN token_transfers.side = 'GRADUATION' THEN token_transfers.side ELSE EXCLUDED.side END`,
+             side = EXCLUDED.side`,
           [tokenId, chainId, tokenAddr, bn, ts, log.transactionHash!, log.index!, fromAddr.toLowerCase(), toAddr.toLowerCase(), amount.toString(), isPaymentTransfer ? ethAmount.toString() : null, isPaymentTransfer ? price : null, transferType]
           )
           
@@ -963,13 +963,13 @@ async function main() {
       }
     }
 
-    // 1.5) Consolidate graduation transactions into single records — run BEFORE DEX processing
+    // 1.5) Convert graduation transactions to new 4-record format — run BEFORE DEX processing
     for (const [chainId] of chainsToProcess) {
-      console.log(`\n=== Consolidating graduation transactions: chain ${chainId} ===`)
+      console.log(`\n=== Converting graduation transactions to new format: chain ${chainId} ===`)
       try {
         await consolidateGraduationTransactionsWrapper(chainId)
       } catch (e) {
-        console.error(`Chain ${chainId}: graduation consolidation failed with`, e)
+        console.error(`Chain ${chainId}: graduation conversion failed with`, e)
         // continue to next chain
       }
     }
