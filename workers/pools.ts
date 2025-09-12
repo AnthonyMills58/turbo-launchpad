@@ -4,6 +4,7 @@ import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
 import TurboTokenABI from '../lib/abi/TurboToken.json'
 import { SWAP_TOPIC, SYNC_TOPIC, getDexChunkSize } from './core/config'
 import { providerFor } from './core/providers'
+import { withRateLimit } from './core/rateLimiting'
 
 // ---------- DB shapes ----------
 type TokenRow = {
@@ -181,7 +182,7 @@ export async function backfillTraderAddresses(chainId: number): Promise<void> {
   let revertedCount = 0
   for (const trade of allTrades) {
     try {
-      const receipt = await providerForCleanup.getTransactionReceipt(trade.tx_hash)
+      const receipt = await withRateLimit(() => providerForCleanup.getTransactionReceipt(trade.tx_hash), 10, chainId)
       if (receipt && receipt.status !== 1) {
         await pool.query(
           `DELETE FROM public.token_trades WHERE chain_id = $1 AND tx_hash = $2`,
@@ -220,10 +221,10 @@ export async function backfillTraderAddresses(chainId: number): Promise<void> {
   for (const trade of tradesToFix) {
     try {
       // Get the transaction to find the actual Swap event
-      const tx = await provider.getTransaction(trade.tx_hash)
+      const tx = await withRateLimit(() => provider.getTransaction(trade.tx_hash), 10, chainId)
       if (!tx) continue
       
-      const receipt = await provider.getTransactionReceipt(trade.tx_hash)
+      const receipt = await withRateLimit(() => provider.getTransactionReceipt(trade.tx_hash), 10, chainId)
       if (!receipt) continue
       
       // Find the Swap event log that matches our log_index
@@ -261,7 +262,7 @@ export async function processDexPools(chainId: number): Promise<void> {
   const pools = await fetchDexPools(chainId)
   if (pools.length === 0) return
 
-  const head = await provider.getBlockNumber()
+  const head = await withRateLimit(() => provider.getBlockNumber(), 10, chainId)
 
   for (const rawPool of pools) {
     const p = await ensurePoolDecimals(rawPool, provider)
@@ -298,12 +299,12 @@ export async function processDexPools(chainId: number): Promise<void> {
     
     console.log(`Pool ${p.pair_address}: last_processed=${p.last_processed_block}, deployment=${p.deployment_block}, from=${from}, to=${to}`)
 
-    const logs: Log[] = await provider.getLogs({
+    const logs: Log[] = await withRateLimit(() => provider.getLogs({
       address: p.pair_address as `0x${string}`,
       fromBlock: from,
       toBlock: to,
       topics: [[SWAP_TOPIC, SYNC_TOPIC]],
-    })
+    }), 10, chainId)
 
     logs.sort(
       (a, b) =>
@@ -318,7 +319,7 @@ export async function processDexPools(chainId: number): Promise<void> {
     const blkTs = new Map<number, number>()
     const tsOf = async (bn: number) => {
       if (blkTs.has(bn)) return blkTs.get(bn)!
-      const blk = await provider.getBlock(bn)
+      const blk = await withRateLimit(() => provider.getBlock(bn), 10, chainId)
       const ts = Number(blk?.timestamp ?? Math.floor(Date.now() / 1000))
       blkTs.set(bn, ts)
       return ts
@@ -362,11 +363,11 @@ export async function processDexPools(chainId: number): Promise<void> {
           )
         } else if (log.topics[0] === SWAP_TOPIC) {
           // Get the actual trader from the transaction sender, not the Swap event 'to' address
-          const tx = await provider.getTransaction(log.transactionHash!)
+          const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 10, chainId)
           const actualTrader = tx?.from || ethers.getAddress('0x' + log.topics[2].slice(26))
           
           // Check if transaction was successful (not reverted)
-          const receipt = await provider.getTransactionReceipt(log.transactionHash!)
+          const receipt = await withRateLimit(() => provider.getTransactionReceipt(log.transactionHash!), 10, chainId)
           if (receipt && receipt.status !== 1) {
             console.log(`Skipping reverted transaction: ${log.transactionHash}`)
             continue
