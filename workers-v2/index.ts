@@ -354,15 +354,16 @@ async function processTokenChunk(
   }
 }
 
+
 /**
- * Fetch DEX logs from OKLink Explorer API as fallback
+ * Fetch DEX swaps from OKLink Explorer API as GPT instructed
  */
-async function fetchDexLogsFromOKLink(
+async function fetchDexSwapsFromOKLink(
   pairAddress: string,
   fromBlock: number,
   toBlock: number,
   chainId: number
-): Promise<ethers.Log[]> {
+): Promise<any[]> {
   const chainShortName = chainId === 6342 ? 'megaeth-testnet' : 'megaeth'
   
   // Try without API key first (public access)
@@ -375,6 +376,8 @@ async function fetchDexLogsFromOKLink(
   if (apiKey) {
     headers['X-API-KEY'] = apiKey
   }
+  
+  console.log(`Fetching transactions for pair ${pairAddress} from OKLink API`)
   
   // Fetch transaction list from OKLink API
   const response = await fetch(
@@ -392,9 +395,11 @@ async function fetchDexLogsFromOKLink(
   }
   
   const transactions = data.data || []
-  const logs: ethers.Log[] = []
+  const swapTransactions: any[] = []
   
-  // Filter for swap events and convert to ethers.Log format
+  console.log(`OKLink returned ${transactions.length} transactions for pair ${pairAddress}`)
+  
+  // Filter for swap transactions as GPT instructed
   for (const tx of transactions) {
     if (tx.blockNumber < fromBlock || tx.blockNumber > toBlock) {
       continue
@@ -403,23 +408,22 @@ async function fetchDexLogsFromOKLink(
     // Look for swap events in transaction logs
     if (tx.logs) {
       for (const log of tx.logs) {
-        if (log.topics && log.topics[0] === SWAP_TOPIC) {
-          logs.push({
-            address: log.address,
-            topics: log.topics,
-            data: log.data,
-            blockNumber: parseInt(log.blockNumber),
-            transactionHash: tx.hash,
-            transactionIndex: parseInt(tx.transactionIndex),
-            index: parseInt(log.logIndex),
-            removed: false
+        // Filter by UniswapV2 Swap signature as GPT instructed
+        if (log.topics && log.topics[0] === '0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822') {
+          console.log(`Found swap transaction: ${tx.hash} at block ${tx.blockNumber}`)
+          swapTransactions.push({
+            transaction: tx,
+            log: log,
+            blockNumber: parseInt(tx.blockNumber),
+            transactionHash: tx.hash
           })
         }
       }
     }
   }
   
-  return logs
+  console.log(`Found ${swapTransactions.length} swap transactions in block range ${fromBlock}-${toBlock}`)
+  return swapTransactions
 }
 
 /**
@@ -469,33 +473,13 @@ async function processDexLogsForChain(
   const pairAddress = ethers.getAddress(dexPool.pair_address)
   console.log(`Token ${token.id}: Using DEX pool address: ${pairAddress}`)
   
-  let dexLogs: ethers.Log[] = []
+  // Try OKLink API for DEX swap detection as GPT suggested
+  console.log(`Token ${token.id}: Fetching DEX swaps from OKLink API`)
+  const dexLogs = await fetchDexSwapsFromOKLink(pairAddress, actualFromBlock, toBlock, chainId)
+  console.log(`Token ${token.id}: Found ${dexLogs.length} DEX swaps via OKLink`)
   
-  try {
-    // Try RPC first
-    dexLogs = await withRateLimit(() => provider.getLogs({
-      address: pairAddress,
-      topics: [SWAP_TOPIC, SYNC_TOPIC],
-      fromBlock: actualFromBlock,
-      toBlock
-    }), 2, chainId)
-    
-    console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs via RPC`)
-  } catch (error) {
-    console.warn(`Token ${token.id}: RPC failed for DEX logs, trying OKLink API: ${error}`)
-    
-    // Fallback to OKLink Explorer API
-    try {
-      dexLogs = await fetchDexLogsFromOKLink(pairAddress, actualFromBlock, toBlock, chainId)
-      console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs via OKLink API`)
-    } catch (apiError) {
-      console.error(`Token ${token.id}: Both RPC and OKLink API failed: ${apiError}`)
-      return
-    }
-  }
-  
-  for (const log of dexLogs) {
-    await processDexLog(token, dexPool, log, provider, chainId)
+  for (const swapData of dexLogs) {
+    await processOKLinkSwap(token, dexPool, swapData, provider, chainId)
   }
   
   // Update DEX cursor for this chain
@@ -902,6 +886,92 @@ async function processDexLog(
     }
   } catch (error) {
     console.error(`❌ Failed to process DEX log ${log.transactionHash}:`, error)
+  }
+}
+
+/**
+ * Process OKLink swap data
+ */
+async function processOKLinkSwap(
+  token: TokenRow,
+  dexPool: DexPoolRow,
+  swapData: any,
+  provider: ethers.JsonRpcProvider,
+  chainId: number
+) {
+  const { transaction, log, blockNumber, transactionHash } = swapData
+  
+  console.log(`Processing OKLink swap: ${transactionHash} at block ${blockNumber}`)
+  
+  // Decode swap data using UniswapV2 Swap ABI as GPT instructed
+  const swapInterface = new ethers.Interface([
+    'event Swap(address indexed sender, uint amount0In, uint amount1In, uint amount0Out, uint amount1Out, address indexed to)'
+  ])
+  
+  try {
+    const decoded = swapInterface.parseLog({
+      topics: log.topics,
+      data: log.data
+    })
+    
+    if (!decoded) {
+      console.warn(`Could not decode swap log for ${transactionHash}`)
+      return
+    }
+    
+    const { sender, amount0In, amount1In, amount0Out, amount1Out, to } = decoded.args
+    
+    // Get block timestamp
+    const block = await withRateLimit(() => provider.getBlock(blockNumber), 2, chainId)
+    const blockTime = new Date(Number(block!.timestamp) * 1000)
+    
+    // Determine BUY/SELL direction as GPT instructed
+    let side: string
+    let fromAddress: string
+    let toAddress: string
+    let amountWei: string
+    let ethAmountWei: string
+    let priceEthPerToken: number | null = null
+    
+    if (amount0In > 0n && amount1Out > 0n) {
+      // Token BUY: ETH in, tokens out
+      side = 'BUY'
+      fromAddress = dexPool.pair_address
+      toAddress = to
+      amountWei = amount1Out.toString()
+      ethAmountWei = amount0In.toString()
+      priceEthPerToken = Number(ethAmountWei) / Number(amountWei)
+    } else if (amount1In > 0n && amount0Out > 0n) {
+      // Token SELL: tokens in, ETH out
+      side = 'SELL'
+      fromAddress = to
+      toAddress = dexPool.pair_address
+      amountWei = amount1In.toString()
+      ethAmountWei = amount0Out.toString()
+      priceEthPerToken = Number(ethAmountWei) / Number(amountWei)
+    } else {
+      console.log(`Unknown swap direction for ${transactionHash}`)
+      return
+    }
+    
+    // Insert DEX transfer record
+    await pool.query(`
+      INSERT INTO public.token_transfers
+        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+        side = EXCLUDED.side,
+        src = EXCLUDED.src
+    `, [
+      token.id, chainId, token.contract_address, blockNumber, blockTime, transactionHash,
+      parseInt(log.logIndex), fromAddress, toAddress, amountWei, ethAmountWei, priceEthPerToken,
+      side, 'DEX'
+    ])
+    
+    console.log(`✅ Token ${token.id}: Recorded DEX ${side} from OKLink (${amountWei} tokens, ${ethAmountWei} ETH)`)
+    
+  } catch (error) {
+    console.error(`Error processing OKLink swap ${transactionHash}:`, error)
   }
 }
 
