@@ -14,7 +14,6 @@ import 'dotenv/config'
 import { ethers } from 'ethers'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
-import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
 import { withRateLimit } from './core/rateLimiting'
 import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT } from './core/config'
 
@@ -52,7 +51,7 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
     
     // Try to get the latest block number with a timeout
     const latestBlock = await Promise.race([
-      withRateLimit(() => provider.getBlockNumber(), 10, chainId),
+      withRateLimit(() => provider.getBlockNumber(), 2, chainId),
       new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Health check timeout')), HEALTH_CHECK_TIMEOUT)
       )
@@ -60,7 +59,7 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
     
     // Try to get block details to ensure the chain is actually responding
     const block = await Promise.race([
-      withRateLimit(() => provider.getBlock(latestBlock), 10, chainId),
+      withRateLimit(() => provider.getBlock(latestBlock), 2, chainId),
       new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Block fetch timeout')), HEALTH_CHECK_TIMEOUT / 2)
       )
@@ -81,30 +80,6 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
   }
 }
 
-/**
- * Get healthy chains for processing
- */
-async function getHealthyChains(tokensByChain: Map<number, TokenRow[]>): Promise<Map<number, TokenRow[]>> {
-  const healthyChains = new Map<number, TokenRow[]>()
-  
-  for (const [chainId, tokens] of tokensByChain) {
-    try {
-      const provider = providerFor(chainId)
-      const isHealthy = await checkChainHealth(chainId, provider)
-      
-      if (isHealthy) {
-        healthyChains.set(chainId, tokens)
-        console.log(`✅ Chain ${chainId}: Healthy - will process ${tokens.length} tokens`)
-      } else {
-        console.log(`❌ Chain ${chainId}: Unhealthy - skipping ${tokens.length} tokens`)
-      }
-    } catch (error) {
-      console.error(`❌ Chain ${chainId}: Health check error - ${error}`)
-    }
-  }
-  
-  return healthyChains
-}
 
 /**
  * Main worker function
@@ -201,7 +176,7 @@ async function processChain(chainId: number) {
  */
 async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, chainId: number) {
   console.log(`🔍 Getting current block for token ${token.id}...`)
-  const currentBlock = await withRateLimit(() => provider.getBlockNumber(), 10, chainId)
+  const currentBlock = await withRateLimit(() => provider.getBlockNumber(), 2, chainId)
   console.log(`🔍 Current block: ${currentBlock}`)
   
   // Determine processing range
@@ -331,7 +306,7 @@ async function processTokenChunk(
     
     // Process each graduation transaction
     for (const [txHash, logs] of logsByTx) {
-      const tx = await withRateLimit(() => provider.getTransaction(txHash), 10, chainId)
+      const tx = await withRateLimit(() => provider.getTransaction(txHash), 2, chainId)
       if (!tx) {
         console.log(`Token ${token.id}: No transaction found for ${txHash}`)
         continue
@@ -346,7 +321,7 @@ async function processTokenChunk(
       if (isGraduation) {
         // Process graduation (creates 2 records: BUY + GRADUATION)
         console.log(`Token ${token.id}: Processing graduation transaction ${tx.hash}`)
-        const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 10, chainId)
+        const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 2, chainId)
         const blockTime = new Date(Number(block!.timestamp) * 1000)
         await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId)
         // Skip processing individual logs - graduation handles all logs in this transaction
@@ -452,14 +427,14 @@ async function processTransferLog(
     const amount = BigInt(log.data)
     
     // Get transaction details
-    const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 10, chainId)
+    const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 2, chainId)
     if (!tx) {
       console.log(`Token ${token.id}: No transaction found for ${log.transactionHash}`)
       return
     }
     
     // Get block timestamp
-    const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
+    const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 2, chainId)
     const blockTime = new Date(Number(block!.timestamp) * 1000)
     
     // Process regular transfer (graduation is handled in main loop)
@@ -481,7 +456,7 @@ async function detectGraduation(
 ): Promise<boolean> {
   // Check if this transaction contains graduation by looking for Graduated event
   try {
-    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 10, chainId)
+    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 2, chainId)
     if (receipt) {
       // Check for Graduated event
       const graduatedEvent = receipt.logs.find(log => 
@@ -593,10 +568,21 @@ async function createGraduationRecords(
   // Get transaction value (ETH paid by user)
   const userEthAmount = tx.value || 0n
   
+  // LOG: Show original BUY record details before consolidation
+  console.log(`\n=== ORIGINAL BUY RECORD (before graduation consolidation) ===`)
+  console.log(`Token ${token.id}: User BUY log found:`)
+  console.log(`  - From: 0x0000... (zero address - mint)`)
+  console.log(`  - To: ${userToAddress}`)
+  console.log(`  - Amount Wei: ${userAmount.toString()}`)
+  console.log(`  - Transaction Value (ETH): ${userEthAmount.toString()}`)
+  console.log(`  - Transaction Hash: ${userBuyLog.transactionHash}`)
+  console.log(`  - Block Number: ${userBuyLog.blockNumber}`)
+  console.log(`=== END ORIGINAL BUY RECORD ===\n`)
+  
   // Find the add liquidity event to get the actual ETH amount added to the pool
   let liquidityEthAmount = 0n
   try {
-    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 10, chainId)
+    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 2, chainId)
     if (receipt) {
       // Look for addLiquidity event or similar in the transaction receipt
       // The ETH amount should be in the transaction value or in the addLiquidity event data
@@ -618,17 +604,22 @@ async function createGraduationRecords(
       'function getCurrentPrice() view returns (uint256)'
     ])
     
+    console.log(`Token ${token.id}: Getting graduation price at block ${log.blockNumber}`)
     const priceWei = await withRateLimit(() => provider.call({
       to: token.contract_address,
       data: turboTokenInterface.encodeFunctionData('getCurrentPrice'),
       blockTag: log.blockNumber
     }), 10, chainId)
     
+    console.log(`Token ${token.id}: Price call result: ${priceWei}`)
     if (priceWei && priceWei !== '0x') {
       priceEthPerToken = Number(priceWei) / 1e18
+      console.log(`Token ${token.id}: Calculated price: ${priceEthPerToken}`)
+    } else {
+      console.warn(`Token ${token.id}: Price call returned empty or invalid result: ${priceWei}`)
     }
   } catch (error) {
-    console.warn(`Could not get graduation price: ${error}`)
+    console.warn(`Token ${token.id}: Could not get graduation price: ${error}`)
   }
   
   // Calculate price for user BUY record
@@ -641,7 +632,7 @@ async function createGraduationRecords(
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    1, // log_index 1 for user BUY
+    userBuyLog.index, // Use actual log index from the original user buy log
     '0x0000000000000000000000000000000000000000', // From zero address (mint)
     userToAddress, // To user who triggered graduation
     userAmount.toString(),
@@ -658,7 +649,7 @@ async function createGraduationRecords(
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    0, // log_index 0 for graduation summary
+    graduationLog.index, // Use actual log index from the original graduation log
     token.contract_address, // From contract
     lpToAddress, // To LP pool (or zero address if not found)
     graduationAmount.toString(), // Use graduation amount
@@ -827,14 +818,14 @@ async function processSwapLog(
   // const to = ethers.getAddress('0x' + log.topics[2].slice(26)) // Not used in current logic
   
   // Get transaction details
-  const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 10, chainId)
+  const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 2, chainId)
   if (!tx) {
     console.log(`Token ${token.id}: No transaction found for DEX swap ${log.transactionHash}`)
     return
   }
   
   // Get block timestamp
-  const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
+  const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 2, chainId)
   const blockTime = new Date(Number(block!.timestamp) * 1000)
   
   // Determine swap direction and amounts
@@ -902,7 +893,7 @@ async function processSyncLog(
   const reserve1 = BigInt('0x' + log.data.slice(66, 130))
   
   // Get block timestamp
-  const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
+  const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 2, chainId)
   const blockTime = new Date(Number(block!.timestamp) * 1000)
   
   // Calculate price from reserves
