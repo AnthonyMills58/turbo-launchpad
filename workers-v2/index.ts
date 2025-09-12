@@ -192,6 +192,8 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   
   // Get DEX pool info if graduated
   let dexPool: DexPoolRow | null = null
+  console.log(`Token ${token.id}: is_graduated = ${token.is_graduated}`)
+  
   if (token.is_graduated) {
     const { rows } = await pool.query<DexPoolRow>(`
       SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block
@@ -199,10 +201,15 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
       WHERE token_id = $1 AND chain_id = $2
     `, [token.id, chainId])
     
+    console.log(`Token ${token.id}: Found ${rows.length} DEX pool records`)
     if (rows.length > 0) {
       dexPool = rows[0]
       console.log(`Token ${token.id}: Found DEX pool ${dexPool.pair_address}`)
+    } else {
+      console.log(`Token ${token.id}: No DEX pool record found despite being graduated`)
     }
+  } else {
+    console.log(`Token ${token.id}: Not graduated - skipping DEX processing`)
   }
   
   // Process in chunks
@@ -371,9 +378,11 @@ async function processDexLogsForChain(
   
   const dexLastProcessed = cursorRows[0].dex_last_processed_block || 0
   
+  console.log(`Token ${token.id}: DEX cursor check - fromBlock: ${fromBlock}, toBlock: ${toBlock}, dexLastProcessed: ${dexLastProcessed}`)
+  
   // Only process if this block range hasn't been processed yet
   if (toBlock <= dexLastProcessed) {
-    console.log(`Token ${token.id}: DEX logs for blocks ${fromBlock}-${toBlock} already processed`)
+    console.log(`Token ${token.id}: DEX logs for blocks ${fromBlock}-${toBlock} already processed (cursor at ${dexLastProcessed})`)
     return
   }
   
@@ -387,8 +396,12 @@ async function processDexLogsForChain(
   
   console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
   
+  // Ensure proper address checksumming
+  const pairAddress = ethers.getAddress(dexPool.pair_address)
+  console.log(`Token ${token.id}: Using DEX pool address: ${pairAddress}`)
+  
   const dexLogs = await withRateLimit(() => provider.getLogs({
-    address: dexPool.pair_address,
+    address: pairAddress,
     topics: [SWAP_TOPIC, SYNC_TOPIC],
     fromBlock: actualFromBlock,
     toBlock
@@ -426,12 +439,19 @@ async function processTransferLog(
     const toAddress = ethers.getAddress('0x' + log.topics[2].slice(26))
     const amount = BigInt(log.data)
     
-    // Get transaction details
-    const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 2, chainId)
-    if (!tx) {
-      console.log(`Token ${token.id}: No transaction found for ${log.transactionHash}`)
-      return
-    }
+  // Get transaction details with more conservative retry
+  let tx: ethers.TransactionResponse | null = null
+  try {
+    tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 1, chainId)
+  } catch (error) {
+    console.warn(`Token ${token.id}: Failed to get transaction ${log.transactionHash}, skipping: ${error}`)
+    return
+  }
+  
+  if (!tx) {
+    console.log(`Token ${token.id}: No transaction found for ${log.transactionHash}`)
+    return
+  }
     
     // Get block timestamp
     const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 2, chainId)

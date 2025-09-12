@@ -11,8 +11,8 @@ export const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 200)
 
 // Chain-specific rate limiting (configurable via environment variables)
 export function getChunkSize(chainId: number): number {
-  if (chainId === 6342) return Number(process.env.MEGAETH_CHUNK ?? 10000)   // MegaETH: balanced chunks
-  if (chainId === 11155111) return Number(process.env.SEPOLIA_CHUNK ?? 20000)  // Sepolia: larger chunks
+  if (chainId === 6342) return Number(process.env.MEGAETH_CHUNK ?? 5000)   // MegaETH: smaller chunks to reduce RPC load
+  if (chainId === 11155111) return Number(process.env.SEPOLIA_CHUNK ?? 10000)  // Sepolia: smaller chunks
   return DEFAULT_CHUNK
 }
 
@@ -23,8 +23,8 @@ export function getDexChunkSize(chainId: number): number {
 }
 
 export function getSleepMs(chainId: number): number {
-  if (chainId === 6342) return Number(process.env.MEGAETH_SLEEP_MS ?? 100)    // MegaETH: minimal delays
-  if (chainId === 11155111) return Number(process.env.SEPOLIA_SLEEP_MS ?? 50)    // Sepolia: minimal delays
+  if (chainId === 6342) return Number(process.env.MEGAETH_SLEEP_MS ?? 500)    // MegaETH: more conservative delays
+  if (chainId === 11155111) return Number(process.env.SEPOLIA_SLEEP_MS ?? 200)    // Sepolia: more conservative delays
   return HEADER_SLEEP_MS
 }
 
