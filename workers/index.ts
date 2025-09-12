@@ -924,6 +924,11 @@ async function main() {
       byChain.get(t.chain_id)!.push(t)
     }
 
+    // Initialize dex_pools deployment blocks before processing
+    for (const [chainId] of byChain) {
+      await initializeDexPools(chainId)
+    }
+
     let chainsToProcess = byChain
 
     if (!SKIP_HEALTH_CHECK) {
@@ -1019,6 +1024,101 @@ main().catch(err => {
   console.error(err)
   process.exit(1)
 })
+
+// ==================== DEX POOLS INITIALIZATION ====================
+async function initializeDexPools(chainId: number) {
+  console.log(`\n=== Initializing dex_pools for chain ${chainId} ===`)
+  
+  try {
+    // Get all dex_pools that need deployment_block updated
+    const { rows: dexPools } = await pool.query(`
+      SELECT token_id, pair_address, last_processed_block
+      FROM public.dex_pools
+      WHERE chain_id = $1 AND deployment_block IS NULL
+      ORDER BY token_id
+    `, [chainId])
+    
+    if (dexPools.length === 0) {
+      console.log(`No dex_pools need deployment_block initialization for chain ${chainId}`)
+      return
+    }
+    
+    console.log(`Found ${dexPools.length} dex_pools needing deployment_block initialization`)
+    
+    const provider = providerFor(chainId)
+    
+    for (const dexPool of dexPools) {
+      console.log(`Initializing token ${dexPool.token_id}, pair ${dexPool.pair_address}`)
+      
+      try {
+        // Discover LP deployment block using binary search
+        const deploymentBlock = await discoverLPDeploymentBlock(dexPool.pair_address, provider)
+        
+        if (deploymentBlock === null) {
+          console.log(`❌ Could not discover deployment block for ${dexPool.pair_address}`)
+          continue
+        }
+        
+        console.log(`✅ Discovered deployment block: ${deploymentBlock}`)
+        
+        // Update deployment_block
+        await pool.query(`
+          UPDATE public.dex_pools
+          SET deployment_block = $1
+          WHERE token_id = $2 AND chain_id = $3
+        `, [deploymentBlock, dexPool.token_id, chainId])
+        
+        // Update last_processed_block if it's empty or lower than deployment_block
+        if (dexPool.last_processed_block === 0 || dexPool.last_processed_block < deploymentBlock) {
+          await pool.query(`
+            UPDATE public.dex_pools
+            SET last_processed_block = $1
+            WHERE token_id = $2 AND chain_id = $3
+          `, [deploymentBlock, dexPool.token_id, chainId])
+          
+          console.log(`✅ Updated last_processed_block to ${deploymentBlock}`)
+        } else {
+          console.log(`ℹ️  last_processed_block (${dexPool.last_processed_block}) is already >= deployment_block (${deploymentBlock})`)
+        }
+        
+        // Add delay to avoid rate limiting
+        await sleep(200)
+        
+      } catch (error) {
+        console.error(`❌ Error initializing token ${dexPool.token_id}:`, error)
+      }
+    }
+    
+  } catch (error) {
+    console.error(`❌ Error initializing dex_pools for chain ${chainId}:`, error)
+  }
+}
+
+async function discoverLPDeploymentBlock(pairAddress: string, provider: ethers.JsonRpcProvider): Promise<number | null> {
+  try {
+    // Binary search to find the deployment block
+    let low = 0
+    let high = await provider.getBlockNumber()
+    let deploymentBlock = high
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2)
+      const code = await provider.send('eth_getCode', [pairAddress, '0x' + mid.toString(16)])
+      
+      if (code === '0x') {
+        low = mid + 1
+      } else {
+        deploymentBlock = mid
+        high = mid - 1
+      }
+    }
+
+    return deploymentBlock
+  } catch (error) {
+    console.error(`Error discovering LP deployment block for ${pairAddress}:`, error)
+    return null
+  }
+}
 
 // ==================== PROCESSING MODULE WRAPPERS ====================
 // These functions delegate to the processing modules for cleaner code organization
