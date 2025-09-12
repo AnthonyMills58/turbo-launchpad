@@ -256,7 +256,7 @@ async function processTokenChunk(
     topics: [TRANSFER_TOPIC],
     fromBlock,
     toBlock
-  }), 10, chainId)
+  }), 2, chainId)
   
   console.log(`Token ${token.id}: Found ${transferLogs.length} transfer logs`)
   
@@ -392,7 +392,7 @@ async function processDexLogsForChain(
     topics: [SWAP_TOPIC, SYNC_TOPIC],
     fromBlock: actualFromBlock,
     toBlock
-  }), 10, chainId)
+  }), 2, chainId)
   
   console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs`)
   
@@ -526,7 +526,7 @@ async function createGraduationRecords(
     topics: [TRANSFER_TOPIC],
     fromBlock: log.blockNumber,
     toBlock: log.blockNumber
-  }), 10, chainId)
+  }), 2, chainId)
   
   // Filter logs for this specific transaction
   const txLogs = allLogs.filter(l => l.transactionHash === log.transactionHash)
@@ -609,7 +609,7 @@ async function createGraduationRecords(
       to: token.contract_address,
       data: turboTokenInterface.encodeFunctionData('getCurrentPrice'),
       blockTag: log.blockNumber
-    }), 10, chainId)
+    }), 2, chainId)
     
     console.log(`Token ${token.id}: Price call result: ${priceWei}`)
     if (priceWei && priceWei !== '0x') {
