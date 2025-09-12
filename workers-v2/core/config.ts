@@ -11,7 +11,7 @@ export const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 200)
 
 // Chain-specific rate limiting (configurable via environment variables)
 export function getChunkSize(chainId: number): number {
-  if (chainId === 6342) return Number(process.env.MEGAETH_CHUNK ?? 1000)   // MegaETH: very small chunks to avoid rate limits
+  if (chainId === 6342) return Number(process.env.MEGAETH_CHUNK ?? 500)   // MegaETH: extremely small chunks to avoid rate limits
   if (chainId === 11155111) return Number(process.env.SEPOLIA_CHUNK ?? 5000)  // Sepolia: smaller chunks
   return DEFAULT_CHUNK
 }
