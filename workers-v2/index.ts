@@ -381,6 +381,7 @@ async function fetchDexSwapsFromOKLink(
   }
   
   console.log(`Fetching transactions for pair ${pairAddress} from OKLink API`)
+  console.log(`OKLink URL: https://www.oklink.com/api/v5/explorer/address/transaction-list?chainShortName=${chainShortName}&address=${pairAddress}&limit=100`)
   
   // Fetch transaction list from OKLink API
   const response = await fetch(
@@ -388,8 +389,12 @@ async function fetchDexSwapsFromOKLink(
     { headers }
   )
   
+  console.log(`OKLink response status: ${response.status} ${response.statusText}`)
+  
   if (!response.ok) {
-    throw new Error(`OKLink API error: ${response.status} ${response.statusText}`)
+    const errorText = await response.text()
+    console.log(`OKLink error response: ${errorText}`)
+    throw new Error(`OKLink API error: ${response.status} ${response.statusText} - ${errorText}`)
   }
   
   const data = await response.json()
@@ -477,32 +482,20 @@ async function processDexLogsForChain(
   console.log(`Token ${token.id}: Token contract address: ${token.contract_address}`)
   console.log(`Token ${token.id}: DEX pool record:`, dexPool)
   
-  // Try OKLink API for DEX swap detection as GPT suggested
-  console.log(`Token ${token.id}: Fetching DEX swaps from OKLink API for pair ${pairAddress}`)
-  try {
-    const dexLogs = await fetchDexSwapsFromOKLink(pairAddress, actualFromBlock, toBlock, chainId)
-    console.log(`Token ${token.id}: Found ${dexLogs.length} DEX swaps via OKLink`)
-    
-    for (const swapData of dexLogs) {
-      await processOKLinkSwap(token, dexPool, swapData, provider, chainId)
-    }
-  } catch (error) {
-    console.log(`Token ${token.id}: OKLink API failed: ${error.message}`)
-    console.log(`Token ${token.id}: Falling back to direct RPC for DEX swaps`)
-    
-    // Fallback to direct RPC when OKLink fails
-    const swapLogs = await withRateLimit(() => provider.getLogs({
-      address: pairAddress,
-      topics: [SWAP_TOPIC],
-      fromBlock: actualFromBlock,
-      toBlock: toBlock
-    }), 2, chainId)
-    
-    console.log(`Token ${token.id}: Found ${swapLogs.length} DEX swaps via direct RPC`)
-    
-    for (const log of swapLogs) {
-      await processDexLog(token, dexPool, log, provider, chainId)
-    }
+  // Use direct RPC for DEX swap detection (OKLink doesn't support MegaETH testnet)
+  console.log(`Token ${token.id}: Fetching DEX swaps via direct RPC for pair ${pairAddress}`)
+  
+  const swapLogs = await withRateLimit(() => provider.getLogs({
+    address: pairAddress,
+    topics: [SWAP_TOPIC],
+    fromBlock: actualFromBlock,
+    toBlock: toBlock
+  }), 2, chainId)
+  
+  console.log(`Token ${token.id}: Found ${swapLogs.length} DEX swaps via direct RPC`)
+  
+  for (const log of swapLogs) {
+    await processDexLog(token, dexPool, log, provider, chainId)
   }
   
   // Update DEX cursor for this chain
