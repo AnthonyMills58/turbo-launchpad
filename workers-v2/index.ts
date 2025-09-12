@@ -154,7 +154,7 @@ async function processChain(chainId: number) {
     SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
     FROM public.tokens 
     WHERE chain_id = $1 
-    ORDER BY id
+    ORDER BY deployment_block DESC
   `, [chainId])
   
   console.log(`📊 Found ${tokens.length} tokens for chain ${chainId}`)
@@ -459,22 +459,22 @@ async function processDexLogsForChain(
     return
   }
   
-  // Process only the new blocks
-  const actualFromBlock = Math.max(fromBlock, dexLastProcessed + 1)
-  
-  if (actualFromBlock > toBlock) {
-    console.log(`Token ${token.id}: No new DEX blocks to process`)
-    return
-  }
+  // Process the entire chunk range for DEX transactions
+  // We don't skip blocks based on dex_last_processed_block because:
+  // 1. DEX transactions can happen at any time after graduation
+  // 2. We want to catch all DEX activity in the chunk range
+  const actualFromBlock = fromBlock
   
   console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
   
   // Ensure proper address checksumming
   const pairAddress = ethers.getAddress(dexPool.pair_address)
   console.log(`Token ${token.id}: Using DEX pool address: ${pairAddress}`)
+  console.log(`Token ${token.id}: Token contract address: ${token.contract_address}`)
+  console.log(`Token ${token.id}: DEX pool record:`, dexPool)
   
   // Try OKLink API for DEX swap detection as GPT suggested
-  console.log(`Token ${token.id}: Fetching DEX swaps from OKLink API`)
+  console.log(`Token ${token.id}: Fetching DEX swaps from OKLink API for pair ${pairAddress}`)
   const dexLogs = await fetchDexSwapsFromOKLink(pairAddress, actualFromBlock, toBlock, chainId)
   console.log(`Token ${token.id}: Found ${dexLogs.length} DEX swaps via OKLink`)
   
