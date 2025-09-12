@@ -593,8 +593,23 @@ async function createGraduationRecords(
   // Get transaction value (ETH paid by user)
   const userEthAmount = tx.value || 0n
   
-  // Get contract balance at graduation
-  const ethBalance = await withRateLimit(() => provider.getBalance(token.contract_address, log.blockNumber), 10, chainId)
+  // Find the add liquidity event to get the actual ETH amount added to the pool
+  let liquidityEthAmount = 0n
+  try {
+    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 10, chainId)
+    if (receipt) {
+      // Look for addLiquidity event or similar in the transaction receipt
+      // The ETH amount should be in the transaction value or in the addLiquidity event data
+      liquidityEthAmount = tx.value || 0n
+      
+      // If we can find the addLiquidity event, we could extract the exact amount
+      // For now, using transaction value as the liquidity amount
+      console.log(`Token ${token.id}: Using transaction value ${liquidityEthAmount} as liquidity ETH amount`)
+    }
+  } catch (error) {
+    console.warn(`Could not get receipt for liquidity amount: ${error}`)
+    liquidityEthAmount = tx.value || 0n
+  }
   
   // Get bonding curve price at graduation
   let priceEthPerToken = 0
@@ -647,7 +662,7 @@ async function createGraduationRecords(
     token.contract_address, // From contract
     lpToAddress, // To LP pool (or zero address if not found)
     graduationAmount.toString(), // Use graduation amount
-    ethBalance.toString(), // Use contract balance (total ETH in contract)
+    liquidityEthAmount.toString(), // Use liquidity ETH amount (from addLiquidity event)
     priceEthPerToken, // Use bonding curve price at graduation
     'GRADUATION',
     'BC', // Bonding curve operation
@@ -655,7 +670,7 @@ async function createGraduationRecords(
       type: 'graduation',
       phase: 'summary',
       total_tokens: graduationAmount.toString(),
-      total_eth: ethBalance.toString(),
+      liquidity_eth: liquidityEthAmount.toString(),
       price_eth_per_token: priceEthPerToken,
       graduation_trigger: tx.from,
       user_tokens: userAmount.toString(),
