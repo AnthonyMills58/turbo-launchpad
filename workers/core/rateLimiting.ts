@@ -13,7 +13,7 @@ export function isRateLimit(err: unknown): boolean {
   const e = err as RpcLikeError
   const code = e?.code ?? e?.error?.code
   const msg = (e?.message ?? e?.error?.message ?? '').toLowerCase()
-  return code === -32016 || msg.includes('rate limit')
+  return code === -32016 || code === -32822 || msg.includes('rate limit') || msg.includes('over compute unit limit')
 }
 
 export async function withRateLimit<T>(
