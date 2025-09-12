@@ -590,6 +590,9 @@ async function createGraduationRecords(
   const userToAddress = ethers.getAddress('0x' + userBuyLog.topics[2].slice(26))
   const lpToAddress = lpTransferLog ? ethers.getAddress('0x' + lpTransferLog.topics[2].slice(26)) : '0x0000000000000000000000000000000000000000'
   
+  // Get transaction value (ETH paid by user)
+  const userEthAmount = tx.value || 0n
+  
   // Get contract balance at graduation
   const ethBalance = await withRateLimit(() => provider.getBalance(token.contract_address, log.blockNumber), 10, chainId)
   
@@ -613,6 +616,9 @@ async function createGraduationRecords(
     console.warn(`Could not get graduation price: ${error}`)
   }
   
+  // Calculate price for user BUY record
+  const userPriceEthPerToken = userEthAmount > 0n && userAmount > 0n ? Number(userEthAmount) / Number(userAmount) : 0
+  
   // Record 1: User BUY (the transaction that triggered graduation)
   await pool.query(`
     INSERT INTO public.token_transfers
@@ -624,8 +630,8 @@ async function createGraduationRecords(
     '0x0000000000000000000000000000000000000000', // From zero address (mint)
     userToAddress, // To user who triggered graduation
     userAmount.toString(),
-    ethBalance.toString(),
-    priceEthPerToken,
+    userEthAmount.toString(), // Use transaction value (ETH paid by user)
+    userPriceEthPerToken, // Use calculated price for user transaction
     'BUY',
     'BC' // Bonding curve operation
   ])
@@ -641,8 +647,8 @@ async function createGraduationRecords(
     token.contract_address, // From contract
     lpToAddress, // To LP pool (or zero address if not found)
     graduationAmount.toString(), // Use graduation amount
-    ethBalance.toString(), // Same ETH amount
-    priceEthPerToken, // Same price
+    ethBalance.toString(), // Use contract balance (total ETH in contract)
+    priceEthPerToken, // Use bonding curve price at graduation
     'GRADUATION',
     'BC', // Bonding curve operation
     JSON.stringify({
@@ -653,6 +659,7 @@ async function createGraduationRecords(
       price_eth_per_token: priceEthPerToken,
       graduation_trigger: tx.from,
       user_tokens: userAmount.toString(),
+      user_eth: userEthAmount.toString(),
       lp_address: lpToAddress !== '0x0000000000000000000000000000000000000000' ? lpToAddress : null,
       reserves: null // Will be populated when DEX pool is processed
     })
