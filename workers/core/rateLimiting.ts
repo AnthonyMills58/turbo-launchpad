@@ -1,7 +1,7 @@
 // Rate limiting utilities
 // Extracted from workers/index.ts
 
-import { HEADER_SLEEP_MS } from './config'
+import { HEADER_SLEEP_MS, getSleepMs } from './config'
 
 export function sleep(ms: number) {
   return new Promise(res => setTimeout(res, ms))
@@ -18,13 +18,15 @@ export function isRateLimit(err: unknown): boolean {
 
 export async function withRateLimit<T>(
   rpcCall: () => Promise<T>,
-  maxAttempts: number = 10
+  maxAttempts: number = 10,
+  chainId?: number
 ): Promise<T> {
   let attempts = 0
   while (true) {
     try {
       const result = await rpcCall()
-      await sleep(HEADER_SLEEP_MS)
+      const sleepMs = chainId ? getSleepMs(chainId) : HEADER_SLEEP_MS
+      await sleep(sleepMs)
       return result
     } catch (e) {
       attempts++

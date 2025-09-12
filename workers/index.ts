@@ -13,14 +13,14 @@ import {
   TRANSFER_TOPIC, 
   ZERO, 
   ONLY_TOKEN_ID, 
-  DEFAULT_CHUNK, 
   HEADER_SLEEP_MS, 
   REORG_CUSHION, 
   ADDR_BATCH_LIMIT, 
   SKIP_HEALTH_CHECK, 
   HEALTH_CHECK_TIMEOUT, 
   LOCK_NS, 
-  LOCK_ID 
+  LOCK_ID,
+  getChunkSize
 } from './core/config'
 import { sleep, isRateLimit } from './core/rateLimiting'
 import { providerFor } from './core/providers'
@@ -613,7 +613,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
   
   const addrBatches = chunkAddresses(addresses, ADDR_BATCH_LIMIT)
 
-  let chunk = DEFAULT_CHUNK
+  let chunk = getChunkSize(chainId)
   for (let from = start; from <= latest; from += chunk + 1) {
     const to = Math.min(from + chunk, latest)
     console.log(`Chain ${chainId}: scanning blocks ${from}..${to} across ${addresses.length} addresses`)

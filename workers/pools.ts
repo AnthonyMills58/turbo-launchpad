@@ -2,7 +2,7 @@ import { ethers, type Log } from 'ethers'
 import pool from '../lib/db'
 import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
 import TurboTokenABI from '../lib/abi/TurboToken.json'
-import { DEFAULT_DEX_CHUNK, SWAP_TOPIC, SYNC_TOPIC } from './core/config'
+import { SWAP_TOPIC, SYNC_TOPIC, getDexChunkSize } from './core/config'
 import { providerFor } from './core/providers'
 
 // ---------- DB shapes ----------
@@ -294,7 +294,7 @@ export async function processDexPools(chainId: number): Promise<void> {
     }
     
     if (from > head) continue
-    const to = Math.min(head, from + DEFAULT_DEX_CHUNK)
+    const to = Math.min(head, from + getDexChunkSize(chainId))
     
     console.log(`Pool ${p.pair_address}: last_processed=${p.last_processed_block}, deployment=${p.deployment_block}, from=${from}, to=${to}`)
 

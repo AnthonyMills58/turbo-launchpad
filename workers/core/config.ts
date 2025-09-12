@@ -16,6 +16,25 @@ export const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID)
 export const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 10000)         // blocks per query (reduced for MegaETH rate limits)
 export const DEFAULT_DEX_CHUNK = Number(process.env.DEX_CHUNK ?? 500)          // blocks per DEX query (further reduced for rate limiting)
 export const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 200)      // ms between getBlock calls (increased for rate limiting)
+
+// Chain-specific rate limiting (MegaETH needs more aggressive limits)
+export function getChunkSize(chainId: number): number {
+  if (chainId === 6342) return 5000   // MegaETH: smaller chunks
+  if (chainId === 11155111) return 20000  // Sepolia: larger chunks
+  return DEFAULT_CHUNK
+}
+
+export function getDexChunkSize(chainId: number): number {
+  if (chainId === 6342) return 250    // MegaETH: very small chunks
+  if (chainId === 11155111) return 1000   // Sepolia: normal chunks
+  return DEFAULT_DEX_CHUNK
+}
+
+export function getSleepMs(chainId: number): number {
+  if (chainId === 6342) return 300    // MegaETH: longer delays
+  if (chainId === 11155111) return 100    // Sepolia: shorter delays
+  return HEADER_SLEEP_MS
+}
 export const REORG_CUSHION = Math.max(0, Number(process.env.REORG_CUSHION ?? 5))
 export const ADDR_BATCH_LIMIT = Math.max(1, Number(process.env.ADDR_BATCH_LIMIT ?? 200)) // addresses per getLogs
 export const SKIP_HEALTH_CHECK = process.env.SKIP_HEALTH_CHECK === 'true'      // skip chain health checks
