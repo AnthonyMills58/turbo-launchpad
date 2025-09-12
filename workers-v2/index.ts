@@ -227,8 +227,9 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
       console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to}`)
     } catch (error) {
       console.error(`❌ Failed to process chunk ${from}-${to} for token ${token.id}:`, error)
-      // Stop processing on first failure to avoid data gaps
-      break
+      // Skip this chunk and continue to next chunk for testing
+      console.log(`⏭️ Token ${token.id}: Skipping chunk ${from}-${to}, continuing to next chunk`)
+      continue
     }
   }
   
