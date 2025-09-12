@@ -114,7 +114,9 @@ async function main() {
   
   try {
     // Get all chains
+    console.log('📊 Querying database for chains...')
     const { rows: chains } = await pool.query('SELECT DISTINCT chain_id FROM public.tokens ORDER BY chain_id')
+    console.log(`📊 Found ${chains.length} chains:`, chains.map(c => c.chain_id))
     
     // Health check before processing
     if (!SKIP_HEALTH_CHECK) {
@@ -168,9 +170,11 @@ async function main() {
  * Process all tokens for a specific chain
  */
 async function processChain(chainId: number) {
+  console.log(`🔗 Setting up provider for chain ${chainId}...`)
   const provider = providerFor(chainId)
   
   // Get all tokens for this chain
+  console.log(`📊 Querying tokens for chain ${chainId}...`)
   const { rows: tokens } = await pool.query<TokenRow>(`
     SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
     FROM public.tokens 
@@ -178,7 +182,7 @@ async function processChain(chainId: number) {
     ORDER BY id
   `, [chainId])
   
-  console.log(`Found ${tokens.length} tokens for chain ${chainId}`)
+  console.log(`📊 Found ${tokens.length} tokens for chain ${chainId}`)
   
   // Process each token individually
   for (const token of tokens) {
@@ -196,7 +200,9 @@ async function processChain(chainId: number) {
  * Process a single token
  */
 async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, chainId: number) {
+  console.log(`🔍 Getting current block for token ${token.id}...`)
   const currentBlock = await withRateLimit(() => provider.getBlockNumber(), 10, chainId)
+  console.log(`🔍 Current block: ${currentBlock}`)
   
   // Determine processing range
   const startBlock = token.last_processed_block + 1
@@ -283,6 +289,8 @@ async function processTokenChunk(
   const graduationBlock = dexPool?.deployment_block || 0
   const isGraduationBlockRange = fromBlock >= graduationBlock && graduationBlock > 0
   
+  console.log(`Token ${token.id}: Block range ${fromBlock}-${toBlock}, graduation block: ${graduationBlock}, is graduation range: ${isGraduationBlockRange}`)
+  
   if (isGraduationBlockRange) {
     console.log(`Token ${token.id}: Processing graduation block range ${fromBlock}-${toBlock}`)
     
@@ -306,16 +314,20 @@ async function processTokenChunk(
       
       // Check if this is a graduation transaction
       const firstLog = logs[0]
+      console.log(`Token ${token.id}: Checking graduation for tx ${tx.hash} with ${logs.length} logs`)
       const isGraduation = await detectGraduation(token, firstLog, tx, provider, chainId)
+      console.log(`Token ${token.id}: Graduation detected: ${isGraduation}`)
       
       if (isGraduation) {
         // Process graduation (creates 2 records: BUY + GRADUATION)
+        console.log(`Token ${token.id}: Processing graduation transaction ${tx.hash}`)
         const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 10, chainId)
         const blockTime = new Date(Number(block!.timestamp) * 1000)
         await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId)
         // Skip processing individual logs - graduation handles all logs in this transaction
       } else {
         // Process each regular transfer log
+        console.log(`Token ${token.id}: Processing ${logs.length} regular transfer logs`)
         for (const log of logs) {
           await processTransferLog(token, dexPool, log, provider, chainId)
         }
@@ -450,7 +462,45 @@ async function detectGraduation(
       const graduatedEvent = receipt.logs.find(log => 
         log.topics[0] === GRADUATED_TOPIC
       )
-      return !!graduatedEvent
+      
+      if (graduatedEvent) {
+        console.log(`Token ${token.id}: Found Graduated event in tx ${tx.hash}`)
+        return true
+      }
+      
+      // Fallback: Check if this is a graduation transaction by looking for multiple transfer logs
+      // Graduation typically has: mint to user + mint to contract + transfer to LP
+      const transferLogs = receipt.logs.filter(log => 
+        log.topics[0] === TRANSFER_TOPIC && 
+        log.address.toLowerCase() === token.contract_address.toLowerCase()
+      )
+      
+      if (transferLogs.length >= 3) {
+        // Check for graduation pattern: mint to user + mint to contract + transfer from contract
+        const mintToUser = transferLogs.find(log => {
+          const fromAddr = ethers.getAddress('0x' + log.topics[1].slice(26))
+          const toAddr = ethers.getAddress('0x' + log.topics[2].slice(26))
+          return fromAddr === '0x0000000000000000000000000000000000000000' && 
+                 toAddr !== token.contract_address
+        })
+        
+        const mintToContract = transferLogs.find(log => {
+          const fromAddr = ethers.getAddress('0x' + log.topics[1].slice(26))
+          const toAddr = ethers.getAddress('0x' + log.topics[2].slice(26))
+          return fromAddr === '0x0000000000000000000000000000000000000000' && 
+                 toAddr.toLowerCase() === token.contract_address.toLowerCase()
+        })
+        
+        const transferFromContract = transferLogs.find(log => {
+          const fromAddr = ethers.getAddress('0x' + log.topics[1].slice(26))
+          return fromAddr.toLowerCase() === token.contract_address.toLowerCase()
+        })
+        
+        if (mintToUser && mintToContract && transferFromContract) {
+          console.log(`Token ${token.id}: Detected graduation pattern in tx ${tx.hash} (${transferLogs.length} transfer logs)`)
+          return true
+        }
+      }
     }
   } catch (error) {
     console.warn(`Could not get receipt for graduation check: ${error}`)
