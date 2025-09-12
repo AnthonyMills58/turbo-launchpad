@@ -22,7 +22,7 @@ import {
   LOCK_ID,
   getChunkSize
 } from './core/config'
-import { sleep, isRateLimit } from './core/rateLimiting'
+import { sleep, isRateLimit, withRateLimit } from './core/rateLimiting'
 import { providerFor } from './core/providers'
 
 async function findBlockByTimestamp(p: ethers.JsonRpcProvider, targetTsSec: number) {
@@ -101,7 +101,7 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
     
     // Try to get the latest block number with a timeout
     const latestBlock = await Promise.race([
-      provider.getBlockNumber(),
+      withRateLimit(() => provider.getBlockNumber(), 10, chainId),
       new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Health check timeout')), HEALTH_CHECK_TIMEOUT)
       )
@@ -109,7 +109,7 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
     
     // Try to get block details to ensure the chain is actually responding
     const block = await Promise.race([
-      provider.getBlock(latestBlock),
+      withRateLimit(() => provider.getBlock(latestBlock), 10, chainId),
       new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Block fetch timeout')), HEALTH_CHECK_TIMEOUT / 2)
       )
@@ -384,8 +384,7 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
       let attempts = 0
       while (true) {
         try {
-          tx = await provider.getTransaction(row.tx_hash)
-          await sleep(HEADER_SLEEP_MS)
+          tx = await withRateLimit(() => provider.getTransaction(row.tx_hash), 10, chainId)
           break
         } catch (e) {
           attempts++
@@ -446,8 +445,7 @@ async function backfillTransferPrices(chainId: number, provider: ethers.JsonRpcP
           let receiptAttempts = 0
           while (true) {
             try {
-              receipt = await provider.getTransactionReceipt(row.tx_hash)
-              await sleep(HEADER_SLEEP_MS)
+              receipt = await withRateLimit(() => provider.getTransactionReceipt(row.tx_hash), 10, chainId)
               break
             } catch (e) {
               receiptAttempts++
@@ -521,7 +519,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
   if (tokens.length === 0) return
   
   const provider = providerFor(chainId)
-  const latest = await provider.getBlockNumber()
+  const latest = await withRateLimit(() => provider.getBlockNumber(), 10, chainId)
   
   // Get LP token addresses to exclude from token_balances
   const { rows: lpAddresses } = await pool.query<{ pair_address: string }>(
@@ -623,12 +621,12 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
       try {
         for (const batch of addrBatches) {
           // Guard: provider.getLogs supports address: string|string[]
-          const logs = await provider.getLogs({
+          const logs = await withRateLimit(() => provider.getLogs({
             address: batch as unknown as string[], // v6 types allow string|string[]
             topics: [TRANSFER_TOPIC],
             fromBlock: from,
             toBlock: to,
-          })
+          }), 10, chainId)
           allLogs = allLogs.concat(logs)
         }
       } catch (e) {
@@ -683,8 +681,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
           let attempts = 0
           while (true) {
             try {
-              tx = await provider.getTransaction(log.transactionHash!)
-              await sleep(HEADER_SLEEP_MS)
+              tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 10, chainId)
               break
             } catch (e) {
               attempts++
@@ -723,8 +720,7 @@ async function processChain(chainId: number, tokens: TokenRow[]) {
               let attempts = 0
               while (true) {
                 try {
-                  receipt = await provider.getTransactionReceipt(log.transactionHash!)
-                  await sleep(HEADER_SLEEP_MS)
+                  receipt = await withRateLimit(() => provider.getTransactionReceipt(log.transactionHash!), 10, chainId)
                   break
                 } catch (e) {
                   attempts++

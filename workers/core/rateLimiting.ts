@@ -31,8 +31,10 @@ export async function withRateLimit<T>(
     } catch (e) {
       attempts++
       if (isRateLimit(e) && attempts <= maxAttempts) {
-        const backoff = Math.min(2000 * attempts, 10000) // Increased backoff
-        console.log(`Rate limit hit, retrying in ${backoff}ms (attempt ${attempts}/${maxAttempts})`)
+        // MegaETH needs much longer backoff
+        const baseBackoff = chainId === 6342 ? 5000 : 2000
+        const backoff = Math.min(baseBackoff * attempts, chainId === 6342 ? 30000 : 10000)
+        console.log(`Rate limit hit on chain ${chainId}, retrying in ${backoff}ms (attempt ${attempts}/${maxAttempts})`)
         await sleep(backoff)
         continue
       }
