@@ -98,6 +98,7 @@ export async function syncDexState(
   chainId: number,
   onRefresh: () => void
 ): Promise<void> {
+  console.log('[syncDexState] Function called for token:', token.symbol, 'chain:', chainId)
   try {
     if (!token.contract_address) {
       console.warn('[syncDexState] Missing contract address')
@@ -126,6 +127,40 @@ export async function syncDexState(
 
     let isNowOnDex = token.on_dex
 
+    // === Always ensure dex_pools record exists when DEX pair is found ===
+    try {
+      // First check if record already exists
+      const { rows: existingRows } = await db.query(`
+        SELECT token_id FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2
+      `, [token.id, chainId])
+      
+      if (existingRows.length === 0) {
+        // Record doesn't exist, insert it
+        // Get current block and set smart buffer based on chain type
+        const currentBlock = await provider.getBlockNumber()
+        const bufferBlocks = chainId === 6342 ? 1000 : 5000  // MegaETH: 25min, Others: 18hrs
+        const estimatedDeploymentBlock = Math.max(token.deployment_block || 0, currentBlock - bufferBlocks)
+        
+        const dexPoolsResult = await db.query(`
+          INSERT INTO public.dex_pools (token_id, chain_id, pair_address, token0, token1, quote_token, deployment_block, last_processed_block, token_decimals, weth_decimals, quote_decimals)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [token.id, chainId, pairAddress, token.contract_address, wethAddress, wethAddress, estimatedDeploymentBlock, estimatedDeploymentBlock, 18, 18, 18])
+        
+        console.log(`[syncDexState] ✅ Added new dex_pools record, rowCount: ${dexPoolsResult.rowCount}, deployment_block: ${estimatedDeploymentBlock} (buffer: ${bufferBlocks} blocks)`)
+      } else {
+        // Record exists, update pair_address if needed
+        const updateResult = await db.query(`
+          UPDATE public.dex_pools 
+          SET pair_address = $1 
+          WHERE token_id = $2 AND chain_id = $3
+        `, [pairAddress, token.id, chainId])
+        
+        console.log('[syncDexState] ✅ Updated existing dex_pools record, rowCount:', updateResult.rowCount)
+      }
+    } catch (dexPoolsError) {
+      console.error('[syncDexState] Error ensuring dex_pools record:', dexPoolsError)
+    }
+
     // === Mark token as on DEX and save DEX URL ===
     if (!token.on_dex && chain.dexBaseUrl) {
       const dexUrl = chain.id === 6342
@@ -134,17 +169,25 @@ export async function syncDexState(
 
       console.log('[syncDexState] Marking token as on DEX:', dexUrl)
 
-      const res = await fetch('/api/mark-dex-listing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contractAddress: token.contract_address,
-          dexUrl,
-        }),
-      })
+      // Update database directly instead of calling API endpoint
+      try {
+        const result = await db.query(
+          `UPDATE tokens
+           SET on_dex = true,
+               is_graduated = true,
+               dex_listing_url = $1
+           WHERE contract_address = $2`,
+          [dexUrl, token.contract_address]
+        )
 
-      const result = await res.json()
-      console.log('[syncDexState] mark-dex-listing response:', result)
+        if (result.rowCount === 0) {
+          console.warn('[syncDexState] Token not found in database')
+        } else {
+          console.log('[syncDexState] ✅ Updated token on_dex status')
+        }
+      } catch (error) {
+        console.error('[syncDexState] Error updating token status:', error)
+      }
 
       isNowOnDex = true
       onRefresh()
@@ -202,19 +245,26 @@ export async function syncDexState(
       console.log('[syncDexState] FDV (ETH):', fdv)
       console.log('[syncDexState] Market Cap (ETH):', marketCap)
 
-      const updateRes = await fetch('/api/dex-update-price', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contractAddress: token.contract_address,
-          dexPrice: price.toString(),
-          fdv: fdv.toString(),
-          marketCap: marketCap.toString(),
-        }),
-      })
+      // Update price directly in database instead of calling API endpoint
+      try {
+        const priceResult = await db.query(
+          `UPDATE tokens
+           SET current_price = $1,
+               fdv = $2,
+               market_cap = $3,
+               last_synced_at = NOW()
+           WHERE contract_address = $4`,
+          [price.toString(), fdv.toString(), marketCap.toString(), token.contract_address]
+        )
 
-      const updateResult = await updateRes.json()
-      console.log('[syncDexState] dex-update-price response:', updateResult)
+        if (priceResult.rowCount === 0) {
+          console.warn('[syncDexState] Token not found for price update:', token.contract_address)
+        } else {
+          console.log('[syncDexState] ✅ Updated token price, FDV, and market cap')
+        }
+      } catch (priceError) {
+        console.error('[syncDexState] Error updating token price:', priceError)
+      }
     }
   } catch (err) {
     console.error('[syncDexState] Error:', err)
