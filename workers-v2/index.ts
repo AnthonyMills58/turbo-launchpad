@@ -182,24 +182,38 @@ async function processTokenChunk(
   
   console.log(`Token ${token.id}: Found ${transferLogs.length} transfer logs`)
   
-  // Process each transfer log
+  // Group logs by transaction to avoid duplicate processing
+  const logsByTx = new Map<string, ethers.Log[]>()
   for (const log of transferLogs) {
-    // Check if this is a graduation transaction first
-    const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 10, chainId)
+    const txHash = log.transactionHash!
+    if (!logsByTx.has(txHash)) {
+      logsByTx.set(txHash, [])
+    }
+    logsByTx.get(txHash)!.push(log)
+  }
+  
+  // Process each transaction (not each log)
+  for (const [txHash, logs] of logsByTx) {
+    const tx = await withRateLimit(() => provider.getTransaction(txHash), 10, chainId)
     if (!tx) {
-      console.log(`Token ${token.id}: No transaction found for transfer ${log.transactionHash}`)
+      console.log(`Token ${token.id}: No transaction found for ${txHash}`)
       continue
     }
     
-    const isGraduation = await detectGraduation(token, log, tx, provider, chainId)
+    // Check if this is a graduation transaction using the first log
+    const firstLog = logs[0]
+    const isGraduation = await detectGraduation(token, firstLog, tx, provider, chainId)
+    
     if (isGraduation) {
       // Process graduation (creates 2 records: BUY + GRADUATION)
-      const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
+      const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 10, chainId)
       const blockTime = new Date(Number(block!.timestamp) * 1000)
-      await createGraduationRecords(token, log, tx, blockTime, provider, chainId)
+      await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId)
     } else {
-      // Process regular transfer
-      await processTransferLog(token, dexPool, log, provider, chainId)
+      // Process each regular transfer log
+      for (const log of logs) {
+        await processTransferLog(token, dexPool, log, provider, chainId)
+      }
     }
   }
   
@@ -354,7 +368,41 @@ async function createGraduationRecords(
   provider: ethers.JsonRpcProvider,
   chainId: number
 ) {
-  const amount = BigInt(log.data)
+  // Get all transfer logs for this transaction to find the correct amounts
+  const allLogs = await withRateLimit(() => provider.getLogs({
+    address: token.contract_address,
+    topics: [TRANSFER_TOPIC],
+    fromBlock: log.blockNumber,
+    toBlock: log.blockNumber
+  }), 10, chainId)
+  
+  // Filter logs for this specific transaction
+  const txLogs = allLogs.filter(l => l.transactionHash === log.transactionHash)
+  
+  // Find the user BUY transfer (mint to user address)
+  const userBuyLog = txLogs.find(l => {
+    const fromAddr = ethers.getAddress('0x' + l.topics[1].slice(26))
+    const toAddr = ethers.getAddress('0x' + l.topics[2].slice(26))
+    return fromAddr === '0x0000000000000000000000000000000000000000' && 
+           toAddr !== token.contract_address
+  })
+  
+  // Find the graduation transfer (mint to contract)
+  const graduationLog = txLogs.find(l => {
+    const fromAddr = ethers.getAddress('0x' + l.topics[1].slice(26))
+    const toAddr = ethers.getAddress('0x' + l.topics[2].slice(26))
+    return fromAddr === '0x0000000000000000000000000000000000000000' && 
+           toAddr.toLowerCase() === token.contract_address.toLowerCase()
+  })
+  
+  if (!userBuyLog || !graduationLog) {
+    console.error(`Token ${token.id}: Could not find user BUY or graduation logs in transaction ${log.transactionHash}`)
+    return
+  }
+  
+  const userAmount = BigInt(userBuyLog.data)
+  const graduationAmount = BigInt(graduationLog.data)
+  const userToAddress = ethers.getAddress('0x' + userBuyLog.topics[2].slice(26))
   
   // Get contract balance at graduation
   const ethBalance = await withRateLimit(() => provider.getBalance(token.contract_address, log.blockNumber), 10, chainId)
@@ -387,16 +435,16 @@ async function createGraduationRecords(
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
     1, // log_index 1 for user BUY
-    tx.from, // User who triggered graduation
-    token.contract_address, // Contract receives tokens
-    amount.toString(),
+    '0x0000000000000000000000000000000000000000', // From zero address (mint)
+    userToAddress, // To user who triggered graduation
+    userAmount.toString(),
     ethBalance.toString(),
     priceEthPerToken,
     'BUY',
     'BC' // Bonding curve operation
   ])
   
-  // Record 2: Graduation Summary (same amounts and price as BUY)
+  // Record 2: Graduation Summary (contract to LP pool with same amounts as user BUY)
   await pool.query(`
     INSERT INTO public.token_transfers
       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata)
@@ -404,17 +452,17 @@ async function createGraduationRecords(
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
     0, // log_index 0 for graduation summary
-    '0x0000000000000000000000000000000000000000', // From zero address (mint)
-    token.contract_address, // To contract (graduation target)
-    amount.toString(),
-    ethBalance.toString(),
-    priceEthPerToken,
+    token.contract_address, // From contract
+    '0x0000000000000000000000000000000000000000', // To zero address (will be updated to LP pool when discovered)
+    userAmount.toString(), // Same amount as user BUY
+    ethBalance.toString(), // Same ETH amount as user BUY
+    priceEthPerToken, // Same price as user BUY
     'GRADUATION',
     'BC', // Bonding curve operation
     JSON.stringify({
       type: 'graduation',
       phase: 'summary',
-      total_tokens: amount.toString(),
+      total_tokens: userAmount.toString(),
       total_eth: ethBalance.toString(),
       price_eth_per_token: priceEthPerToken,
       graduation_trigger: tx.from,
@@ -424,6 +472,51 @@ async function createGraduationRecords(
   ])
   
   console.log(`✅ Token ${token.id}: Created 2 graduation records (BUY + GRADUATION)`)
+}
+
+/**
+ * Determine transfer type (BUY, BUY&LOCK, SELL, etc.)
+ */
+function determineTransferType(
+  token: TokenRow,
+  tx: ethers.TransactionResponse,
+  fromAddress: string,
+  toAddress: string
+): string {
+  // Check function selector first
+  if (tx.data && tx.data.length >= 10) {
+    const functionSelectors: Record<string, string> = {
+      '0xb34ffc5f': 'BUY&LOCK',      // creatorBuy(uint256)
+      '0x5b88349d': 'CLAIMAIRDROP',  // claimAirdrop()
+      '0xb4105e06': 'UNLOCK',        // unlockCreatorTokens()
+    }
+    
+    const selector = tx.data.slice(0, 10)
+    const functionName = functionSelectors[selector]
+    if (functionName) {
+      return functionName
+    }
+  }
+  
+  // Check address patterns
+  if (fromAddress === '0x0000000000000000000000000000000000000000') {
+    // Mint from zero address
+    if (tx.value && tx.value > 0n) {
+      // Check if transaction is from the creator wallet
+      if (token.creator_wallet && tx.from && tx.from.toLowerCase() === token.creator_wallet.toLowerCase()) {
+        return 'BUY&LOCK' // Creator buy operation
+      }
+      return 'BUY' // Regular buy (mint to user with ETH)
+    }
+    // Check for graduation (mint to contract without ETH)
+    if (toAddress.toLowerCase() === token.contract_address.toLowerCase()) {
+      return 'GRADUATION' // Graduation mint to contract
+    }
+    return 'TRANSFER' // Regular token creation (mint without ETH)
+  }
+  
+  // Regular transfer
+  return 'TRANSFER'
 }
 
 /**
@@ -455,15 +548,16 @@ async function processRegularTransfer(
     console.log(`Token ${token.id}: Transfer after graduation - skipping (DEX operations handled separately)`)
     return
   } else {
-    // BC operation - determine BUY/SELL
-    if (tx.value && tx.value > 0n) {
-      // ETH sent to contract = BUY
-      side = 'BUY'
-      ethAmount = tx.value
-      priceEthPerToken = Number(ethAmount) / Number(amount)
-    } else {
-      // No ETH = SELL or other operation
-      side = 'SELL'
+    // BC operation - determine transfer type
+    const transferType = determineTransferType(token, tx, fromAddress, toAddress)
+    side = transferType
+    
+    if (transferType === 'BUY' || transferType === 'BUY&LOCK') {
+      ethAmount = tx.value || 0n
+      if (ethAmount > 0n && amount > 0n) {
+        priceEthPerToken = Number(ethAmount) / Number(amount)
+      }
+    } else if (transferType === 'SELL') {
       // For SELL, we'd need to call getSellPrice, but for now just record the transfer
     }
   }
