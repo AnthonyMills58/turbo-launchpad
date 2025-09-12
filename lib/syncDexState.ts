@@ -139,7 +139,7 @@ export async function syncDexState(
         // Get current block and set smart buffer based on chain type
         const currentBlock = await provider.getBlockNumber()
         const bufferBlocks = chainId === 6342 ? 1000 : 5000  // MegaETH: 25min, Others: 18hrs
-        const estimatedDeploymentBlock = Math.max(token.deployment_block || 0, currentBlock - bufferBlocks)
+        const estimatedDeploymentBlock = currentBlock - bufferBlocks
         
         const dexPoolsResult = await db.query(`
           INSERT INTO public.dex_pools (token_id, chain_id, pair_address, token0, token1, quote_token, deployment_block, last_processed_block, token_decimals, weth_decimals, quote_decimals)
