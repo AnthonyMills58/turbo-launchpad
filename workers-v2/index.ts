@@ -313,6 +313,7 @@ async function processTokenChunk(
         const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 10, chainId)
         const blockTime = new Date(Number(block!.timestamp) * 1000)
         await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId)
+        // Skip processing individual logs - graduation handles all logs in this transaction
       } else {
         // Process each regular transfer log
         for (const log of logs) {
