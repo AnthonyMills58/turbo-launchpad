@@ -355,6 +355,74 @@ async function processTokenChunk(
 }
 
 /**
+ * Fetch DEX logs from OKLink Explorer API as fallback
+ */
+async function fetchDexLogsFromOKLink(
+  pairAddress: string,
+  fromBlock: number,
+  toBlock: number,
+  chainId: number
+): Promise<ethers.Log[]> {
+  const chainShortName = chainId === 6342 ? 'megaeth-testnet' : 'megaeth'
+  
+  // Try without API key first (public access)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  
+  // Add API key if available
+  const apiKey = process.env.OKLINK_API_KEY
+  if (apiKey) {
+    headers['X-API-KEY'] = apiKey
+  }
+  
+  // Fetch transaction list from OKLink API
+  const response = await fetch(
+    `https://www.oklink.com/api/v5/explorer/address/transaction-list?chainShortName=${chainShortName}&address=${pairAddress}&limit=100`,
+    { headers }
+  )
+  
+  if (!response.ok) {
+    throw new Error(`OKLink API error: ${response.status} ${response.statusText}`)
+  }
+  
+  const data = await response.json()
+  if (data.code !== '0') {
+    throw new Error(`OKLink API error: ${data.msg}`)
+  }
+  
+  const transactions = data.data || []
+  const logs: ethers.Log[] = []
+  
+  // Filter for swap events and convert to ethers.Log format
+  for (const tx of transactions) {
+    if (tx.blockNumber < fromBlock || tx.blockNumber > toBlock) {
+      continue
+    }
+    
+    // Look for swap events in transaction logs
+    if (tx.logs) {
+      for (const log of tx.logs) {
+        if (log.topics && log.topics[0] === SWAP_TOPIC) {
+          logs.push({
+            address: log.address,
+            topics: log.topics,
+            data: log.data,
+            blockNumber: parseInt(log.blockNumber),
+            transactionHash: tx.hash,
+            transactionIndex: parseInt(tx.transactionIndex),
+            index: parseInt(log.logIndex),
+            removed: false
+          })
+        }
+      }
+    }
+  }
+  
+  return logs
+}
+
+/**
  * Process DEX logs for a chain (only once per block range)
  */
 async function processDexLogsForChain(
@@ -401,14 +469,30 @@ async function processDexLogsForChain(
   const pairAddress = ethers.getAddress(dexPool.pair_address)
   console.log(`Token ${token.id}: Using DEX pool address: ${pairAddress}`)
   
-  const dexLogs = await withRateLimit(() => provider.getLogs({
-    address: pairAddress,
-    topics: [SWAP_TOPIC, SYNC_TOPIC],
-    fromBlock: actualFromBlock,
-    toBlock
-  }), 2, chainId)
+  let dexLogs: ethers.Log[] = []
   
-  console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs`)
+  try {
+    // Try RPC first
+    dexLogs = await withRateLimit(() => provider.getLogs({
+      address: pairAddress,
+      topics: [SWAP_TOPIC, SYNC_TOPIC],
+      fromBlock: actualFromBlock,
+      toBlock
+    }), 2, chainId)
+    
+    console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs via RPC`)
+  } catch (error) {
+    console.warn(`Token ${token.id}: RPC failed for DEX logs, trying OKLink API: ${error}`)
+    
+    // Fallback to OKLink Explorer API
+    try {
+      dexLogs = await fetchDexLogsFromOKLink(pairAddress, actualFromBlock, toBlock, chainId)
+      console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs via OKLink API`)
+    } catch (apiError) {
+      console.error(`Token ${token.id}: Both RPC and OKLink API failed: ${apiError}`)
+      return
+    }
+  }
   
   for (const log of dexLogs) {
     await processDexLog(token, dexPool, log, provider, chainId)
