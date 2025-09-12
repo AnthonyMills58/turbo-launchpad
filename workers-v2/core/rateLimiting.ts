@@ -7,9 +7,10 @@ export function sleep(ms: number) {
   return new Promise(res => setTimeout(res, ms))
 }
 
-export function isRateLimit(e: any): boolean {
-  const code = e?.code ?? e?.error?.code
-  const msg = (e?.message ?? e?.error?.message ?? '').toLowerCase()
+export function isRateLimit(e: unknown): boolean {
+  const error = e as { code?: number; error?: { code?: number; message?: string }; message?: string }
+  const code = error?.code ?? error?.error?.code
+  const msg = (error?.message ?? error?.error?.message ?? '').toLowerCase()
   return code === -32016 || code === -32822 || msg.includes('rate limit') || msg.includes('over compute unit limit')
 }
 
