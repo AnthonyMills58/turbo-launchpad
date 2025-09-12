@@ -395,6 +395,14 @@ async function createGraduationRecords(
            toAddr.toLowerCase() === token.contract_address.toLowerCase()
   })
   
+  // Find the LP transfer (contract to LP pool)
+  const lpTransferLog = txLogs.find(l => {
+    const fromAddr = ethers.getAddress('0x' + l.topics[1].slice(26))
+    const toAddr = ethers.getAddress('0x' + l.topics[2].slice(26))
+    return fromAddr.toLowerCase() === token.contract_address.toLowerCase() && 
+           toAddr !== '0x0000000000000000000000000000000000000000'
+  })
+  
   if (!userBuyLog || !graduationLog) {
     console.error(`Token ${token.id}: Could not find user BUY or graduation logs in transaction ${log.transactionHash}`)
     return
@@ -403,6 +411,7 @@ async function createGraduationRecords(
   const userAmount = BigInt(userBuyLog.data)
   const graduationAmount = BigInt(graduationLog.data)
   const userToAddress = ethers.getAddress('0x' + userBuyLog.topics[2].slice(26))
+  const lpToAddress = lpTransferLog ? ethers.getAddress('0x' + lpTransferLog.topics[2].slice(26)) : '0x0000000000000000000000000000000000000000'
   
   // Get contract balance at graduation
   const ethBalance = await withRateLimit(() => provider.getBalance(token.contract_address, log.blockNumber), 10, chainId)
@@ -444,7 +453,7 @@ async function createGraduationRecords(
     'BC' // Bonding curve operation
   ])
   
-  // Record 2: Graduation Summary (contract to LP pool with same amounts as user BUY)
+  // Record 2: Graduation Summary (contract to LP pool with graduation amounts)
   await pool.query(`
     INSERT INTO public.token_transfers
       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata)
@@ -453,20 +462,21 @@ async function createGraduationRecords(
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
     0, // log_index 0 for graduation summary
     token.contract_address, // From contract
-    '0x0000000000000000000000000000000000000000', // To zero address (will be updated to LP pool when discovered)
-    userAmount.toString(), // Same amount as user BUY
-    ethBalance.toString(), // Same ETH amount as user BUY
-    priceEthPerToken, // Same price as user BUY
+    lpToAddress, // To LP pool (or zero address if not found)
+    graduationAmount.toString(), // Use graduation amount
+    ethBalance.toString(), // Same ETH amount
+    priceEthPerToken, // Same price
     'GRADUATION',
     'BC', // Bonding curve operation
     JSON.stringify({
       type: 'graduation',
       phase: 'summary',
-      total_tokens: userAmount.toString(),
+      total_tokens: graduationAmount.toString(),
       total_eth: ethBalance.toString(),
       price_eth_per_token: priceEthPerToken,
       graduation_trigger: tx.from,
-      lp_address: null, // Will be populated when DEX pool is discovered
+      user_tokens: userAmount.toString(),
+      lp_address: lpToAddress !== '0x0000000000000000000000000000000000000000' ? lpToAddress : null,
       reserves: null // Will be populated when DEX pool is processed
     })
   ])
