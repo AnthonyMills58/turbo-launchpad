@@ -188,7 +188,7 @@ async function processTokenChunk(
     console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs`)
     
     for (const log of dexLogs) {
-      await processDexLog(token, dexPool, log)
+      await processDexLog(token, dexPool, log, provider, chainId)
     }
   }
 }
@@ -453,10 +453,140 @@ async function processRegularTransfer(
 async function processDexLog(
   token: TokenRow,
   dexPool: DexPoolRow,
-  log: ethers.Log
+  log: ethers.Log,
+  provider: ethers.JsonRpcProvider,
+  chainId: number
 ) {
-  // TODO: Implement DEX log processing
-  console.log(`Processing DEX log: ${log.transactionHash}`)
+  try {
+    if (log.topics[0] === SWAP_TOPIC) {
+      await processSwapLog(token, dexPool, log, provider, chainId)
+    } else if (log.topics[0] === SYNC_TOPIC) {
+      await processSyncLog(token, dexPool, log, provider, chainId)
+    }
+  } catch (error) {
+    console.error(`❌ Failed to process DEX log ${log.transactionHash}:`, error)
+  }
+}
+
+/**
+ * Process a Swap log (DEX BUY/SELL)
+ */
+async function processSwapLog(
+  token: TokenRow,
+  dexPool: DexPoolRow,
+  log: ethers.Log,
+  provider: ethers.JsonRpcProvider,
+  chainId: number
+) {
+  // Parse swap log
+  const amount0In = BigInt(log.data.slice(2, 66))
+  const amount1In = BigInt('0x' + log.data.slice(66, 130))
+  const amount0Out = BigInt('0x' + log.data.slice(130, 194))
+  const amount1Out = BigInt('0x' + log.data.slice(194, 258))
+  // const to = ethers.getAddress('0x' + log.topics[2].slice(26)) // Not used in current logic
+  
+  // Get transaction details
+  const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 10, chainId)
+  if (!tx) {
+    console.log(`Token ${token.id}: No transaction found for DEX swap ${log.transactionHash}`)
+    return
+  }
+  
+  // Get block timestamp
+  const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
+  const blockTime = new Date(Number(block!.timestamp) * 1000)
+  
+  // Determine swap direction and amounts
+  let side: string
+  let fromAddress: string
+  let toAddress: string
+  let amountWei: string
+  let ethAmountWei: string
+  let priceEthPerToken: number | null = null
+  
+  // Check if this is a token buy or sell
+  // For token buy: amount0In > 0 (ETH in), amount1Out > 0 (tokens out)
+  // For token sell: amount1In > 0 (tokens in), amount0Out > 0 (ETH out)
+  
+  if (amount0In > 0n && amount1Out > 0n) {
+    // Token BUY: ETH in, tokens out
+    side = 'BUY'
+    fromAddress = dexPool.pair_address // LP pool provides tokens
+    toAddress = tx.from // Trader receives tokens
+    amountWei = amount1Out.toString() // Tokens received
+    ethAmountWei = amount0In.toString() // ETH paid
+    priceEthPerToken = Number(ethAmountWei) / Number(amountWei)
+  } else if (amount1In > 0n && amount0Out > 0n) {
+    // Token SELL: tokens in, ETH out
+    side = 'SELL'
+    fromAddress = tx.from // Trader provides tokens
+    toAddress = dexPool.pair_address // LP pool receives tokens
+    amountWei = amount1In.toString() // Tokens sold
+    ethAmountWei = amount0Out.toString() // ETH received
+    priceEthPerToken = Number(ethAmountWei) / Number(amountWei)
+  } else {
+    console.log(`Token ${token.id}: Unknown swap direction for ${log.transactionHash}`)
+    return
+  }
+  
+  // Insert DEX transfer record
+  await pool.query(`
+    INSERT INTO public.token_transfers
+      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+      side = EXCLUDED.side,
+      src = EXCLUDED.src
+  `, [
+    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+    log.index, fromAddress, toAddress, amountWei, ethAmountWei, priceEthPerToken,
+    side, 'DEX' // DEX operation
+  ])
+  
+  console.log(`✅ Token ${token.id}: Recorded DEX ${side} (${amountWei} tokens, ${ethAmountWei} ETH)`)
+}
+
+/**
+ * Process a Sync log (reserve updates)
+ */
+async function processSyncLog(
+  token: TokenRow,
+  dexPool: DexPoolRow,
+  log: ethers.Log,
+  provider: ethers.JsonRpcProvider,
+  chainId: number
+) {
+  // Parse sync log
+  const reserve0 = BigInt(log.data.slice(2, 66))
+  const reserve1 = BigInt('0x' + log.data.slice(66, 130))
+  
+  // Get block timestamp
+  const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
+  const blockTime = new Date(Number(block!.timestamp) * 1000)
+  
+  // Calculate price from reserves
+  let priceEthPerToken: number | null = null
+  if (reserve0 > 0n && reserve1 > 0n) {
+    // Assuming token0 is ETH and token1 is the token
+    // Price = reserve0 / reserve1 (ETH per token)
+    priceEthPerToken = Number(reserve0) / Number(reserve1)
+  }
+  
+  // Insert pair snapshot
+  await pool.query(`
+    INSERT INTO public.pair_snapshots
+      (chain_id, pair_address, block_number, block_time, reserve0_wei, reserve1_wei, price_eth_per_token)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (chain_id, pair_address, block_number) DO UPDATE SET
+      reserve0_wei = EXCLUDED.reserve0_wei,
+      reserve1_wei = EXCLUDED.reserve1_wei,
+      price_eth_per_token = EXCLUDED.price_eth_per_token
+  `, [
+    chainId, dexPool.pair_address, log.blockNumber, blockTime,
+    reserve0.toString(), reserve1.toString(), priceEthPerToken
+  ])
+  
+  console.log(`✅ Token ${token.id}: Updated pair snapshot (reserves: ${reserve0}, ${reserve1})`)
 }
 
 // Run the worker
