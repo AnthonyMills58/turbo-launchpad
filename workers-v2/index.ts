@@ -16,7 +16,7 @@ import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
 import { withRateLimit } from './core/rateLimiting'
-import { getChunkSize } from './core/config'
+import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT } from './core/config'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -44,6 +44,69 @@ interface DexPoolRow {
 }
 
 /**
+ * Check if a chain is healthy
+ */
+async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvider): Promise<boolean> {
+  try {
+    console.log(`Checking health for chain ${chainId}...`)
+    
+    // Try to get the latest block number with a timeout
+    const latestBlock = await Promise.race([
+      withRateLimit(() => provider.getBlockNumber(), 10, chainId),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Health check timeout')), HEALTH_CHECK_TIMEOUT)
+      )
+    ])
+    
+    // Try to get block details to ensure the chain is actually responding
+    const block = await Promise.race([
+      withRateLimit(() => provider.getBlock(latestBlock), 10, chainId),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Block fetch timeout')), HEALTH_CHECK_TIMEOUT / 2)
+      )
+    ])
+    
+    if (!block) {
+      console.warn(`Chain ${chainId}: Health check failed - no block data`)
+      return false
+    }
+    
+    console.log(`Chain ${chainId}: Health check passed - latest block ${latestBlock}`)
+    return true
+    
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.warn(`Chain ${chainId}: Health check failed - ${errorMsg}`)
+    return false
+  }
+}
+
+/**
+ * Get healthy chains for processing
+ */
+async function getHealthyChains(tokensByChain: Map<number, TokenRow[]>): Promise<Map<number, TokenRow[]>> {
+  const healthyChains = new Map<number, TokenRow[]>()
+  
+  for (const [chainId, tokens] of tokensByChain) {
+    try {
+      const provider = providerFor(chainId)
+      const isHealthy = await checkChainHealth(chainId, provider)
+      
+      if (isHealthy) {
+        healthyChains.set(chainId, tokens)
+        console.log(`✅ Chain ${chainId}: Healthy - will process ${tokens.length} tokens`)
+      } else {
+        console.log(`❌ Chain ${chainId}: Unhealthy - skipping ${tokens.length} tokens`)
+      }
+    } catch (error) {
+      console.error(`❌ Chain ${chainId}: Health check error - ${error}`)
+    }
+  }
+  
+  return healthyChains
+}
+
+/**
  * Main worker function
  */
 async function main() {
@@ -53,9 +116,43 @@ async function main() {
     // Get all chains
     const { rows: chains } = await pool.query('SELECT DISTINCT chain_id FROM public.tokens ORDER BY chain_id')
     
-    for (const { chain_id } of chains) {
-      console.log(`\n📊 Processing chain ${chain_id}...`)
-      await processChain(chain_id)
+    // Health check before processing
+    if (!SKIP_HEALTH_CHECK) {
+      console.log(`\n🔍 Checking chain health before processing...`)
+      const healthyChains: number[] = []
+      
+      for (const { chain_id } of chains) {
+        const provider = providerFor(chain_id)
+        const isHealthy = await checkChainHealth(chain_id, provider)
+        
+        if (isHealthy) {
+          healthyChains.push(chain_id)
+          console.log(`✅ Chain ${chain_id}: Healthy - will process`)
+        } else {
+          console.log(`❌ Chain ${chain_id}: Unhealthy - skipping`)
+        }
+      }
+      
+      if (healthyChains.length === 0) {
+        console.log('❌ No healthy chains found. Exiting.')
+        return
+      } else {
+        console.log(`\n✅ Processing ${healthyChains.length} healthy chains (of ${chains.length})`)
+        
+        // Process only healthy chains
+        for (const chain_id of healthyChains) {
+          console.log(`\n📊 Processing chain ${chain_id}...`)
+          await processChain(chain_id)
+        }
+      }
+    } else {
+      console.log(`\n⚠️  Health checks disabled - processing all ${chains.length} chains`)
+      
+      // Process all chains
+      for (const { chain_id } of chains) {
+        console.log(`\n📊 Processing chain ${chain_id}...`)
+        await processChain(chain_id)
+      }
     }
     
     console.log('\n✅ Worker V2 completed successfully!')
