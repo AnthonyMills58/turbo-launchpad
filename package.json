@@ -11,7 +11,9 @@
     "deploy": "hardhat run scripts/deploy.ts --network megaeth",
     "postinstall": "npm rebuild sharp",
     "build:workers": "tsc -p workers/tsconfig.json",
-    "start:worker": "node dist/workers/index.js"
+    "start:worker": "node dist/workers/index.js",
+    "build:workers-v2": "tsc -p workers-v2/tsconfig.json",
+    "start:worker-v2": "node dist/workers-v2/index.js"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.3.0",
