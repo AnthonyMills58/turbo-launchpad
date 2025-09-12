@@ -279,38 +279,51 @@ async function processTokenChunk(
   
   console.log(`Token ${token.id}: Found ${transferLogs.length} transfer logs`)
   
-  // Group logs by transaction to avoid duplicate processing
-  const logsByTx = new Map<string, ethers.Log[]>()
-  for (const log of transferLogs) {
-    const txHash = log.transactionHash!
-    if (!logsByTx.has(txHash)) {
-      logsByTx.set(txHash, [])
-    }
-    logsByTx.get(txHash)!.push(log)
-  }
+  // Check if this block range contains graduation transactions
+  const graduationBlock = dexPool?.deployment_block || 0
+  const isGraduationBlockRange = fromBlock >= graduationBlock && graduationBlock > 0
   
-  // Process each transaction (not each log)
-  for (const [txHash, logs] of logsByTx) {
-    const tx = await withRateLimit(() => provider.getTransaction(txHash), 10, chainId)
-    if (!tx) {
-      console.log(`Token ${token.id}: No transaction found for ${txHash}`)
-      continue
+  if (isGraduationBlockRange) {
+    console.log(`Token ${token.id}: Processing graduation block range ${fromBlock}-${toBlock}`)
+    
+    // Group logs by transaction for graduation processing
+    const logsByTx = new Map<string, ethers.Log[]>()
+    for (const log of transferLogs) {
+      const txHash = log.transactionHash!
+      if (!logsByTx.has(txHash)) {
+        logsByTx.set(txHash, [])
+      }
+      logsByTx.get(txHash)!.push(log)
     }
     
-    // Check if this is a graduation transaction using the first log
-    const firstLog = logs[0]
-    const isGraduation = await detectGraduation(token, firstLog, tx, provider, chainId)
-    
-    if (isGraduation) {
-      // Process graduation (creates 2 records: BUY + GRADUATION)
-      const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 10, chainId)
-      const blockTime = new Date(Number(block!.timestamp) * 1000)
-      await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId)
-    } else {
-      // Process each regular transfer log
-      for (const log of logs) {
-        await processTransferLog(token, dexPool, log, provider, chainId)
+    // Process each graduation transaction
+    for (const [txHash, logs] of logsByTx) {
+      const tx = await withRateLimit(() => provider.getTransaction(txHash), 10, chainId)
+      if (!tx) {
+        console.log(`Token ${token.id}: No transaction found for ${txHash}`)
+        continue
       }
+      
+      // Check if this is a graduation transaction
+      const firstLog = logs[0]
+      const isGraduation = await detectGraduation(token, firstLog, tx, provider, chainId)
+      
+      if (isGraduation) {
+        // Process graduation (creates 2 records: BUY + GRADUATION)
+        const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 10, chainId)
+        const blockTime = new Date(Number(block!.timestamp) * 1000)
+        await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId)
+      } else {
+        // Process each regular transfer log
+        for (const log of logs) {
+          await processTransferLog(token, dexPool, log, provider, chainId)
+        }
+      }
+    }
+  } else {
+    // Regular block range - process each log individually
+    for (const log of transferLogs) {
+      await processTransferLog(token, dexPool, log, provider, chainId)
     }
   }
   
