@@ -127,6 +127,8 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   
   // Process in chunks
   const chunkSize = getChunkSize(chainId)
+  let lastSuccessfulBlock = startBlock - 1 // Track last successfully processed block
+  
   for (let from = startBlock; from <= endBlock; from += chunkSize + 1) {
     const to = Math.min(from + chunkSize, endBlock)
     
@@ -134,20 +136,27 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
     
     try {
       await processTokenChunk(token, dexPool, provider, chainId, from, to)
+      lastSuccessfulBlock = to // Update only on success
+      console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to}`)
     } catch (error) {
       console.error(`❌ Failed to process chunk ${from}-${to} for token ${token.id}:`, error)
-      // Continue with next chunk
+      // Stop processing on first failure to avoid data gaps
+      break
     }
   }
   
-  // Update last processed block
-  await pool.query(`
-    UPDATE public.tokens 
-    SET last_processed_block = $1, updated_at = NOW()
-    WHERE id = $2
-  `, [endBlock, token.id])
-  
-  console.log(`✅ Token ${token.id}: Updated to block ${endBlock}`)
+  // Update last processed block only to the last successful chunk
+  if (lastSuccessfulBlock >= startBlock) {
+    await pool.query(`
+      UPDATE public.tokens 
+      SET last_processed_block = $1, updated_at = NOW()
+      WHERE id = $2
+    `, [lastSuccessfulBlock, token.id])
+    
+    console.log(`✅ Token ${token.id}: Updated to block ${lastSuccessfulBlock}`)
+  } else {
+    console.log(`❌ Token ${token.id}: No blocks processed successfully`)
+  }
 }
 
 /**
@@ -176,21 +185,74 @@ async function processTokenChunk(
     await processTransferLog(token, dexPool, log, provider, chainId)
   }
   
-  // If graduated, also process DEX logs
+  // If graduated, also process DEX logs (but only if not already processed for this chain)
   if (dexPool) {
-    const dexLogs = await withRateLimit(() => provider.getLogs({
-      address: dexPool!.pair_address,
-      topics: [SWAP_TOPIC, SYNC_TOPIC],
-      fromBlock,
-      toBlock
-    }), 10, chainId)
-    
-    console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs`)
-    
-    for (const log of dexLogs) {
-      await processDexLog(token, dexPool, log, provider, chainId)
-    }
+    await processDexLogsForChain(token, dexPool, provider, chainId, fromBlock, toBlock)
   }
+}
+
+/**
+ * Process DEX logs for a chain (only once per block range)
+ */
+async function processDexLogsForChain(
+  token: TokenRow,
+  dexPool: DexPoolRow,
+  provider: ethers.JsonRpcProvider,
+  chainId: number,
+  fromBlock: number,
+  toBlock: number
+) {
+  // Check if DEX logs for this block range have already been processed
+  const { rows: cursorRows } = await pool.query(`
+    SELECT dex_last_processed_block 
+    FROM public.chain_cursors 
+    WHERE chain_id = $1
+  `, [chainId])
+  
+  if (cursorRows.length === 0) {
+    console.log(`Token ${token.id}: No chain cursor found for chain ${chainId}`)
+    return
+  }
+  
+  const dexLastProcessed = cursorRows[0].dex_last_processed_block || 0
+  
+  // Only process if this block range hasn't been processed yet
+  if (toBlock <= dexLastProcessed) {
+    console.log(`Token ${token.id}: DEX logs for blocks ${fromBlock}-${toBlock} already processed`)
+    return
+  }
+  
+  // Process only the new blocks
+  const actualFromBlock = Math.max(fromBlock, dexLastProcessed + 1)
+  
+  if (actualFromBlock > toBlock) {
+    console.log(`Token ${token.id}: No new DEX blocks to process`)
+    return
+  }
+  
+  console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
+  
+  const dexLogs = await withRateLimit(() => provider.getLogs({
+    address: dexPool.pair_address,
+    topics: [SWAP_TOPIC, SYNC_TOPIC],
+    fromBlock: actualFromBlock,
+    toBlock
+  }), 10, chainId)
+  
+  console.log(`Token ${token.id}: Found ${dexLogs.length} DEX logs`)
+  
+  for (const log of dexLogs) {
+    await processDexLog(token, dexPool, log, provider, chainId)
+  }
+  
+  // Update DEX cursor for this chain
+  await pool.query(`
+    UPDATE public.chain_cursors 
+    SET dex_last_processed_block = $1, updated_at = NOW()
+    WHERE chain_id = $2
+  `, [toBlock, chainId])
+  
+  console.log(`✅ Token ${token.id}: Updated DEX cursor to block ${toBlock}`)
 }
 
 /**
