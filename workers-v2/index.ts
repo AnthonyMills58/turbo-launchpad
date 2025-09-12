@@ -10,9 +10,11 @@
  * - Better error handling
  */
 
+import 'dotenv/config'
 import { ethers } from 'ethers'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
+import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from '../lib/dex'
 import { withRateLimit } from './core/rateLimiting'
 import { getChunkSize } from './core/config'
 
@@ -182,7 +184,23 @@ async function processTokenChunk(
   
   // Process each transfer log
   for (const log of transferLogs) {
-    await processTransferLog(token, dexPool, log, provider, chainId)
+    // Check if this is a graduation transaction first
+    const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 10, chainId)
+    if (!tx) {
+      console.log(`Token ${token.id}: No transaction found for transfer ${log.transactionHash}`)
+      continue
+    }
+    
+    const isGraduation = await detectGraduation(token, log, tx, provider, chainId)
+    if (isGraduation) {
+      // Process graduation (creates 2 records: BUY + GRADUATION)
+      const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
+      const blockTime = new Date(Number(block!.timestamp) * 1000)
+      await createGraduationRecords(token, log, tx, blockTime, provider, chainId)
+    } else {
+      // Process regular transfer
+      await processTransferLog(token, dexPool, log, provider, chainId)
+    }
   }
   
   // If graduated, also process DEX logs (but only if not already processed for this chain)
@@ -282,16 +300,8 @@ async function processTransferLog(
     const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 10, chainId)
     const blockTime = new Date(Number(block!.timestamp) * 1000)
     
-    // Determine if this is graduation
-    const isGraduation = await detectGraduation(token, log, tx, provider, chainId)
-    
-    if (isGraduation) {
-      console.log(`Token ${token.id}: Graduation detected at block ${log.blockNumber}`)
-      await createGraduationRecords(token, log, tx, blockTime, provider, chainId)
-    } else {
-      // Regular transfer processing
-      await processRegularTransfer(token, dexPool, log, tx, fromAddress, toAddress, amount, blockTime, chainId)
-    }
+    // Process regular transfer (graduation is handled in main loop)
+    await processRegularTransfer(token, dexPool, log, tx, fromAddress, toAddress, amount, blockTime, chainId)
   } catch (error) {
     console.error(`❌ Failed to process transfer log ${log.transactionHash}:`, error)
   }
@@ -334,7 +344,7 @@ async function detectGraduation(
 }
 
 /**
- * Create 4 graduation records
+ * Create 2 graduation records: User BUY + Graduation Summary
  */
 async function createGraduationRecords(
   token: TokenRow,
@@ -369,7 +379,7 @@ async function createGraduationRecords(
     console.warn(`Could not get graduation price: ${error}`)
   }
   
-  // Record 1: User BUY (BC)
+  // Record 1: User BUY (the transaction that triggered graduation)
   await pool.query(`
     INSERT INTO public.token_transfers
       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
@@ -386,41 +396,7 @@ async function createGraduationRecords(
     'BC' // Bonding curve operation
   ])
   
-  // Record 2: LP Creation (BC) - placeholder, will be populated when DEX pool is discovered
-  await pool.query(`
-    INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-  `, [
-    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    2, // log_index 2 for LP Creation
-    token.contract_address, // Contract creates LP
-    token.contract_address, // Contract receives LP
-    '0', // Will be populated when DEX pool is discovered
-    '0', // Will be populated when DEX pool is discovered
-    null, // Will be populated when DEX pool is discovered
-    'LP_CREATION',
-    'BC' // Bonding curve operation
-  ])
-  
-  // Record 3: LP Distribution (BC) - placeholder, will be populated when DEX pool is discovered
-  await pool.query(`
-    INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-  `, [
-    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    3, // log_index 3 for LP Distribution
-    token.contract_address, // Contract distributes LP
-    '0x0000000000000000000000000000000000000000', // Will be populated when DEX pool is discovered
-    '0', // Will be populated when DEX pool is discovered
-    '0', // Will be populated when DEX pool is discovered
-    null, // Will be populated when DEX pool is discovered
-    'LP_DISTRIBUTION',
-    'BC' // Bonding curve operation
-  ])
-  
-  // Record 4: Graduation Summary (BC)
+  // Record 2: Graduation Summary (same amounts and price as BUY)
   await pool.query(`
     INSERT INTO public.token_transfers
       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata)
@@ -428,8 +404,8 @@ async function createGraduationRecords(
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
     0, // log_index 0 for graduation summary
-    token.contract_address, // Contract
-    token.contract_address, // Contract (graduation target)
+    '0x0000000000000000000000000000000000000000', // From zero address (mint)
+    token.contract_address, // To contract (graduation target)
     amount.toString(),
     ethBalance.toString(),
     priceEthPerToken,
@@ -447,7 +423,7 @@ async function createGraduationRecords(
     })
   ])
   
-  console.log(`✅ Token ${token.id}: Created 4 graduation records`)
+  console.log(`✅ Token ${token.id}: Created 2 graduation records (BUY + GRADUATION)`)
 }
 
 /**

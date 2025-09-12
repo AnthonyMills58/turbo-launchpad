@@ -15,7 +15,9 @@
   "include": [
     "**/*.ts",
     "../lib/db.ts",
-    "../lib/providers.ts"
+    "../lib/providers.ts",
+    "../lib/chains.ts",
+    "../lib/dex.ts"
   ],
   "exclude": [
     "node_modules",
