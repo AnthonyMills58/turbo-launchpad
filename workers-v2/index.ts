@@ -286,8 +286,33 @@ async function processTokenChunk(
   console.log(`Token ${token.id}: Found ${transferLogs.length} transfer logs`)
   
   // Check if this block range contains graduation transactions
+  // For graduation detection, we need to check if this block range contains graduation patterns
+  // We'll detect graduation by looking for transactions with multiple transfer logs that match graduation patterns
   const graduationBlock = dexPool?.deployment_block || 0
-  const isGraduationBlockRange = fromBlock >= graduationBlock && graduationBlock > 0
+  let isGraduationBlockRange = fromBlock >= graduationBlock && graduationBlock > 0
+  
+  // If no DEX pool yet, check if this might be a graduation block range by looking for graduation patterns
+  if (!isGraduationBlockRange && transferLogs.length > 0) {
+    // Group logs by transaction to check for graduation patterns
+    const logsByTx = new Map<string, ethers.Log[]>()
+    for (const log of transferLogs) {
+      const txHash = log.transactionHash!
+      if (!logsByTx.has(txHash)) {
+        logsByTx.set(txHash, [])
+      }
+      logsByTx.get(txHash)!.push(log)
+    }
+    
+    // Check if any transaction has graduation pattern (3+ transfer logs)
+    for (const [txHash, logs] of logsByTx) {
+      if (logs.length >= 3) {
+        // This might be a graduation transaction - treat as graduation block range
+        console.log(`Token ${token.id}: Detected potential graduation block range (${logs.length} logs in tx ${txHash})`)
+        isGraduationBlockRange = true
+        break
+      }
+    }
+  }
   
   console.log(`Token ${token.id}: Block range ${fromBlock}-${toBlock}, graduation block: ${graduationBlock}, is graduation range: ${isGraduationBlockRange}`)
   
