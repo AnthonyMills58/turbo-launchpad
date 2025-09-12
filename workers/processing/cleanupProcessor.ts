@@ -7,7 +7,8 @@ import { providerFor } from '../core/providers'
 export async function cleanupOverlappingTransfers(chainId: number) {
   console.log(`\n=== Cleaning up overlapping transfers for chain ${chainId} ===`)
   
-  // First, remove all duplicate records except GRADUATION records
+  // First, remove all duplicate records except graduation-related records
+  // Note: We need to preserve the new graduation format records (BUY, LP_CREATION, LP_DISTRIBUTION, GRADUATION)
   const { rows: duplicateRecords } = await pool.query(
     `SELECT COUNT(*) as count
      FROM public.token_transfers t1
@@ -18,28 +19,46 @@ export async function cleanupOverlappingTransfers(chainId: number) {
        GROUP BY token_id, tx_hash 
        HAVING COUNT(*) > 1
      ) t2 ON t1.token_id = t2.token_id AND t1.tx_hash = t2.tx_hash
-     WHERE t1.chain_id = $1 AND t1.side <> 'GRADUATION'`,
+     WHERE t1.chain_id = $1 
+       AND t1.side NOT IN ('GRADUATION', 'LP_CREATION', 'LP_DISTRIBUTION')
+       AND NOT EXISTS (
+         -- Don't remove records that are part of graduation format (same tx_hash as GRADUATION record)
+         SELECT 1 FROM public.token_transfers t3 
+         WHERE t3.chain_id = $1 
+           AND t3.token_id = t1.token_id 
+           AND t3.tx_hash = t1.tx_hash 
+           AND t3.side = 'GRADUATION'
+       )`,
     [chainId]
   )
   
   const duplicateRecordsCount = parseInt(duplicateRecords[0].count)
-  console.log(`Found ${duplicateRecordsCount} duplicate records (non-GRADUATION)`)
+  console.log(`Found ${duplicateRecordsCount} duplicate records (excluding graduation format)`)
   
   if (duplicateRecordsCount > 0) {
     const { rowCount: removedDuplicates } = await pool.query(
       `DELETE FROM public.token_transfers 
-       WHERE chain_id = $1 AND side <> 'GRADUATION' 
-       AND (token_id, tx_hash) IN (
-         SELECT token_id, tx_hash 
-         FROM public.token_transfers 
-         WHERE chain_id = $1
-         GROUP BY token_id, tx_hash 
-         HAVING COUNT(*) > 1
-       )`,
+       WHERE chain_id = $1 
+         AND side NOT IN ('GRADUATION', 'LP_CREATION', 'LP_DISTRIBUTION')
+         AND (token_id, tx_hash) IN (
+           SELECT token_id, tx_hash 
+           FROM public.token_transfers 
+           WHERE chain_id = $1
+           GROUP BY token_id, tx_hash 
+           HAVING COUNT(*) > 1
+         )
+         AND NOT EXISTS (
+           -- Don't remove records that are part of graduation format
+           SELECT 1 FROM public.token_transfers t3 
+           WHERE t3.chain_id = $1 
+             AND t3.token_id = token_transfers.token_id 
+             AND t3.tx_hash = token_transfers.tx_hash 
+             AND t3.side = 'GRADUATION'
+         )`,
       [chainId]
     )
     
-    console.log(`Removed ${removedDuplicates} duplicate records (kept GRADUATION records)`)
+    console.log(`Removed ${removedDuplicates} duplicate records (preserved graduation format records)`)
   }
   
   // Then, fix timestamps in token_trades (many records have 1970 timestamps that need correction)

@@ -53,11 +53,30 @@ export async function markDexOperationsInTransfers(
       const token = tokenRows[0]
       console.log(`Token ${row.token_id} graduation status: is_graduated=${token.is_graduated}`)
       
-      // Only mark operations that happened after graduation or if token is graduated
+      // Only mark operations that happened after graduation
       if (!token.is_graduated) {
         console.log(`Token ${row.token_id} not graduated, skipping ${row.side} mark (likely bonding curve operation)`)
         continue
       }
+      
+      // Check if this operation happened after graduation (DEX operations only happen after graduation)
+      const { rows: graduationRows } = await pool.query(
+        'SELECT block_number FROM public.token_transfers WHERE token_id = $1 AND side = \'GRADUATION\' AND chain_id = $2',
+        [row.token_id, chainId]
+      )
+      
+      if (graduationRows.length === 0) {
+        console.log(`Token ${row.token_id} has no graduation record, skipping ${row.side} mark`)
+        continue
+      }
+      
+      const graduationBlock = graduationRows[0].block_number
+      if (row.block_number <= graduationBlock) {
+        console.log(`Token ${row.token_id} operation at block ${row.block_number} is before/at graduation block ${graduationBlock}, skipping ${row.side} mark (likely bonding curve operation)`)
+        continue
+      }
+      
+      console.log(`Token ${row.token_id} operation at block ${row.block_number} is after graduation block ${graduationBlock}, marking as DEX`)
       
       // Get transaction details
       let tx
