@@ -442,27 +442,18 @@ async function detectGraduation(
   provider: ethers.JsonRpcProvider,
   chainId: number
 ): Promise<boolean> {
-  // Graduation: contract mints tokens to itself
-  const fromAddress = ethers.getAddress('0x' + log.topics[1].slice(26))
-  const toAddress = ethers.getAddress('0x' + log.topics[2].slice(26))
-  
-  // Check if this is a mint to contract (graduation signature)
-  if (fromAddress === '0x0000000000000000000000000000000000000000' && 
-      toAddress.toLowerCase() === token.contract_address.toLowerCase()) {
-    
-    // Additional check: look for Graduated event in transaction receipt
-    try {
-      const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 10, chainId)
-      if (receipt) {
-        // Check for Graduated event
-        const graduatedEvent = receipt.logs.find(log => 
-          log.topics[0] === GRADUATED_TOPIC
-        )
-        return !!graduatedEvent
-      }
-    } catch (error) {
-      console.warn(`Could not get receipt for graduation check: ${error}`)
+  // Check if this transaction contains graduation by looking for Graduated event
+  try {
+    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 10, chainId)
+    if (receipt) {
+      // Check for Graduated event
+      const graduatedEvent = receipt.logs.find(log => 
+        log.topics[0] === GRADUATED_TOPIC
+      )
+      return !!graduatedEvent
     }
+  } catch (error) {
+    console.warn(`Could not get receipt for graduation check: ${error}`)
   }
   
   return false
