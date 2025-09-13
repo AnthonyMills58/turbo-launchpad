@@ -205,17 +205,8 @@ async function processChain(chainId: number) {
       console.log(`\n🪙 Processing token ${token.id} (${token.contract_address})...`)
       await processToken(token, provider, chainId)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const errorCode = (error as { code?: number; error?: { code?: number } })?.code || (error as { code?: number; error?: { code?: number } })?.error?.code
-      
-      // Check for rate limit errors or other retry-exhausted errors
-      if (errorCode === -32016 || errorCode === -32822 || 
-          errorMessage.toLowerCase().includes('rate limit') || 
-          errorMessage.toLowerCase().includes('over compute unit limit')) {
-        console.error(`🔄 Token ${token.id}: Final retry failure (rate limit exhausted) - skipping to next token:`, error)
-      } else {
-        console.error(`❌ Failed to process token ${token.id}:`, error)
-      }
+      // Any error that reaches here means all retry attempts were exhausted
+      console.error(`🔄 Token ${token.id}: All retry attempts exhausted - skipping to next token:`, error)
       // Continue with next token instead of failing entire chain
     }
   }
@@ -298,20 +289,10 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
             
             console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to}`)
           } catch (dexError) {
-            const dexErrorMessage = dexError instanceof Error ? dexError.message : String(dexError)
-            const dexErrorCode = (dexError as { code?: number; error?: { code?: number } })?.code || (dexError as { code?: number; error?: { code?: number } })?.error?.code
-            
-            // Check for rate limit errors or other retry-exhausted errors in DEX processing
-            if (dexErrorCode === -32016 || dexErrorCode === -32822 || 
-                dexErrorMessage.toLowerCase().includes('rate limit') || 
-                dexErrorMessage.toLowerCase().includes('over compute unit limit')) {
-              console.log(`🔄 Token ${token.id}: Final retry failure in DEX processing (rate limit exhausted)`)
-              hasDexFinalRetryFailure = true
-              throw dexError // Re-throw to skip entire token processing
-            } else {
-              console.error(`❌ Failed to process DEX logs for chunk ${from}-${to} for token ${token.id}:`, dexError)
-              // For other DEX errors, continue processing but don't update DEX cursor
-            }
+            // Any error that reaches here means all retry attempts were exhausted in DEX processing
+            console.log(`🔄 Token ${token.id}: All retry attempts exhausted in DEX processing`)
+            hasDexFinalRetryFailure = true
+            throw dexError // Re-throw to skip entire token processing
           }
         } else {
           console.log(`Token ${token.id}: Skipping DEX processing for chunk ${from}-${to} (before DEX deployment at ${dexDeploymentBlock})`)
@@ -331,22 +312,11 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
     } catch (error) {
       console.error(`❌ Failed to process chunk ${from}-${to} for token ${token.id}:`, error)
       
-      // Check if this is a final retry failure (after all attempts exhausted)
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const errorCode = (error as { code?: number; error?: { code?: number } })?.code || (error as { code?: number; error?: { code?: number } })?.error?.code
-      
-      // Check for rate limit errors or other retry-exhausted errors
-      if (errorCode === -32016 || errorCode === -32822 || 
-          errorMessage.toLowerCase().includes('rate limit') || 
-          errorMessage.toLowerCase().includes('over compute unit limit')) {
-        console.log(`🔄 Token ${token.id}: Final retry failure detected (rate limit exhausted), skipping to next token`)
-        hasFinalRetryFailure = true
-        throw error // Re-throw to skip entire token processing
-      }
-      
-      // For other errors, skip this chunk and continue to next chunk
-      console.log(`⏭️ Token ${token.id}: Skipping chunk ${from}-${to}, continuing to next chunk`)
-      continue
+      // Any error that reaches here means all retry attempts were exhausted
+      // Skip the entire token to avoid getting stuck in a loop
+      console.log(`🔄 Token ${token.id}: All retry attempts exhausted, skipping to next token`)
+      hasFinalRetryFailure = true
+      throw error // Re-throw to skip entire token processing
     }
   }
   
