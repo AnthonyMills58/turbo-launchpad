@@ -349,7 +349,7 @@ async function processTransferChunk(
         console.log(`Token ${token.id}: Processing graduation transaction ${tx.hash}`)
         const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 2, chainId)
         const blockTime = new Date(Number(block!.timestamp) * 1000)
-        await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId)
+        await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId, dexPool)
         // Skip processing individual logs - graduation handles all logs in this transaction
       } else {
         // Process each regular transfer log
@@ -559,7 +559,8 @@ async function createGraduationRecords(
   tx: ethers.TransactionResponse,
   blockTime: Date,
   provider: ethers.JsonRpcProvider,
-  chainId: number
+  chainId: number,
+  dexPool: DexPoolRow | null
 ) {
   // Get all transfer logs for this transaction to find the correct amounts
   const allLogs = await withRateLimit(() => provider.getLogs({
@@ -620,51 +621,74 @@ async function createGraduationRecords(
   console.log(`  - Block Number: ${userBuyLog.blockNumber}`)
   console.log(`=== END ORIGINAL BUY RECORD ===\n`)
   
-  // Find the add liquidity event to get the actual ETH amount added to the pool
+  // Find the add liquidity event to get the actual amounts added to the pool
+  let liquidityTokenAmount = 0n
   let liquidityEthAmount = 0n
   try {
     const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 2, chainId)
     if (receipt) {
-      // Look for addLiquidity event or similar in the transaction receipt
-      // The ETH amount should be in the transaction value or in the addLiquidity event data
-      liquidityEthAmount = tx.value || 0n
+      // Look for addLiquidity event in the transaction receipt
+      // The addLiquidity event should be from the DEX pair contract
+      const addLiquidityInterface = new ethers.Interface([
+        'event Mint(address indexed sender, uint amount0, uint amount1)'
+      ])
       
-      // If we can find the addLiquidity event, we could extract the exact amount
-      // For now, using transaction value as the liquidity amount
-      console.log(`Token ${token.id}: Using transaction value ${liquidityEthAmount} as liquidity ETH amount`)
+      // Find the Mint event (which is the addLiquidity event)
+      const mintEvent = receipt.logs.find(log => {
+        try {
+          const decoded = addLiquidityInterface.parseLog({
+            topics: log.topics,
+            data: log.data
+          })
+          return decoded && decoded.name === 'Mint'
+        } catch {
+          return false
+        }
+      })
+      
+      if (mintEvent) {
+        const decoded = addLiquidityInterface.parseLog({
+          topics: mintEvent.topics,
+          data: mintEvent.data
+        })
+        
+        if (decoded) {
+          const { amount0, amount1 } = decoded.args
+          
+          // Determine which amount is which based on token position in DEX pair
+          // We need to check if our token is token0 or token1 in the DEX pair
+          if (dexPool) {
+            const isToken0 = token.contract_address.toLowerCase() === dexPool.token0.toLowerCase()
+            
+            if (isToken0) {
+              liquidityTokenAmount = amount0
+              liquidityEthAmount = amount1
+            } else {
+              liquidityTokenAmount = amount1
+              liquidityEthAmount = amount0
+            }
+            
+            console.log(`Token ${token.id}: Found addLiquidity event - Token: ${liquidityTokenAmount}, ETH: ${liquidityEthAmount}`)
+          } else {
+            console.warn(`Token ${token.id}: No DEX pool info available for addLiquidity decoding`)
+            liquidityEthAmount = tx.value || 0n
+          }
+        }
+      } else {
+        console.warn(`Token ${token.id}: No addLiquidity event found, using transaction value`)
+        liquidityEthAmount = tx.value || 0n
+      }
     }
   } catch (error) {
     console.warn(`Could not get receipt for liquidity amount: ${error}`)
     liquidityEthAmount = tx.value || 0n
   }
   
-  // Get bonding curve price at graduation
-  let priceEthPerToken = 0
-  try {
-    const turboTokenInterface = new ethers.Interface([
-      'function getCurrentPrice() view returns (uint256)'
-    ])
-    
-    console.log(`Token ${token.id}: Getting graduation price at block ${log.blockNumber}`)
-    const priceWei = await withRateLimit(() => provider.call({
-      to: token.contract_address,
-      data: turboTokenInterface.encodeFunctionData('getCurrentPrice'),
-      blockTag: log.blockNumber
-    }), 2, chainId)
-    
-    console.log(`Token ${token.id}: Price call result: ${priceWei}`)
-    if (priceWei && priceWei !== '0x') {
-      priceEthPerToken = Number(priceWei) / 1e18
-      console.log(`Token ${token.id}: Calculated price: ${priceEthPerToken}`)
-    } else {
-      console.warn(`Token ${token.id}: Price call returned empty or invalid result: ${priceWei}`)
-    }
-  } catch (error) {
-    console.warn(`Token ${token.id}: Could not get graduation price: ${error}`)
-  }
-  
   // Calculate price for user BUY record
   const userPriceEthPerToken = userEthAmount > 0n && userAmount > 0n ? Number(userEthAmount) / Number(userAmount) : 0
+  
+  // Calculate price for GRADUATION record (addLiquidity price)
+  const graduationPriceEthPerToken = liquidityEthAmount > 0n && liquidityTokenAmount > 0n ? Number(liquidityEthAmount) / Number(liquidityTokenAmount) : 0
   
   // Record 1: User BUY (the transaction that triggered graduation)
   await pool.query(`
@@ -683,7 +707,7 @@ async function createGraduationRecords(
     'BC' // Bonding curve operation
   ])
   
-  // Record 2: Graduation Summary (contract to LP pool with graduation amounts)
+  // Record 2: Graduation Summary (contract to LP pool with addLiquidity amounts)
   await pool.query(`
     INSERT INTO public.token_transfers
       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata)
@@ -693,20 +717,21 @@ async function createGraduationRecords(
     graduationLog.index, // Use actual log index from the original graduation log
     token.contract_address, // From contract
     lpToAddress, // To LP pool (or zero address if not found)
-    graduationAmount.toString(), // Use graduation amount
-    liquidityEthAmount.toString(), // Use liquidity ETH amount (from addLiquidity event)
-    priceEthPerToken, // Use bonding curve price at graduation
+    liquidityTokenAmount.toString(), // Use actual addLiquidity token amount
+    liquidityEthAmount.toString(), // Use actual addLiquidity ETH amount
+    graduationPriceEthPerToken, // Use addLiquidity price (amount_eth_wei / amount_wei)
     'GRADUATION',
     'BC', // Bonding curve operation
     JSON.stringify({
       type: 'graduation',
       phase: 'summary',
-      total_tokens: graduationAmount.toString(),
-      liquidity_eth: liquidityEthAmount.toString(),
-      price_eth_per_token: priceEthPerToken,
+      addliquidity_tokens: liquidityTokenAmount.toString(),
+      addliquidity_eth: liquidityEthAmount.toString(),
+      addliquidity_price_eth_per_token: graduationPriceEthPerToken,
       graduation_trigger: tx.from,
       user_tokens: userAmount.toString(),
       user_eth: userEthAmount.toString(),
+      graduation_tokens: graduationAmount.toString(),
       lp_address: lpToAddress !== '0x0000000000000000000000000000000000000000' ? lpToAddress : null,
       reserves: null // Will be populated when DEX pool is processed
     })
