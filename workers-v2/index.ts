@@ -90,6 +90,55 @@ async function main() {
   console.log('🚀 Starting Turbo Launchpad Worker V2...')
   
   try {
+    // Update last_processed_block for tokens and dex_pools based on token_transfers
+    console.log('🔄 Updating last_processed_block from token_transfers...')
+    
+    // Update tokens table
+    const tokensUpdateResult = await pool.query(`
+      WITH max_bc_blocks AS (
+        SELECT 
+          chain_id,
+          token_id,
+          MAX(block_number) as max_block
+        FROM public.token_transfers 
+        WHERE src = 'BC'
+        GROUP BY chain_id, token_id
+      )
+      UPDATE public.tokens 
+      SET last_processed_block = COALESCE(
+        max_bc_blocks.max_block,
+        tokens.deployment_block
+      )
+      FROM max_bc_blocks
+      WHERE tokens.chain_id = max_bc_blocks.chain_id 
+        AND tokens.id = max_bc_blocks.token_id
+        AND tokens.contract_address IS NOT NULL
+    `)
+    console.log(`✅ Updated ${tokensUpdateResult.rowCount} tokens`)
+    
+    // Update dex_pools table
+    const dexPoolsUpdateResult = await pool.query(`
+      WITH max_dex_blocks AS (
+        SELECT 
+          chain_id,
+          token_id,
+          MAX(block_number) as max_block
+        FROM public.token_transfers 
+        WHERE src = 'DEX'
+        GROUP BY chain_id, token_id
+      )
+      UPDATE public.dex_pools 
+      SET last_processed_block = COALESCE(
+        max_dex_blocks.max_block,
+        dex_pools.deployment_block
+      )
+      FROM max_dex_blocks
+      WHERE dex_pools.chain_id = max_dex_blocks.chain_id 
+        AND dex_pools.token_id = max_dex_blocks.token_id
+        AND dex_pools.pair_address IS NOT NULL
+    `)
+    console.log(`✅ Updated ${dexPoolsUpdateResult.rowCount} dex_pools`)
+    
     // Get all chains
     console.log('📊 Querying database for chains...')
     const { rows: chains } = await pool.query('SELECT DISTINCT chain_id FROM public.tokens ORDER BY chain_id')
