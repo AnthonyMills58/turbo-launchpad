@@ -40,6 +40,12 @@ This document lists all environment variables that can be used to configure the 
 | `SKIP_HEALTH_CHECK` | false | Skip chain health checks (set to 'true' to enable) |
 | `HEALTH_CHECK_TIMEOUT` | 10000 | Health check timeout in milliseconds |
 
+## Retry Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_RETRY_ATTEMPTS` | 9 | Maximum number of retry attempts for RPC calls (total attempts = 1 + MAX_RETRY_ATTEMPTS) |
+
 ## Usage Examples
 
 ### Ultra-Conservative MegaETH Settings
@@ -47,6 +53,7 @@ This document lists all environment variables that can be used to configure the 
 MEGAETH_CHUNK=1000
 MEGAETH_DEX_CHUNK=50
 MEGAETH_SLEEP_MS=1000
+MAX_RETRY_ATTEMPTS=9
 ```
 
 ### Aggressive Sepolia Settings

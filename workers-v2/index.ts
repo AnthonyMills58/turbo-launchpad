@@ -15,7 +15,7 @@ import { ethers } from 'ethers'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
-import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT } from './core/config'
+import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS } from './core/config'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -285,7 +285,7 @@ async function processTransferChunk(
     topics: [TRANSFER_TOPIC],
     fromBlock,
     toBlock
-  }), 2, chainId)
+  }), MAX_RETRY_ATTEMPTS, chainId)
   
   console.log(`Token ${token.id}: Found ${transferLogs.length} transfer logs`)
   
@@ -335,7 +335,7 @@ async function processTransferChunk(
     
     // Process each graduation transaction
     for (const [txHash, logs] of logsByTx) {
-      const tx = await withRateLimit(() => provider.getTransaction(txHash), 2, chainId)
+      const tx = await withRateLimit(() => provider.getTransaction(txHash), MAX_RETRY_ATTEMPTS, chainId)
       if (!tx) {
         console.log(`Token ${token.id}: No transaction found for ${txHash}`)
         continue
@@ -350,7 +350,7 @@ async function processTransferChunk(
       if (isGraduation) {
         // Process graduation (creates 2 records: BUY + GRADUATION)
         console.log(`Token ${token.id}: Processing graduation transaction ${tx.hash}`)
-        const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), 2, chainId)
+        const block = await withRateLimit(() => provider.getBlock(firstLog.blockNumber), MAX_RETRY_ATTEMPTS, chainId)
         const blockTime = new Date(Number(block!.timestamp) * 1000)
         await createGraduationRecords(token, firstLog, tx, blockTime, provider, chainId, dexPool)
         // Skip processing individual logs - graduation handles all logs in this transaction
@@ -419,7 +419,7 @@ async function processDexLogsForChain(
   const pairAddress = ethers.getAddress(dexPool.pair_address)
   console.log(`Token ${token.id}: Using DEX pool address: ${pairAddress}`)
   console.log(`Token ${token.id}: Token contract address: ${token.contract_address}`)
-  console.log(`Token ${token.id}: DEX pool record:`, dexPool)
+  //console.log(`Token ${token.id}: DEX pool record:`, dexPool)
   
   // Use direct RPC for DEX swap detection (OKLink doesn't support MegaETH testnet)
   console.log(`Token ${token.id}: Fetching DEX swaps via direct RPC for pair ${pairAddress}`)
@@ -429,7 +429,7 @@ async function processDexLogsForChain(
     topics: [SWAP_TOPIC],
     fromBlock: actualFromBlock,
     toBlock: toBlock
-  }), 2, chainId)
+  }), MAX_RETRY_ATTEMPTS, chainId)
   
   console.log(`Token ${token.id}: Found ${swapLogs.length} DEX swaps via direct RPC`)
   
@@ -466,7 +466,7 @@ async function processTransferLog(
   // Get transaction details with more conservative retry
   let tx: ethers.TransactionResponse | null = null
   try {
-    tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 1, chainId)
+    tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), MAX_RETRY_ATTEMPTS, chainId)
   } catch (error) {
     console.warn(`Token ${token.id}: Failed to get transaction ${log.transactionHash}, skipping: ${error}`)
     return
@@ -478,7 +478,7 @@ async function processTransferLog(
   }
     
     // Get block timestamp
-    const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 2, chainId)
+    const block = await withRateLimit(() => provider.getBlock(log.blockNumber), MAX_RETRY_ATTEMPTS, chainId)
     const blockTime = new Date(Number(block!.timestamp) * 1000)
     
     // Process regular transfer (graduation is handled in main loop)
@@ -500,7 +500,7 @@ async function detectGraduation(
 ): Promise<boolean> {
   // Check if this transaction contains graduation by looking for Graduated event
   try {
-    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 2, chainId)
+    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), MAX_RETRY_ATTEMPTS, chainId)
     if (receipt) {
       // Check for Graduated event
       const graduatedEvent = receipt.logs.find(log => 
@@ -628,7 +628,7 @@ async function createGraduationRecords(
   let liquidityTokenAmount = 0n
   let liquidityEthAmount = 0n
   try {
-    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), 2, chainId)
+    const receipt = await withRateLimit(() => provider.getTransactionReceipt(tx.hash), MAX_RETRY_ATTEMPTS, chainId)
     if (receipt) {
       // Look for addLiquidity event in the transaction receipt
       // The addLiquidity event should be from the DEX pair contract
@@ -836,7 +836,7 @@ async function processRegularTransfer(
       // For SELL, calculate the ETH amount received by calling getSellPrice
       // Use block before transaction to get the correct price (like old worker)
       try {
-        const receipt = await withRateLimit(() => provider.getTransactionReceipt(log.transactionHash!), 2, chainId)
+        const receipt = await withRateLimit(() => provider.getTransactionReceipt(log.transactionHash!), MAX_RETRY_ATTEMPTS, chainId)
         if (receipt && receipt.blockNumber) {
           const blockBeforeTx = receipt.blockNumber - 1
           
@@ -898,14 +898,14 @@ async function processDexLog(
 ) {
   try {
     // Get transaction details
-    const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), 2, chainId)
+    const tx = await withRateLimit(() => provider.getTransaction(log.transactionHash!), MAX_RETRY_ATTEMPTS, chainId)
     if (!tx) {
       console.log(`Token ${token.id}: Could not get transaction ${log.transactionHash}`)
       return
     }
 
     // Get block details
-    const block = await withRateLimit(() => provider.getBlock(log.blockNumber), 2, chainId)
+    const block = await withRateLimit(() => provider.getBlock(log.blockNumber), MAX_RETRY_ATTEMPTS, chainId)
     if (!block) {
       console.log(`Token ${token.id}: Could not get block ${log.blockNumber}`)
       return
