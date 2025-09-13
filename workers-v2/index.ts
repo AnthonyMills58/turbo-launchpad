@@ -90,55 +90,6 @@ async function main() {
   console.log('🚀 Starting Turbo Launchpad Worker V2...')
   
   try {
-    // Update last_processed_block for tokens and dex_pools based on token_transfers
-    console.log('🔄 Updating last_processed_block from token_transfers...')
-    
-    // Update tokens table
-    const tokensUpdateResult = await pool.query(`
-      WITH max_bc_blocks AS (
-        SELECT 
-          chain_id,
-          token_id,
-          MAX(block_number) as max_block
-        FROM public.token_transfers 
-        WHERE src = 'BC'
-        GROUP BY chain_id, token_id
-      )
-      UPDATE public.tokens 
-      SET last_processed_block = COALESCE(
-        max_bc_blocks.max_block,
-        tokens.deployment_block
-      )
-      FROM max_bc_blocks
-      WHERE tokens.chain_id = max_bc_blocks.chain_id 
-        AND tokens.id = max_bc_blocks.token_id
-        AND tokens.contract_address IS NOT NULL
-    `)
-    console.log(`✅ Updated ${tokensUpdateResult.rowCount} tokens`)
-    
-    // Update dex_pools table
-    const dexPoolsUpdateResult = await pool.query(`
-      WITH max_dex_blocks AS (
-        SELECT 
-          chain_id,
-          token_id,
-          MAX(block_number) as max_block
-        FROM public.token_transfers 
-        WHERE src = 'DEX'
-        GROUP BY chain_id, token_id
-      )
-      UPDATE public.dex_pools 
-      SET last_processed_block = COALESCE(
-        max_dex_blocks.max_block,
-        dex_pools.deployment_block
-      )
-      FROM max_dex_blocks
-      WHERE dex_pools.chain_id = max_dex_blocks.chain_id 
-        AND dex_pools.token_id = max_dex_blocks.token_id
-        AND dex_pools.pair_address IS NOT NULL
-    `)
-    console.log(`✅ Updated ${dexPoolsUpdateResult.rowCount} dex_pools`)
-    
     // Get all chains
     console.log('📊 Querying database for chains...')
     const { rows: chains } = await pool.query('SELECT DISTINCT chain_id FROM public.tokens ORDER BY chain_id')
@@ -219,7 +170,17 @@ async function processChain(chainId: number) {
       console.log(`\n🪙 Processing token ${token.id} (${token.contract_address})...`)
       await processToken(token, provider, chainId)
     } catch (error) {
-      console.error(`❌ Failed to process token ${token.id}:`, error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorCode = (error as { code?: number; error?: { code?: number } })?.code || (error as { code?: number; error?: { code?: number } })?.error?.code
+      
+      // Check for rate limit errors or other retry-exhausted errors
+      if (errorCode === -32016 || errorCode === -32822 || 
+          errorMessage.toLowerCase().includes('rate limit') || 
+          errorMessage.toLowerCase().includes('over compute unit limit')) {
+        console.error(`🔄 Token ${token.id}: Final retry failure (rate limit exhausted) - skipping to next token:`, error)
+      } else {
+        console.error(`❌ Failed to process token ${token.id}:`, error)
+      }
       // Continue with next token instead of failing entire chain
     }
   }
@@ -272,6 +233,8 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   // Process in chunks: transfers first, then DEX for each chunk
   const chunkSize = getChunkSize(chainId)
   let lastSuccessfulBlock = startBlock - 1 // Track last successfully processed block
+  let hasFinalRetryFailure = false // Track if we had a final retry failure
+  let hasDexFinalRetryFailure = false // Track if we had a final retry failure in DEX processing
   
   for (let from = startBlock; from <= endBlock; from += chunkSize + 1) {
     const to = Math.min(from + chunkSize, endBlock)
@@ -287,31 +250,75 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
         const dexDeploymentBlock = dexPool.deployment_block || 0
         if (from >= dexDeploymentBlock) {
           console.log(`Token ${token.id}: Processing DEX logs for chunk ${from} to ${to} (DEX deployment: ${dexDeploymentBlock})`)
-          await processDexLogsForChain(token, dexPool, provider, chainId, from, to)
+          try {
+            await processDexLogsForChain(token, dexPool, provider, chainId, from, to)
+            
+            // Update DEX pool last_processed_block after successful DEX chunk processing
+            await pool.query(`
+              UPDATE public.dex_pools 
+              SET last_processed_block = $1
+              WHERE token_id = $2 AND chain_id = $3
+            `, [to, token.id, chainId])
+            
+            console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to}`)
+          } catch (dexError) {
+            const dexErrorMessage = dexError instanceof Error ? dexError.message : String(dexError)
+            const dexErrorCode = (dexError as { code?: number; error?: { code?: number } })?.code || (dexError as { code?: number; error?: { code?: number } })?.error?.code
+            
+            // Check for rate limit errors or other retry-exhausted errors in DEX processing
+            if (dexErrorCode === -32016 || dexErrorCode === -32822 || 
+                dexErrorMessage.toLowerCase().includes('rate limit') || 
+                dexErrorMessage.toLowerCase().includes('over compute unit limit')) {
+              console.log(`🔄 Token ${token.id}: Final retry failure in DEX processing (rate limit exhausted)`)
+              hasDexFinalRetryFailure = true
+              throw dexError // Re-throw to skip entire token processing
+            } else {
+              console.error(`❌ Failed to process DEX logs for chunk ${from}-${to} for token ${token.id}:`, dexError)
+              // For other DEX errors, continue processing but don't update DEX cursor
+            }
+          }
         } else {
           console.log(`Token ${token.id}: Skipping DEX processing for chunk ${from}-${to} (before DEX deployment at ${dexDeploymentBlock})`)
         }
       }
       
       lastSuccessfulBlock = to // Update only on success
-      console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to}`)
+      
+      // Update last_processed_block in database after each successful chunk
+      await pool.query(`
+        UPDATE public.tokens 
+        SET last_processed_block = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [to, token.id])
+      
+      console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to} and updated DB to block ${to}`)
     } catch (error) {
       console.error(`❌ Failed to process chunk ${from}-${to} for token ${token.id}:`, error)
-      // Skip this chunk and continue to next chunk for testing
+      
+      // Check if this is a final retry failure (after all attempts exhausted)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorCode = (error as { code?: number; error?: { code?: number } })?.code || (error as { code?: number; error?: { code?: number } })?.error?.code
+      
+      // Check for rate limit errors or other retry-exhausted errors
+      if (errorCode === -32016 || errorCode === -32822 || 
+          errorMessage.toLowerCase().includes('rate limit') || 
+          errorMessage.toLowerCase().includes('over compute unit limit')) {
+        console.log(`🔄 Token ${token.id}: Final retry failure detected (rate limit exhausted), skipping to next token`)
+        hasFinalRetryFailure = true
+        throw error // Re-throw to skip entire token processing
+      }
+      
+      // For other errors, skip this chunk and continue to next chunk
       console.log(`⏭️ Token ${token.id}: Skipping chunk ${from}-${to}, continuing to next chunk`)
       continue
     }
   }
   
-  // Update last processed block only to the last successful chunk
-  if (lastSuccessfulBlock >= startBlock) {
-    await pool.query(`
-      UPDATE public.tokens 
-      SET last_processed_block = $1, updated_at = NOW()
-      WHERE id = $2
-    `, [lastSuccessfulBlock, token.id])
-    
-    console.log(`✅ Token ${token.id}: Updated to block ${lastSuccessfulBlock}`)
+  // Log final status
+  if (hasFinalRetryFailure || hasDexFinalRetryFailure) {
+    console.log(`🔄 Token ${token.id}: Final retry failure occurred (transfer: ${hasFinalRetryFailure}, DEX: ${hasDexFinalRetryFailure}) - processing stopped`)
+  } else if (lastSuccessfulBlock >= startBlock) {
+    console.log(`✅ Token ${token.id}: Completed processing up to block ${lastSuccessfulBlock}`)
   } else {
     console.log(`❌ Token ${token.id}: No blocks processed successfully`)
   }
@@ -424,7 +431,7 @@ async function processTransferChunk(
 
 
 /**
- * Process DEX logs for a chain (only once per block range)
+ * Process DEX logs for a specific token's DEX pool
  */
 async function processDexLogsForChain(
   token: TokenRow,
@@ -434,33 +441,19 @@ async function processDexLogsForChain(
   fromBlock: number,
   toBlock: number
 ) {
-  // Check if DEX logs for this block range have already been processed
-  const { rows: cursorRows } = await pool.query(`
-    SELECT dex_last_processed_block 
-    FROM public.chain_cursors 
-    WHERE chain_id = $1
-  `, [chainId])
-  
-  if (cursorRows.length === 0) {
-    console.log(`Token ${token.id}: No chain cursor found for chain ${chainId}`)
-    return
-  }
-  
-  const dexLastProcessed = cursorRows[0].dex_last_processed_block || 0
+  // Use dex_pools.last_processed_block as the primary cursor for this specific token
+  const dexLastProcessed = dexPool.last_processed_block || 0
   
   console.log(`Token ${token.id}: DEX cursor check - fromBlock: ${fromBlock}, toBlock: ${toBlock}, dexLastProcessed: ${dexLastProcessed}`)
   
-  // Only process if this block range hasn't been processed yet
+  // Only process if this block range hasn't been processed yet for this specific token
   if (toBlock <= dexLastProcessed) {
-    console.log(`Token ${token.id}: DEX logs for blocks ${fromBlock}-${toBlock} already processed (cursor at ${dexLastProcessed})`)
+    console.log(`Token ${token.id}: DEX logs for blocks ${fromBlock}-${toBlock} already processed (dex_pools cursor at ${dexLastProcessed})`)
     return
   }
   
-  // Process the entire chunk range for DEX transactions
-  // We don't skip blocks based on dex_last_processed_block because:
-  // 1. DEX transactions can happen at any time after graduation
-  // 2. We want to catch all DEX activity in the chunk range
-  const actualFromBlock = fromBlock
+  // Process from the last processed block + 1, or from the requested fromBlock if it's higher
+  const actualFromBlock = Math.max(fromBlock, dexLastProcessed + 1)
   
   console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
   
@@ -486,14 +479,7 @@ async function processDexLogsForChain(
     await processDexLog(token, dexPool, log, provider, chainId)
   }
   
-  // Update DEX cursor for this chain
-  await pool.query(`
-    UPDATE public.chain_cursors 
-    SET dex_last_processed_block = $1, updated_at = NOW()
-    WHERE chain_id = $2
-  `, [toBlock, chainId])
-  
-  console.log(`✅ Token ${token.id}: Updated DEX cursor to block ${toBlock}`)
+  console.log(`✅ Token ${token.id}: Processed DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
 }
 
 /**
