@@ -928,7 +928,7 @@ async function processDexLog(
       return
     }
 
-    const { sender, amount0In, amount1In, amount0Out, amount1Out } = decoded.args
+    const { sender, amount0In, amount1In, amount0Out, amount1Out, to } = decoded.args
 
     // Debug: Log DEX pool configuration and raw amounts
     console.log(`Token ${token.id}: DEX pool config - token0: ${dexPool.token0}, token1: ${dexPool.token1}, quote_token: ${dexPool.quote_token}`)
@@ -999,13 +999,17 @@ async function processDexLog(
     }
 
     // Determine from/to addresses
-    const fromAddress = isBuy ? dexPool.pair_address : sender
-    const toAddress = isBuy ? sender : dexPool.pair_address
+    // For BUY: use 'to' field from Swap event (user receives tokens)
+    // For SELL: use transaction 'from' field (user sends tokens)
+    const userAddress = isBuy ? to : tx.from
+    const fromAddress = isBuy ? dexPool.pair_address : userAddress
+    const toAddress = isBuy ? userAddress : dexPool.pair_address 
 
     // Calculate price (ETH per token)
     const priceEthPerToken = Number(ethAmount) / Number(tokenAmount)
 
     console.log(`Token ${token.id}: Processing DEX ${side} - ${tokenAmount} tokens for ${ethAmount} ETH`)
+    console.log(`Token ${token.id}: DEX addresses - sender: ${sender}, to: ${to}, tx.from: ${tx.from}, pair: ${dexPool.pair_address}, userAddress: ${userAddress}`)
 
     // Insert into token_transfers
     await pool.query(`
