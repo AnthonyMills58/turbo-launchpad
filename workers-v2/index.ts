@@ -810,7 +810,7 @@ async function processRegularTransfer(
 ) {
   // Determine if this is BC or DEX operation
   const graduationBlock = dexPool?.deployment_block || 0
-  const isAfterGraduation = log.blockNumber > graduationBlock
+  const isAfterGraduation = graduationBlock > 0 && log.blockNumber > graduationBlock
   
   let side = 'BUY' // Default
   const src = 'BC' // Default
