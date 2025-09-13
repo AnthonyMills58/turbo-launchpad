@@ -253,7 +253,8 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
           try {
             await processDexLogsForChain(token, dexPool, provider, chainId, from, to)
             
-            // Update DEX pool last_processed_block after successful DEX chunk processing
+            // Update DEX pool last_processed_block to the end of the current chunk
+            // Since DEX processing succeeded for this chunk, we can safely update to 'to'
             await pool.query(`
               UPDATE public.dex_pools 
               SET last_processed_block = $1
@@ -454,6 +455,12 @@ async function processDexLogsForChain(
   
   // Process from the last processed block + 1, or from the requested fromBlock if it's higher
   const actualFromBlock = Math.max(fromBlock, dexLastProcessed + 1)
+  
+  // If actualFromBlock > toBlock, we're already caught up for this chunk
+  if (actualFromBlock > toBlock) {
+    console.log(`Token ${token.id}: DEX already caught up for chunk ${fromBlock}-${toBlock} (dex cursor at ${dexLastProcessed})`)
+    return
+  }
   
   console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
   
