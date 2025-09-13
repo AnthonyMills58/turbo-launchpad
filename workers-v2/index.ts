@@ -152,12 +152,15 @@ async function processChain(chainId: number) {
   
   // Get all tokens for this chain
   console.log(`📊 Querying tokens for chain ${chainId}...`)
+  const tokenFilter = process.env.ONLY_TOKEN_ID ? ` AND id = $2` : ''
+  const params = process.env.ONLY_TOKEN_ID ? [chainId, parseInt(process.env.ONLY_TOKEN_ID)] : [chainId]
+  
   const { rows: tokens } = await pool.query<TokenRow>(`
     SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
     FROM public.tokens 
-    WHERE chain_id = $1 
+    WHERE chain_id = $1${tokenFilter}
     ORDER BY deployment_block ASC
-  `, [chainId])
+  `, params)
   
   console.log(`📊 Found ${tokens.length} tokens for chain ${chainId}`)
   
@@ -479,7 +482,7 @@ async function processTransferLog(
     const blockTime = new Date(Number(block!.timestamp) * 1000)
     
     // Process regular transfer (graduation is handled in main loop)
-    await processRegularTransfer(token, dexPool, log, tx, fromAddress, toAddress, amount, blockTime, chainId)
+        await processRegularTransfer(token, dexPool, log, tx, fromAddress, toAddress, amount, blockTime, chainId, provider)
   } catch (error) {
     console.error(`❌ Failed to process transfer log ${log.transactionHash}:`, error)
   }
@@ -781,6 +784,11 @@ function determineTransferType(
     return 'TRANSFER' // Regular token creation (mint without ETH)
   }
   
+  // Check for burn to zero address (SELL operation)
+  if (toAddress === '0x0000000000000000000000000000000000000000') {
+    return 'SELL' // Burn to zero address (user selling tokens)
+  }
+  
   // Regular transfer
   return 'TRANSFER'
 }
@@ -797,7 +805,8 @@ async function processRegularTransfer(
   toAddress: string,
   amount: bigint,
   blockTime: Date,
-  chainId: number
+  chainId: number,
+  provider: ethers.JsonRpcProvider
 ) {
   // Determine if this is BC or DEX operation
   const graduationBlock = dexPool?.deployment_block || 0
@@ -824,7 +833,38 @@ async function processRegularTransfer(
         priceEthPerToken = Number(ethAmount) / Number(amount)
       }
     } else if (transferType === 'SELL') {
-      // For SELL, we'd need to call getSellPrice, but for now just record the transfer
+      // For SELL, calculate the ETH amount received by calling getSellPrice
+      // Use block before transaction to get the correct price (like old worker)
+      try {
+        const receipt = await withRateLimit(() => provider.getTransactionReceipt(log.transactionHash!), 2, chainId)
+        if (receipt && receipt.blockNumber) {
+          const blockBeforeTx = receipt.blockNumber - 1
+          
+          const turboTokenInterface = new ethers.Interface([
+            'function getSellPrice(uint256 tokenAmount) view returns (uint256)'
+          ])
+          
+          const sellPriceWei = await withRateLimit(() => provider.call({
+            to: token.contract_address,
+            data: turboTokenInterface.encodeFunctionData('getSellPrice', [amount]),
+            blockTag: blockBeforeTx
+          }), 2, chainId)
+          
+          if (sellPriceWei && sellPriceWei !== '0x') {
+            ethAmount = BigInt(sellPriceWei.toString())
+            if (ethAmount > 0n && amount > 0n) {
+              priceEthPerToken = Number(ethAmount) / Number(amount)
+            }
+            console.log(`Token ${token.id}: SELL - ${amount} tokens for ${ethAmount} ETH (price: ${priceEthPerToken}) at block ${blockBeforeTx}`)
+          } else {
+            console.warn(`Token ${token.id}: SELL price call returned empty result`)
+          }
+        } else {
+          console.warn(`Token ${token.id}: Could not get transaction receipt for SELL`)
+        }
+      } catch (error) {
+        console.warn(`Token ${token.id}: Could not get SELL price: ${error}`)
+      }
     }
   }
   
