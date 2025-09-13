@@ -12,10 +12,11 @@
 
 import 'dotenv/config'
 import { ethers } from 'ethers'
+import type { PoolClient } from 'pg'
 import pool from './db'
 import { providerFor } from './providers'
 import { withRateLimit } from './core/rateLimiting'
-import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS } from './core/config'
+import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID } from './core/config'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -42,6 +43,30 @@ interface DexPoolRow {
   token0: string
   token1: string
   quote_token: string
+}
+
+// ---- Singleton advisory lock helpers ----
+async function acquireGlobalLock(): Promise<null | { release: () => Promise<void> }> {
+  const lockClient: PoolClient = await pool.connect()
+  try {
+    const { rows } = await lockClient.query<{ locked: boolean }>(
+      'SELECT pg_try_advisory_lock($1, $2) AS locked',
+      [LOCK_NS, LOCK_ID]
+    )
+    if (!rows[0]?.locked) {
+      lockClient.release()
+      return null
+    }
+    return {
+      release: async () => {
+        await lockClient.query('SELECT pg_advisory_unlock($1, $2)', [LOCK_NS, LOCK_ID])
+        lockClient.release()
+      }
+    }
+  } catch (e) {
+    lockClient.release()
+    throw e
+  }
 }
 
 /**
@@ -88,6 +113,14 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
  */
 async function main() {
   console.log('🚀 Starting Turbo Launchpad Worker V2...')
+  
+  // Acquire global lock to prevent overlapping runs
+  const lock = await acquireGlobalLock()
+  if (!lock) {
+    console.log('Another worker run is in progress. Exiting.')
+    await pool.end()
+    return
+  }
   
   try {
     // Get all chains
@@ -139,6 +172,8 @@ async function main() {
     console.error('❌ Worker V2 failed:', error)
     process.exit(1)
   } finally {
+    // Release the global lock
+    await lock.release()
     await pool.end()
   }
 }

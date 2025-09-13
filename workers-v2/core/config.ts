@@ -36,3 +36,7 @@ export const HEALTH_CHECK_TIMEOUT = Number(process.env.HEALTH_CHECK_TIMEOUT ?? 1
 
 // Retry configuration
 export const MAX_RETRY_ATTEMPTS = Math.max(1, Number(process.env.MAX_RETRY_ATTEMPTS ?? 9))
+
+// Singleton advisory lock (prevent overlapping runs)
+export const LOCK_NS = 42
+export const LOCK_ID = 2 // Different from workers v1 to avoid conflicts
