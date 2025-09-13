@@ -1,8 +1,7 @@
 {
-  "extends": "../tsconfig.json",
   "compilerOptions": {
     "outDir": "../dist/workers-v2",
-    "rootDir": "..",
+    "rootDir": ".",
     "module": "commonjs",
     "target": "es2020",
     "moduleResolution": "node",
@@ -10,18 +9,17 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"]
   },
   "include": [
-    "**/*.ts",
-    "../lib/db.ts",
-    "../lib/providers.ts",
-    "../lib/chains.ts",
-    "../lib/dex.ts"
+    "**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "../lib/createDexPool.ts"
+    "dist"
   ]
 }
