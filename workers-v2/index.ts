@@ -302,13 +302,28 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
       lastSuccessfulBlock = to // Update only on success
       
       // Update last_processed_block in database after each successful chunk
-      await pool.query(`
-        UPDATE public.tokens 
-        SET last_processed_block = $1, updated_at = NOW()
-        WHERE id = $2
-      `, [to, token.id])
-      
-      console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to} and updated DB to block ${to}`)
+      console.log(`🔄 Token ${token.id}: Updating database last_processed_block to ${to}`)
+      try {
+        const updateResult = await pool.query(`
+          UPDATE public.tokens 
+          SET last_processed_block = $1
+          WHERE id = $2
+        `, [to, token.id])
+        
+        console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to} and updated DB to block ${to} (rows affected: ${updateResult.rowCount})`)
+        
+        // Verify the update actually happened
+        const verifyResult = await pool.query(`
+          SELECT last_processed_block FROM public.tokens WHERE id = $1
+        `, [token.id])
+        
+        if (verifyResult.rows.length > 0) {
+          console.log(`🔍 Token ${token.id}: Verified last_processed_block is now ${verifyResult.rows[0].last_processed_block}`)
+        }
+      } catch (dbError) {
+        console.error(`❌ Token ${token.id}: Database update failed:`, dbError)
+        throw dbError
+      }
     } catch (error) {
       console.error(`❌ Failed to process chunk ${from}-${to} for token ${token.id}:`, error)
       
