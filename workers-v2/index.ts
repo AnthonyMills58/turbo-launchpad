@@ -213,29 +213,36 @@ async function processChain(chainId: number) {
   console.log(`🔗 Setting up provider for chain ${chainId}...`)
   const provider = providerFor(chainId)
   
-  // Get all tokens for this chain
-  console.log(`📊 Querying tokens for chain ${chainId}...`)
-  // Token range filter with defaults
-  const tokenStart = parseInt(process.env.TOKEN_START || '1')
-  const tokenEnd = parseInt(process.env.TOKEN_END || '100000')
+  // Get token processing parameters
+  const startToken = parseInt(process.env.START_TOKEN || '10000')
+  const tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
   
-  const { rows: tokens } = await pool.query<TokenRow>(`
-    SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
-    FROM public.tokens 
-    WHERE chain_id = $1 AND id >= $2 AND id <= $3
-    ORDER BY id DESC
-  `, [chainId, tokenStart, tokenEnd])
+  console.log(`📊 Processing ${tokensNumber} tokens starting from token ${startToken} for chain ${chainId}...`)
   
-  console.log(`📊 Found ${tokens.length} tokens for chain ${chainId} (token range: ${tokenStart}-${tokenEnd})`)
-  
-  // Process each token individually
-  for (const token of tokens) {
+  // Process tokens in descending order (startToken, startToken-1, startToken-2, ...)
+  for (let i = 0; i < tokensNumber; i++) {
+    const tokenId = startToken - i
+    
     try {
+      // Get token info from database
+      const { rows: tokenRows } = await pool.query<TokenRow>(`
+        SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
+        FROM public.tokens 
+        WHERE chain_id = $1 AND id = $2
+      `, [chainId, tokenId])
+      
+      if (tokenRows.length === 0) {
+        console.log(`⚠️  Token ${tokenId} not found in database - skipping`)
+        continue
+      }
+      
+      const token = tokenRows[0]
       console.log(`\n🪙 Processing token ${token.id} (${token.contract_address})...`)
       await processToken(token, provider, chainId)
+      
     } catch (error) {
       // Any error that reaches here means all retry attempts were exhausted
-      console.error(`🔄 Token ${token.id}: All retry attempts exhausted - skipping to next token:`, error)
+      console.error(`🔄 Token ${tokenId}: All retry attempts exhausted - skipping to next token:`, error)
       // Continue with next token instead of failing entire chain
     }
   }
