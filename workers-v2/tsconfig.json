@@ -2,7 +2,7 @@
     "extends": "../tsconfig.json",
     "compilerOptions": {
       "rootDir": "..",
-      "outDir": "../dist/workers-v2",
+      "outDir": "../dist",
       "noEmit": false,                 // ⬅️ ensure JS is emitted
       "emitDeclarationOnly": false,    // ⬅️ emit JS, not just d.ts
       "incremental": false,            // optional: avoid tsbuildinfo
