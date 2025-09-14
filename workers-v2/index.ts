@@ -8,6 +8,7 @@
  * - Proper rate limiting
  * - Clean graduation logic
  * - Better error handling
+ * - UPSERT approach for Railway compatibility
  */
 
 import 'dotenv/config'
