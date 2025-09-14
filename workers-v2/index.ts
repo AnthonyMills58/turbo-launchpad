@@ -278,21 +278,36 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
           console.log(`Token ${token.id}: Processing DEX logs for chunk ${from} to ${to} (DEX deployment: ${dexDeploymentBlock})`)
           try {
             await processDexLogsForChain(token, dexPool, provider, chainId, from, to)
-            
-            // Update DEX pool last_processed_block to the end of the current chunk
-            // Since DEX processing succeeded for this chunk, we can safely update to 'to'
-            await pool.query(`
-              UPDATE public.dex_pools 
-              SET last_processed_block = $1
-              WHERE token_id = $2 AND chain_id = $3
-            `, [to, token.id, chainId])
-            
-            console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to}`)
           } catch (dexError) {
             // Any error that reaches here means all retry attempts were exhausted in DEX processing
             console.log(`🔄 Token ${token.id}: All retry attempts exhausted in DEX processing`)
             hasDexFinalRetryFailure = true
             throw dexError // Re-throw to skip entire token processing
+          }
+          
+          // Update DEX pool last_processed_block to the end of the current chunk
+          // This happens regardless of whether DEX logs were found or not, as long as no error occurred
+          console.log(`🔄 Token ${token.id}: Updating DEX pool last_processed_block to ${to}`)
+          try {
+            const dexUpdateResult = await pool.query(`
+              UPDATE public.dex_pools 
+              SET last_processed_block = $1
+              WHERE token_id = $2 AND chain_id = $3
+            `, [to, token.id, chainId])
+            
+            console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to} (rows affected: ${dexUpdateResult.rowCount})`)
+            
+            // Verify the DEX pool update actually happened
+            const dexVerifyResult = await pool.query(`
+              SELECT last_processed_block FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2
+            `, [token.id, chainId])
+            
+            if (dexVerifyResult.rows.length > 0) {
+              console.log(`🔍 Token ${token.id}: Verified DEX pool last_processed_block is now ${dexVerifyResult.rows[0].last_processed_block}`)
+            }
+          } catch (dexDbError) {
+            console.error(`❌ Token ${token.id}: DEX pool database update failed:`, dexDbError)
+            throw dexDbError
           }
         } else {
           console.log(`Token ${token.id}: Skipping DEX processing for chunk ${from}-${to} (before DEX deployment at ${dexDeploymentBlock})`)
