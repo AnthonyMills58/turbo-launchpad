@@ -13,7 +13,7 @@
     "build:workers": "tsc -p workers/tsconfig.json",
     "start:worker": "node dist/workers/index.js",
     "build:workers-v2": "tsc -p workers-v2/tsconfig.json",
-    "start:worker-v2": "node dist/workers-v2/index.js"
+    "start:worker-v2": "node dist/workers-v2/workers-v2/index.js"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.3.0",
