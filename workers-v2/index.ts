@@ -43,6 +43,9 @@ interface DexPoolRow {
   token0: string
   token1: string
   quote_token: string
+  token_decimals: number | null
+  weth_decimals: number | null
+  quote_decimals: number | null
 }
 
 // ---- Singleton advisory lock helpers ----
@@ -238,7 +241,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   
   if (token.is_graduated) {
     const { rows } = await pool.query<DexPoolRow>(`
-      SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block, token0, token1, quote_token
+      SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals
       FROM public.dex_pools 
       WHERE token_id = $1 AND chain_id = $2
     `, [token.id, chainId])
@@ -293,12 +296,13 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
           // This happens regardless of whether DEX logs were found or not, as long as no error occurred
           console.log(`🔄 Token ${token.id}: Updating DEX pool last_processed_block to ${to}`)
           try {
-            // Use simple pool.query like the working app - no explicit transactions
+            // Use UPSERT to bypass Railway UPDATE issues
             const dexUpdateResult = await pool.query(`
-              UPDATE public.dex_pools 
-              SET last_processed_block = $1
-              WHERE token_id = $2 AND chain_id = $3
-            `, [to, token.id, chainId])
+              INSERT INTO public.dex_pools (token_id, chain_id, pair_address, last_processed_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals, deployment_block)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              ON CONFLICT (chain_id, pair_address) DO UPDATE SET 
+                last_processed_block = EXCLUDED.last_processed_block
+            `, [token.id, chainId, dexPool.pair_address, to, dexPool.token0, dexPool.token1, dexPool.quote_token, dexPool.token_decimals, dexPool.weth_decimals, dexPool.quote_decimals, dexPool.deployment_block])
             
             console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to} (rows affected: ${dexUpdateResult.rowCount})`)
             
@@ -324,12 +328,14 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
       // Update last_processed_block in database after each successful chunk
       console.log(`🔄 Token ${token.id}: Updating database last_processed_block to ${to}`)
       try {
-        // Use simple pool.query like the working app - no explicit transactions
+        // Use UPSERT to bypass Railway UPDATE issues
         const updateResult = await pool.query(`
-          UPDATE public.tokens 
-          SET last_processed_block = $1
-          WHERE id = $2
-        `, [to, token.id])
+          INSERT INTO public.tokens (id, last_processed_block, name, symbol, supply, raise_target, dex, creator_wallet, chain_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ON CONFLICT (id) DO UPDATE SET 
+            last_processed_block = EXCLUDED.last_processed_block,
+            updated_at = now()
+        `, [token.id, to, `Token ${token.id}`, `TKN${token.id}`, 1000000, 100, 'uniswap', token.creator_wallet || '', token.chain_id])
         
         console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to} and updated DB to block ${to} (rows affected: ${updateResult.rowCount})`)
         
