@@ -233,16 +233,25 @@ async function processChain(chainId: number) {
   }
   
   console.log(`📊 Found highest available token: ${actualStartToken} (requested: ${startToken})`)
-  console.log(`📊 Processing ${tokensNumber} tokens starting from token ${actualStartToken}...`)
   
-  // Get all available tokens in descending order, limited by tokensNumber
+  // If tokensNumber is very large (like default 100000), process all available tokens
+  // Otherwise, limit to the specified number
+  const shouldProcessAll = tokensNumber >= 10000
+  const limitClause = shouldProcessAll ? '' : `LIMIT ${tokensNumber}`
+  
+  if (shouldProcessAll) {
+    console.log(`📊 Processing ALL available tokens starting from token ${actualStartToken}...`)
+  } else {
+    console.log(`📊 Processing ${tokensNumber} tokens starting from token ${actualStartToken}...`)
+  }
+  
   const { rows: tokens } = await pool.query<TokenRow>(`
     SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
     FROM public.tokens 
     WHERE chain_id = $1 AND id <= $2
     ORDER BY id DESC
-    LIMIT $3
-  `, [chainId, actualStartToken, tokensNumber])
+    ${limitClause}
+  `, [chainId, actualStartToken])
   
   console.log(`📊 Found ${tokens.length} tokens to process:`, tokens.map(t => t.id))
   
