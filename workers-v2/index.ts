@@ -265,7 +265,10 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   for (let from = startBlock; from <= endBlock; from += chunkSize + 1) {
     const to = Math.min(from + chunkSize, endBlock)
     
-    console.log(`Token ${token.id}: Processing chunk ${from} to ${to}`)
+    // Get timestamp for the last block in range for better debugging
+    const toBlockInfo = await withRateLimit(() => provider.getBlock(to), 2, chainId)
+    const toBlockTimestamp = toBlockInfo ? new Date(Number(toBlockInfo.timestamp) * 1000).toISOString() : 'unknown'
+    console.log(`Token ${token.id}: Processing chunk ${from} to ${to} (last block timestamp: ${toBlockTimestamp})`)
     
     try {
       // Step 1: Process transfer logs for this chunk
@@ -497,7 +500,10 @@ async function processDexLogsForChain(
     return
   }
   
-  console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
+  // Get timestamp for the last block in range for better debugging
+  const toBlockInfo = await withRateLimit(() => provider.getBlock(toBlock), 2, chainId)
+  const toBlockTimestamp = toBlockInfo ? new Date(Number(toBlockInfo.timestamp) * 1000).toISOString() : 'unknown'
+  console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock} (last block timestamp: ${toBlockTimestamp})`)
   
   // Ensure proper address checksumming
   const pairAddress = ethers.getAddress(dexPool.pair_address)
