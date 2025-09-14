@@ -187,17 +187,18 @@ async function processChain(chainId: number) {
   
   // Get all tokens for this chain
   console.log(`📊 Querying tokens for chain ${chainId}...`)
-  const tokenFilter = process.env.ONLY_TOKEN_ID ? ` AND id = $2` : ''
-  const params = process.env.ONLY_TOKEN_ID ? [chainId, parseInt(process.env.ONLY_TOKEN_ID)] : [chainId]
+  // Token range filter with defaults
+  const tokenStart = parseInt(process.env.TOKEN_START || '1')
+  const tokenEnd = parseInt(process.env.TOKEN_END || '100000')
   
   const { rows: tokens } = await pool.query<TokenRow>(`
     SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
     FROM public.tokens 
-    WHERE chain_id = $1${tokenFilter}
+    WHERE chain_id = $1 AND id >= $2 AND id <= $3
     ORDER BY deployment_block ASC
-  `, params)
+  `, [chainId, tokenStart, tokenEnd])
   
-  console.log(`📊 Found ${tokens.length} tokens for chain ${chainId}`)
+  console.log(`📊 Found ${tokens.length} tokens for chain ${chainId} (token range: ${tokenStart}-${tokenEnd})`)
   
   // Process each token individually
   for (const token of tokens) {
