@@ -117,8 +117,9 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
  */
 async function main() {
   console.log('🚀 Starting Turbo Launchpad Worker V2...')
-  console.log('📋 Version: [328] - UPSERT approach with fixed tsconfig compilation')
+  console.log('📋 Version: [330] - FORCE FRESH DEPLOYMENT - UPSERT + DESC ORDER')
   console.log('🔧 Features: DESC token order, UPSERT database updates, Railway compatibility')
+  console.log('🔄 FORCE DEPLOY: This should trigger fresh Railway build and deployment')
   
   // Acquire global lock to prevent overlapping runs
   const lock = await acquireGlobalLock()
