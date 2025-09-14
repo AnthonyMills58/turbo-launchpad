@@ -217,32 +217,43 @@ async function processChain(chainId: number) {
   const startToken = parseInt(process.env.START_TOKEN || '10000')
   const tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
   
-  console.log(`📊 Processing ${tokensNumber} tokens starting from token ${startToken} for chain ${chainId}...`)
+  console.log(`📊 Looking for tokens starting from ${startToken}, processing ${tokensNumber} tokens for chain ${chainId}...`)
   
-  // Process tokens in descending order (startToken, startToken-1, startToken-2, ...)
-  for (let i = 0; i < tokensNumber; i++) {
-    const tokenId = startToken - i
-    
+  // Find the highest available token ID that's <= startToken
+  const { rows: maxTokenRows } = await pool.query(`
+    SELECT MAX(id) as max_id
+    FROM public.tokens 
+    WHERE chain_id = $1 AND id <= $2
+  `, [chainId, startToken])
+  
+  const actualStartToken = maxTokenRows[0]?.max_id
+  if (!actualStartToken) {
+    console.log(`⚠️  No tokens found for chain ${chainId} with ID <= ${startToken}`)
+    return
+  }
+  
+  console.log(`📊 Found highest available token: ${actualStartToken} (requested: ${startToken})`)
+  console.log(`📊 Processing ${tokensNumber} tokens starting from token ${actualStartToken}...`)
+  
+  // Get all available tokens in descending order, limited by tokensNumber
+  const { rows: tokens } = await pool.query<TokenRow>(`
+    SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
+    FROM public.tokens 
+    WHERE chain_id = $1 AND id <= $2
+    ORDER BY id DESC
+    LIMIT $3
+  `, [chainId, actualStartToken, tokensNumber])
+  
+  console.log(`📊 Found ${tokens.length} tokens to process:`, tokens.map(t => t.id))
+  
+  // Process each token individually
+  for (const token of tokens) {
     try {
-      // Get token info from database
-      const { rows: tokenRows } = await pool.query<TokenRow>(`
-        SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
-        FROM public.tokens 
-        WHERE chain_id = $1 AND id = $2
-      `, [chainId, tokenId])
-      
-      if (tokenRows.length === 0) {
-        console.log(`⚠️  Token ${tokenId} not found in database - skipping`)
-        continue
-      }
-      
-      const token = tokenRows[0]
       console.log(`\n🪙 Processing token ${token.id} (${token.contract_address})...`)
       await processToken(token, provider, chainId)
-      
     } catch (error) {
       // Any error that reaches here means all retry attempts were exhausted
-      console.error(`🔄 Token ${tokenId}: All retry attempts exhausted - skipping to next token:`, error)
+      console.error(`🔄 Token ${token.id}: All retry attempts exhausted - skipping to next token:`, error)
       // Continue with next token instead of failing entire chain
     }
   }
