@@ -172,7 +172,7 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
       }
     }
     
-    console.log('\n✅ Worker V2 completed successfully!')
+    console.log('\n✅ Worker V2 cycle completed successfully!')
   } catch (error) {
     console.error('❌ Worker V2 failed:', error)
     process.exit(1)
@@ -180,6 +180,29 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
     // Release the global lock
     await lock.release()
     await pool.end()
+  }
+}
+
+/**
+ * Continuous worker loop
+ */
+async function runContinuousWorker() {
+  console.log('🔄 Starting continuous worker loop...')
+  
+  while (true) {
+    try {
+      console.log('\n🔄 Starting new worker cycle...')
+      await main()
+      
+      // Wait 30 seconds before next cycle
+      console.log('⏳ Waiting 30 seconds before next cycle...')
+      await new Promise(resolve => setTimeout(resolve, 30000))
+      
+    } catch (error) {
+      console.error('❌ Worker cycle failed:', error)
+      console.log('⏳ Waiting 60 seconds before retry...')
+      await new Promise(resolve => setTimeout(resolve, 60000))
+    }
   }
 }
 
@@ -1151,7 +1174,7 @@ async function processDexLog(
 
 // Run the worker
 if (require.main === module) {
-  main().catch(console.error)
+  runContinuousWorker().catch(console.error)
 }
 
 export { main }
