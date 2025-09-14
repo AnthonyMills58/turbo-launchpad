@@ -958,20 +958,25 @@ async function processRegularTransfer(
     }
   
   // Insert transfer record
-  await pool.query(`
-    INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
-      side = EXCLUDED.side,
-      src = EXCLUDED.src
-  `, [
-    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    log.index, fromAddress, toAddress, amount.toString(), ethAmount.toString(), priceEthPerToken,
-    side, src
-  ])
-  
-  console.log(`✅ Token ${token.id}: Recorded ${side} transfer (${src})`)
+  try {
+    await pool.query(`
+      INSERT INTO public.token_transfers
+        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+        side = EXCLUDED.side,
+        src = EXCLUDED.src
+    `, [
+      token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+      log.index, fromAddress, toAddress, amount.toString(), ethAmount.toString(), priceEthPerToken,
+      side, src
+    ])
+    
+    console.log(`✅ Token ${token.id}: Recorded ${side} transfer (${src})`)
+  } catch (dbError) {
+    console.error(`❌ Token ${token.id}: Database error recording ${side} transfer:`, dbError)
+    throw dbError // Re-throw to skip to next token
+  }
 }
 
 
@@ -1101,23 +1106,28 @@ async function processDexLog(
     console.log(`Token ${token.id}: DEX addresses - sender: ${sender}, to: ${to}, tx.from: ${tx.from}, pair: ${dexPool.pair_address}, userAddress: ${userAddress}`)
 
     // Insert into token_transfers
-    await pool.query(`
-      INSERT INTO public.token_transfers
-        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    `, [
-      token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-      log.index,
-      fromAddress,
-      toAddress,
-      tokenAmount.toString(),
-      ethAmount.toString(),
-      priceEthPerToken,
-      side,
-      'DEX'
-    ])
+    try {
+      await pool.query(`
+        INSERT INTO public.token_transfers
+          (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `, [
+        token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+        log.index,
+        fromAddress,
+        toAddress,
+        tokenAmount.toString(),
+        ethAmount.toString(),
+        priceEthPerToken,
+        side,
+        'DEX'
+      ])
 
-    console.log(`Token ${token.id}: Inserted DEX ${side} record`)
+      console.log(`Token ${token.id}: Inserted DEX ${side} record`)
+    } catch (dbError) {
+      console.error(`❌ Token ${token.id}: Database error recording DEX ${side}:`, dbError)
+      throw dbError // Re-throw to skip to next token
+    }
   } catch (error) {
     console.error(`Token ${token.id}: Error processing DEX log:`, error)
   }
