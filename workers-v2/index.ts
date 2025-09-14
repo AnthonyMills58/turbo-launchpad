@@ -293,21 +293,32 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
           // This happens regardless of whether DEX logs were found or not, as long as no error occurred
           console.log(`🔄 Token ${token.id}: Updating DEX pool last_processed_block to ${to}`)
           try {
-            const dexUpdateResult = await pool.query(`
-              UPDATE public.dex_pools 
-              SET last_processed_block = $1
-              WHERE token_id = $2 AND chain_id = $3
-            `, [to, token.id, chainId])
-            
-            console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to} (rows affected: ${dexUpdateResult.rowCount})`)
-            
-            // Verify the DEX pool update actually happened
-            const dexVerifyResult = await pool.query(`
-              SELECT last_processed_block FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2
-            `, [token.id, chainId])
-            
-            if (dexVerifyResult.rows.length > 0) {
-              console.log(`🔍 Token ${token.id}: Verified DEX pool last_processed_block is now ${dexVerifyResult.rows[0].last_processed_block}`)
+            // Use explicit transaction like old worker to force immediate commit
+            const client = await pool.connect()
+            try {
+              await client.query('BEGIN')
+              const dexUpdateResult = await client.query(`
+                UPDATE public.dex_pools 
+                SET last_processed_block = $1
+                WHERE token_id = $2 AND chain_id = $3
+              `, [to, token.id, chainId])
+              await client.query('COMMIT')
+              
+              console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to} (rows affected: ${dexUpdateResult.rowCount})`)
+              
+              // Verify the DEX pool update actually happened
+              const dexVerifyResult = await pool.query(`
+                SELECT last_processed_block FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2
+              `, [token.id, chainId])
+              
+              if (dexVerifyResult.rows.length > 0) {
+                console.log(`🔍 Token ${token.id}: Verified DEX pool last_processed_block is now ${dexVerifyResult.rows[0].last_processed_block}`)
+              }
+            } catch (txError) {
+              await client.query('ROLLBACK')
+              throw txError
+            } finally {
+              client.release()
             }
           } catch (dexDbError) {
             console.error(`❌ Token ${token.id}: DEX pool database update failed:`, dexDbError)
@@ -323,21 +334,32 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
       // Update last_processed_block in database after each successful chunk
       console.log(`🔄 Token ${token.id}: Updating database last_processed_block to ${to}`)
       try {
-        const updateResult = await pool.query(`
-          UPDATE public.tokens 
-          SET last_processed_block = $1
-          WHERE id = $2
-        `, [to, token.id])
-        
-        console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to} and updated DB to block ${to} (rows affected: ${updateResult.rowCount})`)
-        
-        // Verify the update actually happened
-        const verifyResult = await pool.query(`
-          SELECT last_processed_block FROM public.tokens WHERE id = $1
-        `, [token.id])
-        
-        if (verifyResult.rows.length > 0) {
-          console.log(`🔍 Token ${token.id}: Verified last_processed_block is now ${verifyResult.rows[0].last_processed_block}`)
+        // Use explicit transaction like old worker to force immediate commit
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          const updateResult = await client.query(`
+            UPDATE public.tokens 
+            SET last_processed_block = $1
+            WHERE id = $2
+          `, [to, token.id])
+          await client.query('COMMIT')
+          
+          console.log(`✅ Token ${token.id}: Successfully processed chunk ${from} to ${to} and updated DB to block ${to} (rows affected: ${updateResult.rowCount})`)
+          
+          // Verify the update actually happened
+          const verifyResult = await pool.query(`
+            SELECT last_processed_block FROM public.tokens WHERE id = $1
+          `, [token.id])
+          
+          if (verifyResult.rows.length > 0) {
+            console.log(`🔍 Token ${token.id}: Verified last_processed_block is now ${verifyResult.rows[0].last_processed_block}`)
+          }
+        } catch (txError) {
+          await client.query('ROLLBACK')
+          throw txError
+        } finally {
+          client.release()
         }
       } catch (dbError) {
         console.error(`❌ Token ${token.id}: Database update failed:`, dbError)
