@@ -900,17 +900,24 @@ async function processRegularTransfer(
   let ethAmount = 0n
   let priceEthPerToken = null
   
+  // Determine transfer type first
+  const transferType = determineTransferType(token, tx, fromAddress, toAddress)
+  side = transferType
+  
   if (isAfterGraduation) {
-    // This should be a DEX operation, but we're processing transfer logs
-    // DEX operations are handled in processDexLog
-    console.log(`Token ${token.id}: Transfer after graduation - skipping (DEX operations handled separately)`)
-    return
-  } else {
-    // BC operation - determine transfer type
-    const transferType = determineTransferType(token, tx, fromAddress, toAddress)
-    side = transferType
-    
-    if (transferType === 'BUY' || transferType === 'BUY&LOCK') {
+    // After graduation, only process CLAIMAIRDROP and UNLOCK transactions
+    // Skip regular BC transfers (BUY/SELL) as they should be DEX operations
+    if (transferType === 'CLAIMAIRDROP' || transferType === 'UNLOCK') {
+      console.log(`Token ${token.id}: Processing post-graduation ${transferType} transaction at block ${log.blockNumber}`)
+      // Continue processing this transaction
+    } else {
+      console.log(`Token ${token.id}: Transfer after graduation - skipping ${transferType} (DEX operations handled separately)`)
+      return
+    }
+  }
+  
+  // Process the transaction based on its type
+  if (transferType === 'BUY' || transferType === 'BUY&LOCK') {
       ethAmount = tx.value || 0n
       if (ethAmount > 0n && amount > 0n) {
         priceEthPerToken = Number(ethAmount) / Number(amount)
@@ -949,7 +956,6 @@ async function processRegularTransfer(
         console.warn(`Token ${token.id}: Could not get SELL price: ${error}`)
       }
     }
-  }
   
   // Insert transfer record
   await pool.query(`
