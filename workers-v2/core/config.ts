@@ -39,4 +39,4 @@ export const MAX_RETRY_ATTEMPTS = Math.max(1, Number(process.env.MAX_RETRY_ATTEM
 
 // Singleton advisory lock (prevent overlapping runs)
 export const LOCK_NS = 42
-export const LOCK_ID = 2 // Different from workers v1 to avoid conflicts
+export const LOCK_ID = 1 // Same as old worker to prevent overlapping runs
