@@ -13,8 +13,8 @@
 import 'dotenv/config'
 import { ethers } from 'ethers'
 import type { PoolClient } from 'pg'
-import pool from './db'
-import { providerFor } from './providers'
+import pool from '../lib/db'
+import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
 import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID } from './core/config'
 
