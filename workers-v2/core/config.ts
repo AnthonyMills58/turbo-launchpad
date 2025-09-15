@@ -19,14 +19,14 @@ export const HEADER_SLEEP_MS = Number(process.env.WORKER_SLEEP_MS ?? 200)
 
 // Chain-specific rate limiting (configurable via environment variables)
 export function getChunkSize(chainId: number): number {
-  if (chainId === 6342) return Number(process.env.MEGAETH_CHUNK ?? 1000)   // MegaETH: moderate chunks for balanced processing
-  if (chainId === 11155111) return Number(process.env.SEPOLIA_CHUNK ?? 5000)  // Sepolia: smaller chunks
+  if (chainId === 6342) return Number(process.env.MEGAETH_CHUNK ?? 10000)   // MegaETH: larger chunks for BC transfers (restored from old worker)
+  if (chainId === 11155111) return Number(process.env.SEPOLIA_CHUNK ?? 20000)  // Sepolia: larger chunks for BC transfers (restored from old worker)
   return DEFAULT_CHUNK
 }
 
 export function getDexChunkSize(chainId: number): number {
-  if (chainId === 6342) return Number(process.env.MEGAETH_DEX_CHUNK ?? 500)    // MegaETH: moderate chunks for balanced processing
-  if (chainId === 11155111) return Number(process.env.SEPOLIA_DEX_CHUNK ?? 1000)   // Sepolia: normal chunks
+  if (chainId === 6342) return Number(process.env.MEGAETH_DEX_CHUNK ?? 1000)    // MegaETH: smaller chunks for DEX events (restored from old worker)
+  if (chainId === 11155111) return Number(process.env.SEPOLIA_DEX_CHUNK ?? 1000)   // Sepolia: smaller chunks for DEX events (restored from old worker)
   return DEFAULT_DEX_CHUNK
 }
 

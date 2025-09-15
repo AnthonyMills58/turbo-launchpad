@@ -18,7 +18,7 @@ import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
 import { getCurrentEthPrice } from './core/priceCache'
-import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID, TOKEN_ID, TOKEN_ID_FROM, TOKEN_ID_TO, CHAIN_ID_FILTER, GRADUATED_ONLY, UNGRADUATED_ONLY, HAS_TEST_FILTERS } from './core/config'
+import { getChunkSize, getDexChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID, TOKEN_ID, TOKEN_ID_FROM, TOKEN_ID_TO, CHAIN_ID_FILTER, GRADUATED_ONLY, UNGRADUATED_ONLY, HAS_TEST_FILTERS } from './core/config'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -324,7 +324,8 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   }
   
   // Process in chunks: transfers first, then DEX for each chunk
-  const chunkSize = getChunkSize(chainId)
+  const bcChunkSize = getChunkSize(chainId)        // BC transfers: larger chunks
+  const dexChunkSize = getDexChunkSize(chainId)    // DEX events: smaller chunks
   let lastSuccessfulBlock = startBlock - 1 // Track last successfully processed block
   let hasFinalRetryFailure = false // Track if we had a final retry failure
   let hasDexFinalRetryFailure = false // Track if we had a final retry failure in DEX processing
@@ -338,7 +339,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
     if (bcNeedsWork) {
       anyProcessNeedsWork = true
       const bcFrom = lastSuccessfulBlock + 1
-      const bcTo = Math.min(bcFrom + chunkSize, endBlock)
+      const bcTo = Math.min(bcFrom + bcChunkSize, endBlock)
       
       // Get timestamp for the last block in range for better debugging
       const toBlockInfo = await withRateLimit(() => provider.getBlock(bcTo), 2, chainId)
@@ -389,7 +390,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
         if (swapNeedsWork) {
           anyProcessNeedsWork = true
           const swapFrom = swapLastProcessed + 1
-          const swapTo = Math.min(swapFrom + chunkSize, endBlock)
+          const swapTo = Math.min(swapFrom + dexChunkSize, endBlock)
           
           console.log(`Token ${token.id}: Processing SWAP chunk ${swapFrom} to ${swapTo}`)
           try {
@@ -420,7 +421,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
         if (syncNeedsWork) {
           anyProcessNeedsWork = true
           const syncFrom = syncLastProcessed + 1
-          const syncTo = Math.min(syncFrom + chunkSize, endBlock)
+          const syncTo = Math.min(syncFrom + dexChunkSize, endBlock)
           
           console.log(`Token ${token.id}: Processing SYNC chunk ${syncFrom} to ${syncTo}`)
           try {
