@@ -570,7 +570,7 @@ async function processSwapChunk(
   console.log(`✅ Token ${token.id}: Processed SWAP events for blocks ${fromBlock} to ${toBlock}`)
   
   // Update SWAP cursor
-  const dexUpdateResult = await pool.query(`
+  await pool.query(`
     INSERT INTO public.dex_pools (token_id, chain_id, pair_address, last_processed_block, last_processed_sync_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals, deployment_block)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ON CONFLICT (chain_id, pair_address) DO UPDATE SET 
@@ -607,7 +607,7 @@ async function processSyncChunk(
   console.log(`✅ Token ${token.id}: Processed SYNC events for blocks ${fromBlock} to ${toBlock}`)
   
   // Update SYNC cursor
-  const dexUpdateResult = await pool.query(`
+  await pool.query(`
     INSERT INTO public.dex_pools (token_id, chain_id, pair_address, last_processed_block, last_processed_sync_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals, deployment_block)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ON CONFLICT (chain_id, pair_address) DO UPDATE SET 
