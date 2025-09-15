@@ -1340,14 +1340,24 @@ if (require.main === module) {
       if (!success) {
         console.log('🛑 Single cycle aborted - another worker is running')
       }
-    }).catch(console.error)
+      console.log('✅ Worker V2 cycle completed successfully!')
+      process.exit(0)
+    }).catch(error => {
+      console.error('❌ Worker V2 failed:', error)
+      process.exit(1)
+    })
   } else {
     console.log('🔄 No test filters - running single cycle only')
     main().then(success => {
       if (!success) {
         console.log('🛑 Single cycle aborted - another worker is running')
       }
-    }).catch(console.error)
+      console.log('✅ Worker V2 cycle completed successfully!')
+      process.exit(0)
+    }).catch(error => {
+      console.error('❌ Worker V2 failed:', error)
+      process.exit(1)
+    })
   }
 }
 
