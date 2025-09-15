@@ -17,7 +17,7 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
-import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID, ONLY_TOKEN_ID } from './core/config'
+import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID } from './core/config'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -216,15 +216,8 @@ async function processChain(chainId: number) {
   const provider = providerFor(chainId)
   
   // Get token processing parameters
-  let startToken = parseInt(process.env.START_TOKEN || '10000')
-  let tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
-  
-  // If ONLY_TOKEN_ID is set, override parameters
-  if (ONLY_TOKEN_ID) {
-    startToken = ONLY_TOKEN_ID
-    tokensNumber = 1
-    console.log(`🎯 ONLY_TOKEN_ID=${ONLY_TOKEN_ID} set - START_TOKEN=${startToken}, TOKENS_NUMBER=${tokensNumber}`)
-  }
+  const startToken = parseInt(process.env.START_TOKEN || '10000')
+  const tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
   
   console.log(`📊 Looking for tokens starting from ${startToken}, processing ${tokensNumber} tokens for chain ${chainId}...`)
   
@@ -345,7 +338,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
         if (from >= dexDeploymentBlock) {
           console.log(`Token ${token.id}: Processing DEX logs for chunk ${from} to ${to} (DEX deployment: ${dexDeploymentBlock})`)
           try {
-            await processDexLogsForChain(token, dexPool, provider, chainId, from, to)
+          await processDexLogsForChain(token, dexPool, provider, chainId, from, to)
           } catch (dexError) {
             // Any error that reaches here means all retry attempts were exhausted in DEX processing
             console.log(`🔄 Token ${token.id}: All retry attempts exhausted in DEX processing`)
@@ -568,20 +561,20 @@ async function processDexLogsForChain(
     const swapFromBlock = Math.max(fromBlock, swapLastProcessed + 1)
     if (swapFromBlock <= toBlock) {
       console.log(`Token ${token.id}: Processing SWAP events for blocks ${swapFromBlock} to ${toBlock}`)
-      
-      const swapLogs = await withRateLimit(() => provider.getLogs({
-        address: pairAddress,
-        topics: [SWAP_TOPIC],
+  
+  const swapLogs = await withRateLimit(() => provider.getLogs({
+    address: pairAddress,
+    topics: [SWAP_TOPIC],
         fromBlock: swapFromBlock,
-        toBlock: toBlock
-      }), MAX_RETRY_ATTEMPTS, chainId)
-      
+    toBlock: toBlock
+  }), MAX_RETRY_ATTEMPTS, chainId)
+  
       console.log(`Token ${token.id}: Found ${swapLogs.length} DEX swaps`)
-      
-      for (const log of swapLogs) {
-        await processDexLog(token, dexPool, log, provider, chainId)
-      }
-      
+  
+  for (const log of swapLogs) {
+    await processDexLog(token, dexPool, log, provider, chainId)
+  }
+  
       console.log(`✅ Token ${token.id}: Processed SWAP events for blocks ${swapFromBlock} to ${toBlock}`)
     }
   } else {
@@ -985,9 +978,9 @@ async function processRegularTransfer(
   let priceEthPerToken = null
   
   // Determine transfer type first
-  const transferType = determineTransferType(token, tx, fromAddress, toAddress)
-  side = transferType
-  
+    const transferType = determineTransferType(token, tx, fromAddress, toAddress)
+    side = transferType
+    
   if (isAfterGraduation) {
     // After graduation, only process CLAIMAIRDROP and UNLOCK transactions
     // Skip regular BC transfers (BUY/SELL) as they should be DEX operations
@@ -1001,7 +994,7 @@ async function processRegularTransfer(
   }
   
   // Process the transaction based on its type
-  if (transferType === 'BUY' || transferType === 'BUY&LOCK') {
+    if (transferType === 'BUY' || transferType === 'BUY&LOCK') {
       ethAmount = tx.value || 0n
       if (ethAmount > 0n && amount > 0n) {
         priceEthPerToken = Number(ethAmount) / Number(amount)
@@ -1038,25 +1031,25 @@ async function processRegularTransfer(
         }
       } catch (error) {
         console.warn(`Token ${token.id}: Could not get SELL price: ${error}`)
-      }
     }
+  }
   
   // Insert transfer record
   try {
-    await pool.query(`
-      INSERT INTO public.token_transfers
-        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
-        side = EXCLUDED.side,
-        src = EXCLUDED.src
-    `, [
-      token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-      log.index, fromAddress, toAddress, amount.toString(), ethAmount.toString(), priceEthPerToken,
-      side, src
-    ])
-    
-    console.log(`✅ Token ${token.id}: Recorded ${side} transfer (${src})`)
+  await pool.query(`
+    INSERT INTO public.token_transfers
+      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+      side = EXCLUDED.side,
+      src = EXCLUDED.src
+  `, [
+    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+    log.index, fromAddress, toAddress, amount.toString(), ethAmount.toString(), priceEthPerToken,
+    side, src
+  ])
+  
+  console.log(`✅ Token ${token.id}: Recorded ${side} transfer (${src})`)
   } catch (dbError) {
     console.error(`❌ Token ${token.id}: Database error recording ${side} transfer:`, dbError)
     throw dbError // Re-throw to skip to next token
@@ -1191,23 +1184,23 @@ async function processDexLog(
 
     // Insert into token_transfers
     try {
-      await pool.query(`
-        INSERT INTO public.token_transfers
-          (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      `, [
-        token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-        log.index,
-        fromAddress,
-        toAddress,
-        tokenAmount.toString(),
-        ethAmount.toString(),
-        priceEthPerToken,
-        side,
-        'DEX'
-      ])
+    await pool.query(`
+      INSERT INTO public.token_transfers
+        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `, [
+      token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+      log.index,
+      fromAddress,
+      toAddress,
+      tokenAmount.toString(),
+      ethAmount.toString(),
+      priceEthPerToken,
+      side,
+      'DEX'
+    ])
 
-      console.log(`Token ${token.id}: Inserted DEX ${side} record`)
+    console.log(`Token ${token.id}: Inserted DEX ${side} record`)
     } catch (dbError) {
       console.error(`❌ Token ${token.id}: Database error recording DEX ${side}:`, dbError)
       throw dbError // Re-throw to skip to next token
@@ -1288,14 +1281,7 @@ async function processSyncLog(
 
 // Run the worker
 if (require.main === module) {
-  if (ONLY_TOKEN_ID) {
-    // For testing with ONLY_TOKEN_ID, run once and exit
-    console.log(`🎯 ONLY_TOKEN_ID=${ONLY_TOKEN_ID} set - running once and exiting`)
-    main().catch(console.error)
-  } else {
-    // Normal continuous operation
-    runContinuousWorker().catch(console.error)
-  }
+  runContinuousWorker().catch(console.error)
 }
 
 export { main }
