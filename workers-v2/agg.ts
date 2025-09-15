@@ -11,7 +11,7 @@ import {
 } from './core/config'
 
 // Aggregation configuration
-const DAILY_AGG_UPDATE_DAYS = Number(process.env.DAILY_AGG_UPDATE_DAYS ?? 7)  // Update last 7 days by default
+const DAILY_AGG_UPDATE_DAYS = Number(process.env.DAILY_AGG_UPDATE_DAYS ?? 12)  // Update last 12 days by default (covers oldest token)
 const CANDLES_UPDATE_HOURS = Number(process.env.CANDLES_UPDATE_HOURS ?? 24)   // Update last 24 hours by default
 
 /**
