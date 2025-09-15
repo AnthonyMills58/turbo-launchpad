@@ -356,42 +356,62 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
     
     // Check if SWAP events need work (if graduated)
     if (dexPool) {
-      const swapLastProcessed = dexPool.last_processed_block || 0
-      const swapNeedsWork = swapLastProcessed < endBlock
-      if (swapNeedsWork) {
-        anyProcessNeedsWork = true
-        const swapFrom = swapLastProcessed + 1
-        const swapTo = Math.min(swapFrom + chunkSize, endBlock)
-        
-        console.log(`Token ${token.id}: Processing SWAP chunk ${swapFrom} to ${swapTo}`)
-        try {
-          await processSwapChunk(token, dexPool, provider, chainId, swapFrom, swapTo)
-          console.log(`✅ Token ${token.id}: Processed SWAP chunk ${swapFrom} to ${swapTo}`)
-        } catch (error) {
-          console.error(`❌ Token ${token.id}: Error processing SWAP chunk ${swapFrom} to ${swapTo}:`, error)
-          hasDexFinalRetryFailure = true
-          throw error
+      // Refresh dexPool data to get latest cursor values
+      const { rows: freshDexPools } = await pool.query<DexPoolRow>(`
+        SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block, last_processed_sync_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals
+        FROM public.dex_pools 
+        WHERE token_id = $1 AND chain_id = $2
+      `, [token.id, chainId])
+      
+      if (freshDexPools.length > 0) {
+        const freshDexPool = freshDexPools[0]
+        const swapLastProcessed = freshDexPool.last_processed_block || 0
+        const swapNeedsWork = swapLastProcessed < endBlock
+        if (swapNeedsWork) {
+          anyProcessNeedsWork = true
+          const swapFrom = swapLastProcessed + 1
+          const swapTo = Math.min(swapFrom + chunkSize, endBlock)
+          
+          console.log(`Token ${token.id}: Processing SWAP chunk ${swapFrom} to ${swapTo}`)
+          try {
+            await processSwapChunk(token, freshDexPool, provider, chainId, swapFrom, swapTo)
+            console.log(`✅ Token ${token.id}: Processed SWAP chunk ${swapFrom} to ${swapTo}`)
+          } catch (error) {
+            console.error(`❌ Token ${token.id}: Error processing SWAP chunk ${swapFrom} to ${swapTo}:`, error)
+            hasDexFinalRetryFailure = true
+            throw error
+          }
         }
       }
     }
     
     // Check if SYNC events need work (if graduated)
     if (dexPool) {
-      const syncLastProcessed = Number(dexPool.last_processed_sync_block) || 0
-      const syncNeedsWork = syncLastProcessed < endBlock
-      if (syncNeedsWork) {
-        anyProcessNeedsWork = true
-        const syncFrom = syncLastProcessed + 1
-        const syncTo = Math.min(syncFrom + chunkSize, endBlock)
-        
-        console.log(`Token ${token.id}: Processing SYNC chunk ${syncFrom} to ${syncTo}`)
-        try {
-          await processSyncChunk(token, dexPool, provider, chainId, syncFrom, syncTo)
-          console.log(`✅ Token ${token.id}: Processed SYNC chunk ${syncFrom} to ${syncTo}`)
-        } catch (error) {
-          console.error(`❌ Token ${token.id}: Error processing SYNC chunk ${syncFrom} to ${syncTo}:`, error)
-          hasDexFinalRetryFailure = true
-          throw error
+      // Refresh dexPool data to get latest cursor values
+      const { rows: freshDexPools } = await pool.query<DexPoolRow>(`
+        SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block, last_processed_sync_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals
+        FROM public.dex_pools 
+        WHERE token_id = $1 AND chain_id = $2
+      `, [token.id, chainId])
+      
+      if (freshDexPools.length > 0) {
+        const freshDexPool = freshDexPools[0]
+        const syncLastProcessed = Number(freshDexPool.last_processed_sync_block) || 0
+        const syncNeedsWork = syncLastProcessed < endBlock
+        if (syncNeedsWork) {
+          anyProcessNeedsWork = true
+          const syncFrom = syncLastProcessed + 1
+          const syncTo = Math.min(syncFrom + chunkSize, endBlock)
+          
+          console.log(`Token ${token.id}: Processing SYNC chunk ${syncFrom} to ${syncTo}`)
+          try {
+            await processSyncChunk(token, freshDexPool, provider, chainId, syncFrom, syncTo)
+            console.log(`✅ Token ${token.id}: Processed SYNC chunk ${syncFrom} to ${syncTo}`)
+          } catch (error) {
+            console.error(`❌ Token ${token.id}: Error processing SYNC chunk ${syncFrom} to ${syncTo}:`, error)
+            hasDexFinalRetryFailure = true
+            throw error
+          }
         }
       }
     }
