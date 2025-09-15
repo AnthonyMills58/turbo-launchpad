@@ -2,7 +2,15 @@
 // Clean, focused configuration for the new worker
 
 // Environment variables
-export const ONLY_TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : undefined
+export const TOKEN_ID = process.env.TOKEN_ID ? Number(process.env.TOKEN_ID) : undefined
+export const TOKEN_ID_FROM = process.env.TOKEN_ID_FROM ? Number(process.env.TOKEN_ID_FROM) : undefined
+export const TOKEN_ID_TO = process.env.TOKEN_ID_TO ? Number(process.env.TOKEN_ID_TO) : undefined
+export const CHAIN_ID_FILTER = process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : undefined
+export const GRADUATED_ONLY = process.env.GRADUATED_ONLY === 'true'
+export const UNGRADUATED_ONLY = process.env.UNGRADUATED_ONLY === 'true'
+
+// Check if any test filter parameters are set (for single cycle mode)
+export const HAS_TEST_FILTERS = !!(TOKEN_ID || TOKEN_ID_FROM || TOKEN_ID_TO || CHAIN_ID_FILTER || GRADUATED_ONLY || UNGRADUATED_ONLY)
 
 // Tunables
 export const DEFAULT_CHUNK = Number(process.env.WORKER_CHUNK ?? 10000)

@@ -17,7 +17,7 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
-import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID } from './core/config'
+import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID, TOKEN_ID, TOKEN_ID_FROM, TOKEN_ID_TO, CHAIN_ID_FILTER, GRADUATED_ONLY, UNGRADUATED_ONLY, HAS_TEST_FILTERS } from './core/config'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -213,14 +213,58 @@ async function processChain(chainId: number) {
   console.log(`🔗 Setting up provider for chain ${chainId}...`)
   const provider = providerFor(chainId)
   
-  console.log(`📊 Processing all tokens for chain ${chainId}...`)
+  // Apply chain filter if specified
+  if (CHAIN_ID_FILTER && CHAIN_ID_FILTER !== chainId) {
+    console.log(`📊 Skipping chain ${chainId} (filtered to chain ${CHAIN_ID_FILTER})`)
+    return
+  }
+
+  console.log(`📊 Processing tokens for chain ${chainId}...`)
+  
+  // Build the WHERE clause based on filters
+  let whereConditions = ['chain_id = $1']
+  let params: any[] = [chainId]
+  let paramIndex = 2
+
+  // Token ID filter (highest priority)
+  if (TOKEN_ID) {
+    whereConditions.push(`id = $${paramIndex}`)
+    params.push(TOKEN_ID)
+    paramIndex++
+    console.log(`📊 Filtering to token ID: ${TOKEN_ID}`)
+  }
+  // Token range filter
+  else if (TOKEN_ID_FROM || TOKEN_ID_TO) {
+    if (TOKEN_ID_FROM) {
+      whereConditions.push(`id >= $${paramIndex}`)
+      params.push(TOKEN_ID_FROM)
+      paramIndex++
+    }
+    if (TOKEN_ID_TO) {
+      whereConditions.push(`id <= $${paramIndex}`)
+      params.push(TOKEN_ID_TO)
+      paramIndex++
+    }
+    console.log(`📊 Filtering to token range: ${TOKEN_ID_FROM || 'any'} to ${TOKEN_ID_TO || 'any'}`)
+  }
+
+  // Graduation status filter
+  if (GRADUATED_ONLY) {
+    whereConditions.push(`is_graduated = true`)
+    console.log(`📊 Filtering to graduated tokens only`)
+  } else if (UNGRADUATED_ONLY) {
+    whereConditions.push(`is_graduated = false`)
+    console.log(`📊 Filtering to ungraduated tokens only`)
+  }
+
+  const whereClause = whereConditions.join(' AND ')
   
   const { rows: tokens } = await pool.query<TokenRow>(`
     SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
     FROM public.tokens 
-    WHERE chain_id = $1
-    ORDER BY id ASC
-  `, [chainId])
+    WHERE ${whereClause}
+    ORDER BY id DESC
+  `, params)
   
   console.log(`📊 Found ${tokens.length} tokens to process:`, tokens.map(t => t.id))
   
@@ -1248,7 +1292,13 @@ async function processSyncLog(
 
 // Run the worker
 if (require.main === module) {
-  runContinuousWorker().catch(console.error)
+  if (HAS_TEST_FILTERS) {
+    console.log('🧪 Test filters detected - running single cycle only')
+    main().catch(console.error)
+  } else {
+    console.log('🔄 No test filters - running continuous worker loop')
+    runContinuousWorker().catch(console.error)
+  }
 }
 
 export { main }
