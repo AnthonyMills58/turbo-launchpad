@@ -184,33 +184,6 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
   }
 }
 
-/**
- * Continuous worker loop
- */
-async function runContinuousWorker() {
-  console.log('🔄 Starting continuous worker loop...')
-  
-  while (true) {
-    try {
-      console.log('\n🔄 Starting new worker cycle...')
-      const shouldContinue = await main()
-      
-      if (!shouldContinue) {
-        console.log('🛑 Worker should exit - another instance is running')
-        break
-      }
-      
-      // Wait 30 seconds before next cycle
-      console.log('⏳ Waiting 30 seconds before next cycle...')
-      await new Promise(resolve => setTimeout(resolve, 30000))
-      
-    } catch (error) {
-      console.error('❌ Worker cycle failed:', error)
-      console.log('⏳ Waiting 60 seconds before retry...')
-      await new Promise(resolve => setTimeout(resolve, 60000))
-    }
-  }
-}
 
 /**
  * Process all tokens for a specific chain
@@ -228,8 +201,8 @@ async function processChain(chainId: number) {
   console.log(`📊 Processing tokens for chain ${chainId}...`)
   
   // Build the WHERE clause based on filters
-  let whereConditions = ['chain_id = $1']
-  let params: any[] = [chainId]
+  const whereConditions: string[] = ['chain_id = $1']
+  const params: (string | number)[] = [chainId]
   let paramIndex = 2
 
   // Token ID filter (highest priority)
@@ -1306,8 +1279,12 @@ if (require.main === module) {
       }
     }).catch(console.error)
   } else {
-    console.log('🔄 No test filters - running continuous worker loop')
-    runContinuousWorker().catch(console.error)
+    console.log('🔄 No test filters - running single cycle only')
+    main().then(success => {
+      if (!success) {
+        console.log('🛑 Single cycle aborted - another worker is running')
+      }
+    }).catch(console.error)
   }
 }
 
