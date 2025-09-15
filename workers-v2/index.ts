@@ -1287,7 +1287,14 @@ async function processSyncLog(
 
 // Run the worker
 if (require.main === module) {
-  runContinuousWorker().catch(console.error)
+  if (ONLY_TOKEN_ID) {
+    // For testing with ONLY_TOKEN_ID, run once and exit
+    console.log(`🎯 ONLY_TOKEN_ID=${ONLY_TOKEN_ID} set - running once and exiting`)
+    main().catch(console.error)
+  } else {
+    // Normal continuous operation
+    runContinuousWorker().catch(console.error)
+  }
 }
 
 export { main }
