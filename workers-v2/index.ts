@@ -216,13 +216,14 @@ async function processChain(chainId: number) {
   const provider = providerFor(chainId)
   
   // Get token processing parameters
-  const startToken = parseInt(process.env.START_TOKEN || '10000')
+  let startToken = parseInt(process.env.START_TOKEN || '10000')
   let tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
   
-  // If ONLY_TOKEN_ID is set, limit to 1 token
+  // If ONLY_TOKEN_ID is set, override parameters
   if (ONLY_TOKEN_ID) {
+    startToken = ONLY_TOKEN_ID
     tokensNumber = 1
-    console.log(`🎯 ONLY_TOKEN_ID=${ONLY_TOKEN_ID} set - limiting to 1 token`)
+    console.log(`🎯 ONLY_TOKEN_ID=${ONLY_TOKEN_ID} set - START_TOKEN=${startToken}, TOKENS_NUMBER=${tokensNumber}`)
   }
   
   console.log(`📊 Looking for tokens starting from ${startToken}, processing ${tokensNumber} tokens for chain ${chainId}...`)
