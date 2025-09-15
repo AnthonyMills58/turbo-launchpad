@@ -117,7 +117,7 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
 /**
  * Main worker function
  */
-async function main() {
+async function main(): Promise<boolean> {
   console.log('🚀 Starting Turbo Launchpad Worker V2...')
 console.log('📋 Version: [335] - Railway deployment working correctly')
   
@@ -125,7 +125,7 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
   const lock = await acquireGlobalLock()
   if (!lock) {
     console.log('Another worker run is in progress. Exiting.')
-    return
+    return false // Indicate that worker should exit
   }
   
   try {
@@ -153,7 +153,7 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
       
       if (healthyChains.length === 0) {
         console.log('❌ No healthy chains found. Exiting.')
-        return
+        return false
       } else {
         console.log(`\n✅ Processing ${healthyChains.length} healthy chains (of ${chains.length})`)
         
@@ -174,6 +174,7 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
     }
     
     console.log('\n✅ Worker V2 cycle completed successfully!')
+    return true // Indicate successful completion
   } catch (error) {
     console.error('❌ Worker V2 failed:', error)
     process.exit(1)
@@ -192,7 +193,12 @@ async function runContinuousWorker() {
   while (true) {
     try {
       console.log('\n🔄 Starting new worker cycle...')
-      await main()
+      const shouldContinue = await main()
+      
+      if (!shouldContinue) {
+        console.log('🛑 Worker should exit - another instance is running')
+        break
+      }
       
       // Wait 30 seconds before next cycle
       console.log('⏳ Waiting 30 seconds before next cycle...')
@@ -1294,7 +1300,11 @@ async function processSyncLog(
 if (require.main === module) {
   if (HAS_TEST_FILTERS) {
     console.log('🧪 Test filters detected - running single cycle only')
-    main().catch(console.error)
+    main().then(success => {
+      if (!success) {
+        console.log('🛑 Single cycle aborted - another worker is running')
+      }
+    }).catch(console.error)
   } else {
     console.log('🔄 No test filters - running continuous worker loop')
     runContinuousWorker().catch(console.error)
