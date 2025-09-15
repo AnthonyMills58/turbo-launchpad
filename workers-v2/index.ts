@@ -22,6 +22,7 @@ import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMP
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 const SWAP_TOPIC = '0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822'
+const SYNC_TOPIC = '0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1'
 const GRADUATED_TOPIC = '0x1c858049e704460ab9455025be4078f9e746e3fd426a56040d06389edb8197db'
 
 // Types
@@ -41,6 +42,7 @@ interface DexPoolRow {
   pair_address: string
   deployment_block: number
   last_processed_block: number
+  last_processed_sync_block: number | null
   token0: string
   token1: string
   quote_token: string
@@ -293,7 +295,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   
   if (token.is_graduated) {
     const { rows } = await pool.query<DexPoolRow>(`
-      SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals
+      SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block, last_processed_sync_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals
       FROM public.dex_pools 
       WHERE token_id = $1 AND chain_id = $2
     `, [token.id, chainId])
@@ -344,27 +346,28 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
             throw dexError // Re-throw to skip entire token processing
           }
           
-          // Update DEX pool last_processed_block to the end of the current chunk
+          // Update DEX pool cursors to the end of the current chunk
           // This happens regardless of whether DEX logs were found or not, as long as no error occurred
-          console.log(`🔄 Token ${token.id}: Updating DEX pool last_processed_block to ${to}`)
+          console.log(`🔄 Token ${token.id}: Updating DEX pool cursors to block ${to}`)
           try {
             // Use UPSERT to bypass Railway UPDATE issues
             const dexUpdateResult = await pool.query(`
-              INSERT INTO public.dex_pools (token_id, chain_id, pair_address, last_processed_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals, deployment_block)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              INSERT INTO public.dex_pools (token_id, chain_id, pair_address, last_processed_block, last_processed_sync_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals, deployment_block)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
               ON CONFLICT (chain_id, pair_address) DO UPDATE SET 
-                last_processed_block = EXCLUDED.last_processed_block
-            `, [token.id, chainId, dexPool.pair_address, to, dexPool.token0, dexPool.token1, dexPool.quote_token, dexPool.token_decimals, dexPool.weth_decimals, dexPool.quote_decimals, dexPool.deployment_block])
+                last_processed_block = EXCLUDED.last_processed_block,
+                last_processed_sync_block = EXCLUDED.last_processed_sync_block
+            `, [token.id, chainId, dexPool.pair_address, to, to, dexPool.token0, dexPool.token1, dexPool.quote_token, dexPool.token_decimals, dexPool.weth_decimals, dexPool.quote_decimals, dexPool.deployment_block])
             
-            console.log(`✅ Token ${token.id}: Updated DEX pool to block ${to} (rows affected: ${dexUpdateResult.rowCount})`)
+            console.log(`✅ Token ${token.id}: Updated DEX pool cursors to block ${to} (rows affected: ${dexUpdateResult.rowCount})`)
             
             // Verify the DEX pool update actually happened
             const dexVerifyResult = await pool.query(`
-              SELECT last_processed_block FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2
+              SELECT last_processed_block, last_processed_sync_block FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2
             `, [token.id, chainId])
             
             if (dexVerifyResult.rows.length > 0) {
-              console.log(`🔍 Token ${token.id}: Verified DEX pool last_processed_block is now ${dexVerifyResult.rows[0].last_processed_block}`)
+              console.log(`🔍 Token ${token.id}: Verified DEX pool cursors - SWAP: ${dexVerifyResult.rows[0].last_processed_block}, SYNC: ${dexVerifyResult.rows[0].last_processed_sync_block}`)
             }
           } catch (dexDbError) {
             console.error(`❌ Token ${token.id}: DEX pool database update failed:`, dexDbError)
@@ -532,6 +535,7 @@ async function processTransferChunk(
 
 /**
  * Process DEX logs for a specific token's DEX pool
+ * Now handles separate cursors for SWAP and SYNC events
  */
 async function processDexLogsForChain(
   token: TokenRow,
@@ -541,54 +545,66 @@ async function processDexLogsForChain(
   fromBlock: number,
   toBlock: number
 ) {
-  // Use dex_pools.last_processed_block as the primary cursor for this specific token
-  const dexLastProcessed = dexPool.last_processed_block || 0
+  // Get separate cursors for SWAP and SYNC events
+  const swapLastProcessed = dexPool.last_processed_block || 0
+  const syncLastProcessed = dexPool.last_processed_sync_block || 0
   
-  console.log(`Token ${token.id}: DEX cursor check - fromBlock: ${fromBlock}, toBlock: ${toBlock}, dexLastProcessed: ${dexLastProcessed}`)
-  
-  // Only process if this block range hasn't been processed yet for this specific token
-  if (toBlock <= dexLastProcessed) {
-    console.log(`Token ${token.id}: DEX logs for blocks ${fromBlock}-${toBlock} already processed (dex_pools cursor at ${dexLastProcessed})`)
-    return
-  }
-  
-  // Process from the last processed block + 1, or from the requested fromBlock if it's higher
-  const actualFromBlock = Math.max(fromBlock, dexLastProcessed + 1)
-  
-  // If actualFromBlock > toBlock, we're already caught up for this chunk
-  if (actualFromBlock > toBlock) {
-    console.log(`Token ${token.id}: DEX already caught up for chunk ${fromBlock}-${toBlock} (dex cursor at ${dexLastProcessed})`)
-    return
-  }
-  
-  // Get timestamp for the last block in range for better debugging
-  const toBlockInfo = await withRateLimit(() => provider.getBlock(toBlock), 2, chainId)
-  const toBlockTimestamp = toBlockInfo ? new Date(Number(toBlockInfo.timestamp) * 1000).toISOString() : 'unknown'
-  console.log(`Token ${token.id}: Processing DEX logs for blocks ${actualFromBlock} to ${toBlock} (last block timestamp: ${toBlockTimestamp})`)
+  console.log(`Token ${token.id}: DEX cursor check - fromBlock: ${fromBlock}, toBlock: ${toBlock}, swapLastProcessed: ${swapLastProcessed}, syncLastProcessed: ${syncLastProcessed}`)
   
   // Ensure proper address checksumming
   const pairAddress = ethers.getAddress(dexPool.pair_address)
   console.log(`Token ${token.id}: Using DEX pool address: ${pairAddress}`)
   console.log(`Token ${token.id}: Token contract address: ${token.contract_address}`)
-  //console.log(`Token ${token.id}: DEX pool record:`, dexPool)
   
-  // Use direct RPC for DEX swap detection (OKLink doesn't support MegaETH testnet)
-  console.log(`Token ${token.id}: Fetching DEX swaps via direct RPC for pair ${pairAddress}`)
-  
-  const swapLogs = await withRateLimit(() => provider.getLogs({
-    address: pairAddress,
-    topics: [SWAP_TOPIC],
-    fromBlock: actualFromBlock,
-    toBlock: toBlock
-  }), MAX_RETRY_ATTEMPTS, chainId)
-  
-  console.log(`Token ${token.id}: Found ${swapLogs.length} DEX swaps via direct RPC`)
-  
-  for (const log of swapLogs) {
-    await processDexLog(token, dexPool, log, provider, chainId)
+  // Process SWAP events
+  if (toBlock > swapLastProcessed) {
+    const swapFromBlock = Math.max(fromBlock, swapLastProcessed + 1)
+    if (swapFromBlock <= toBlock) {
+      console.log(`Token ${token.id}: Processing SWAP events for blocks ${swapFromBlock} to ${toBlock}`)
+      
+      const swapLogs = await withRateLimit(() => provider.getLogs({
+        address: pairAddress,
+        topics: [SWAP_TOPIC],
+        fromBlock: swapFromBlock,
+        toBlock: toBlock
+      }), MAX_RETRY_ATTEMPTS, chainId)
+      
+      console.log(`Token ${token.id}: Found ${swapLogs.length} DEX swaps`)
+      
+      for (const log of swapLogs) {
+        await processDexLog(token, dexPool, log, provider, chainId)
+      }
+      
+      console.log(`✅ Token ${token.id}: Processed SWAP events for blocks ${swapFromBlock} to ${toBlock}`)
+    }
+  } else {
+    console.log(`Token ${token.id}: SWAP events already processed for blocks ${fromBlock}-${toBlock}`)
   }
   
-  console.log(`✅ Token ${token.id}: Processed DEX logs for blocks ${actualFromBlock} to ${toBlock}`)
+  // Process SYNC events
+  if (toBlock > syncLastProcessed) {
+    const syncFromBlock = Math.max(fromBlock, syncLastProcessed + 1)
+    if (syncFromBlock <= toBlock) {
+      console.log(`Token ${token.id}: Processing SYNC events for blocks ${syncFromBlock} to ${toBlock}`)
+      
+      const syncLogs = await withRateLimit(() => provider.getLogs({
+        address: pairAddress,
+        topics: [SYNC_TOPIC],
+        fromBlock: syncFromBlock,
+        toBlock: toBlock
+      }), MAX_RETRY_ATTEMPTS, chainId)
+      
+      console.log(`Token ${token.id}: Found ${syncLogs.length} DEX sync events`)
+      
+      for (const log of syncLogs) {
+        await processSyncLog(token, dexPool, log, provider, chainId)
+      }
+      
+      console.log(`✅ Token ${token.id}: Processed SYNC events for blocks ${syncFromBlock} to ${toBlock}`)
+    }
+  } else {
+    console.log(`Token ${token.id}: SYNC events already processed for blocks ${fromBlock}-${toBlock}`)
+  }
 }
 
 /**
@@ -1191,6 +1207,70 @@ async function processDexLog(
     }
   } catch (error) {
     console.error(`Token ${token.id}: Error processing DEX log:`, error)
+  }
+}
+
+/**
+ * Process SYNC log and insert into pair_snapshots
+ */
+async function processSyncLog(
+  token: TokenRow,
+  dexPool: DexPoolRow,
+  log: ethers.Log,
+  provider: ethers.JsonRpcProvider,
+  chainId: number
+) {
+  try {
+    // Get block details
+    const block = await withRateLimit(() => provider.getBlock(log.blockNumber), MAX_RETRY_ATTEMPTS, chainId)
+    if (!block) {
+      console.log(`Token ${token.id}: Could not get block ${log.blockNumber}`)
+      return
+    }
+
+    const blockTime = new Date(Number(block.timestamp) * 1000)
+
+    // Decode SYNC log using UniswapV2 Sync ABI
+    const [r0, r1] = ethers.AbiCoder.defaultAbiCoder().decode(['uint112','uint112'], log.data)
+    const reserve0 = BigInt(r0.toString())
+    const reserve1 = BigInt(r1.toString())
+
+    // Determine which reserve is the quote token (ETH/WETH)
+    const isQuoteToken0 = dexPool.quote_token.toLowerCase() === dexPool.token0.toLowerCase()
+    const reserveQuoteWei = isQuoteToken0 ? reserve0 : reserve1
+    const reserveTokenWei = isQuoteToken0 ? reserve1 : reserve0
+
+    // Calculate price (ETH per token)
+    const priceEthPerToken = 
+      (Number(reserveQuoteWei) / 10 ** (dexPool.quote_decimals ?? 18)) /
+      (Number(reserveTokenWei) / 10 ** (dexPool.token_decimals ?? 18))
+
+    console.log(`Token ${token.id}: SYNC event - reserve0: ${reserve0}, reserve1: ${reserve1}, price: ${priceEthPerToken}`)
+
+    // Insert into pair_snapshots
+    try {
+      await pool.query(`
+        INSERT INTO public.pair_snapshots
+          (chain_id, pair_address, block_number, block_time, reserve0_wei, reserve1_wei, price_eth_per_token)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (chain_id, pair_address, block_number)
+        DO UPDATE SET
+          block_time = EXCLUDED.block_time,
+          reserve0_wei = EXCLUDED.reserve0_wei,
+          reserve1_wei = EXCLUDED.reserve1_wei,
+          price_eth_per_token = EXCLUDED.price_eth_per_token
+      `, [
+        chainId, dexPool.pair_address, log.blockNumber, blockTime,
+        reserve0.toString(), reserve1.toString(), priceEthPerToken
+      ])
+
+      console.log(`Token ${token.id}: Inserted SYNC snapshot record`)
+    } catch (dbError) {
+      console.error(`❌ Token ${token.id}: Database error recording SYNC snapshot:`, dbError)
+      throw dbError // Re-throw to skip to next token
+    }
+  } catch (error) {
+    console.error(`Token ${token.id}: Error processing SYNC log:`, error)
   }
 }
 
