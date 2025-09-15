@@ -61,3 +61,6 @@ ignition/deployments/chain-31337
 # Media uploads
 /uploads
 /thumbnails
+
+# Compiled workers
+/dist

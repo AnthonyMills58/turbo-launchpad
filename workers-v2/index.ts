@@ -17,7 +17,7 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
-import { getUsdPrice } from '../lib/getUsdPrice'
+import { getCurrentEthPrice } from './core/priceCache'
 import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID, TOKEN_ID, TOKEN_ID_FROM, TOKEN_ID_TO, CHAIN_ID_FILTER, GRADUATED_ONLY, UNGRADUATED_ONLY, HAS_TEST_FILTERS } from './core/config'
 
 // Event topics
@@ -133,7 +133,7 @@ async function main(): Promise<boolean> {
   console.log('📋 Version: [400] - Adding USD price support to transfers')
   
   // Get current ETH price once at the beginning of worker run
-  currentEthPriceUsd = await getUsdPrice()
+  currentEthPriceUsd = await getCurrentEthPrice()
   if (currentEthPriceUsd) {
     console.log(`💰 Current ETH price: $${currentEthPriceUsd.toFixed(2)}`)
   } else {
@@ -847,20 +847,37 @@ async function createGraduationRecords(
         if (decoded) {
           const { amount0, amount1 } = decoded.args
           
-          // Determine which amount is which based on token position in DEX pair
-          // We need to check if our token is token0 or token1 in the DEX pair
+          // Get actual token addresses from the DEX pair contract to determine correct mapping
           if (dexPool) {
-            const isToken0 = token.contract_address.toLowerCase() === dexPool.token0.toLowerCase()
+            // Query the actual DEX pair contract to get real token order
+            const pair = new ethers.Contract(dexPool.pair_address, [
+              'function token0() view returns (address)',
+              'function token1() view returns (address)'
+            ], provider)
             
-            if (isToken0) {
-              liquidityTokenAmount = amount0
-              liquidityEthAmount = amount1
+            const actualToken0 = await pair.token0()
+            const actualToken1 = await pair.token1()
+            
+            // Get WETH address from database (quote_token is always WETH)
+            const wethAddress = dexPool.quote_token
+            
+            // Determine which amount corresponds to which token
+            const isWethToken0 = actualToken0.toLowerCase() === wethAddress.toLowerCase()
+            
+            if (isWethToken0) {
+              // WETH is token0, our token is token1
+              liquidityTokenAmount = amount1  // amount1 = our token
+              liquidityEthAmount = amount0    // amount0 = WETH
             } else {
-              liquidityTokenAmount = amount1
-              liquidityEthAmount = amount0
+              // Our token is token0, WETH is token1
+              liquidityTokenAmount = amount0  // amount0 = our token
+              liquidityEthAmount = amount1    // amount1 = WETH
             }
             
-            console.log(`Token ${token.id}: Found addLiquidity event - Token: ${liquidityTokenAmount}, ETH: ${liquidityEthAmount}`)
+            console.log(`Token ${token.id}: Found addLiquidity event - amount0: ${amount0}, amount1: ${amount1}`)
+            console.log(`Token ${token.id}: Actual DEX pair - token0: ${actualToken0}, token1: ${actualToken1}`)
+            console.log(`Token ${token.id}: WETH address: ${wethAddress}, isWethToken0: ${isWethToken0}`)
+            console.log(`Token ${token.id}: Calculated - Token: ${liquidityTokenAmount}, ETH: ${liquidityEthAmount}`)
           } else {
             console.warn(`Token ${token.id}: No DEX pool info available for addLiquidity decoding`)
             liquidityEthAmount = tx.value || 0n
@@ -910,8 +927,8 @@ async function createGraduationRecords(
     graduationLog.index, // Use actual log index from the original graduation log
     token.contract_address, // From contract
     lpToAddress, // To LP pool (or zero address if not found)
-    liquidityTokenAmount.toString(), // Use actual addLiquidity token amount
-    liquidityEthAmount.toString(), // Use actual addLiquidity ETH amount
+    liquidityTokenAmount.toString(), // amount_wei (token amount)
+    liquidityEthAmount.toString(),   // amount_eth_wei (ETH amount)
     graduationPriceEthPerToken, // Use addLiquidity price (amount_eth_wei / amount_wei)
     'GRADUATION',
     'BC', // Bonding curve operation
@@ -999,30 +1016,21 @@ async function processRegularTransfer(
   chainId: number,
   provider: ethers.JsonRpcProvider
 ) {
-  // Determine if this is BC or DEX operation
-  const graduationBlock = dexPool?.deployment_block || 0
-  const isAfterGraduation = graduationBlock > 0 && log.blockNumber > graduationBlock
+  // Determine transfer type
+  const transferType = determineTransferType(token, tx, fromAddress, toAddress)
   
-  let side = 'BUY' // Default
-  const src = 'BC' // Default
+  // Skip generic TRANSFER transactions - we only want specific operations
+  if (transferType === 'TRANSFER') {
+    console.log(`Token ${token.id}: Skipping generic TRANSFER transaction at block ${log.blockNumber}`)
+    return
+  }
+  
+  const side = transferType
+  const src = 'BC' // All transfers from BC contract are BC operations
   let ethAmount = 0n
   let priceEthPerToken = null
   
-  // Determine transfer type first
-    const transferType = determineTransferType(token, tx, fromAddress, toAddress)
-    side = transferType
-    
-  if (isAfterGraduation) {
-    // After graduation, only process CLAIMAIRDROP and UNLOCK transactions
-    // Skip regular BC transfers (BUY/SELL) as they should be DEX operations
-    if (transferType === 'CLAIMAIRDROP' || transferType === 'UNLOCK') {
-      console.log(`Token ${token.id}: Processing post-graduation ${transferType} transaction at block ${log.blockNumber}`)
-      // Continue processing this transaction
-    } else {
-      console.log(`Token ${token.id}: Transfer after graduation - skipping ${transferType} (DEX operations handled separately)`)
-      return
-    }
-  }
+  console.log(`Token ${token.id}: Processing ${transferType} transfer at block ${log.blockNumber}`)
   
   // Process the transaction based on its type
     if (transferType === 'BUY' || transferType === 'BUY&LOCK') {
@@ -1138,60 +1146,68 @@ async function processDexLog(
     console.log(`Token ${token.id}: Raw swap amounts - amount0In: ${amount0In}, amount1In: ${amount1In}, amount0Out: ${amount0Out}, amount1Out: ${amount1Out}`)
     console.log(`Token ${token.id}: Token contract: ${token.contract_address}`)
 
-    // Determine if this is a BUY or SELL based on which token is which
-    // We need to check if our token is token0 or token1 in the pair
-    const isToken0 = token.contract_address.toLowerCase() === dexPool.token0.toLowerCase()
-    const isToken1 = token.contract_address.toLowerCase() === dexPool.token1.toLowerCase()
+    // Get actual token addresses from the DEX pair contract to determine correct mapping
+    const pair = new ethers.Contract(dexPool.pair_address, [
+      'function token0() view returns (address)',
+      'function token1() view returns (address)'
+    ], provider)
     
-    console.log(`Token ${token.id}: Token position - isToken0: ${isToken0}, isToken1: ${isToken1}`)
-
+    const actualToken0 = await pair.token0()
+    const actualToken1 = await pair.token1()
+    
+    // Get WETH address from database (quote_token is always WETH)
+    const wethAddress = dexPool.quote_token
+    
+    // Determine which amount corresponds to which token
+    const isWethToken0 = actualToken0.toLowerCase() === wethAddress.toLowerCase()
+    
+    // Determine if this is a BUY or SELL based on actual token order
     let isBuy: boolean
-    if (isToken0) {
-      // Our token is token0, so:
-      // BUY: amount0Out > 0 (receiving our token)
-      // SELL: amount0In > 0 (selling our token)
-      isBuy = amount0Out > 0n
-    } else if (isToken1) {
-      // Our token is token1, so:
+    if (isWethToken0) {
+      // WETH is token0, our token is token1
       // BUY: amount1Out > 0 (receiving our token)
       // SELL: amount1In > 0 (selling our token)
       isBuy = amount1Out > 0n
     } else {
-      console.log(`Token ${token.id}: Token not found in DEX pair, skipping`)
-      return
+      // Our token is token0, WETH is token1
+      // BUY: amount0Out > 0 (receiving our token)
+      // SELL: amount0In > 0 (selling our token)
+      isBuy = amount0Out > 0n
     }
     
     const side = isBuy ? 'BUY' : 'SELL'
 
-    // Calculate amounts based on token position
+    // Calculate amounts based on actual token order
     let tokenAmount: bigint
     let ethAmount: bigint
     
-    if (isToken0) {
-      // Our token is token0
+    if (isWethToken0) {
+      // WETH is token0, our token is token1
       if (isBuy) {
-        // BUY: receiving token0, paying with token1 (ETH)
-        tokenAmount = amount0Out
-        ethAmount = amount1In
-      } else {
-        // SELL: selling token0, receiving token1 (ETH)
-        tokenAmount = amount0In
-        ethAmount = amount1Out
-      }
-    } else {
-      // Our token is token1
-      if (isBuy) {
-        // BUY: receiving token1, paying with token0 (ETH)
+        // BUY: receiving token1 (our token), paying with token0 (WETH)
         tokenAmount = amount1Out
         ethAmount = amount0In
       } else {
-        // SELL: selling token1, receiving token0 (ETH)
+        // SELL: selling token1 (our token), receiving token0 (WETH)
         tokenAmount = amount1In
         ethAmount = amount0Out
+      }
+    } else {
+      // Our token is token0, WETH is token1
+      if (isBuy) {
+        // BUY: receiving token0 (our token), paying with token1 (WETH)
+        tokenAmount = amount0Out
+        ethAmount = amount1In
+      } else {
+        // SELL: selling token0 (our token), receiving token1 (WETH)
+        tokenAmount = amount0In
+        ethAmount = amount1Out
       }
     }
 
     // Debug: Log calculated amounts
+    console.log(`Token ${token.id}: Actual DEX pair - token0: ${actualToken0}, token1: ${actualToken1}`)
+    console.log(`Token ${token.id}: WETH address: ${wethAddress}, isWethToken0: ${isWethToken0}`)
     console.log(`Token ${token.id}: Calculated amounts - tokenAmount: ${tokenAmount}, ethAmount: ${ethAmount}`)
     console.log(`Token ${token.id}: isBuy: ${isBuy}, amount0In: ${amount0In}, amount1In: ${amount1In}, amount0Out: ${amount0Out}, amount1Out: ${amount1Out}`)
 
@@ -1225,8 +1241,8 @@ async function processDexLog(
       log.index,
       fromAddress,
       toAddress,
-      tokenAmount.toString(),
-      ethAmount.toString(),
+      tokenAmount.toString(), // amount_wei (token amount)
+      ethAmount.toString(),   // amount_eth_wei (ETH amount)
       priceEthPerToken,
       side,
       'DEX',
@@ -1268,10 +1284,13 @@ async function processSyncLog(
     const reserve0 = BigInt(r0.toString())
     const reserve1 = BigInt(r1.toString())
 
-    // Determine which reserve is the quote token (ETH/WETH)
-    const isQuoteToken0 = dexPool.quote_token.toLowerCase() === dexPool.token0.toLowerCase()
-    const reserveQuoteWei = isQuoteToken0 ? reserve0 : reserve1
-    const reserveTokenWei = isQuoteToken0 ? reserve1 : reserve0
+    // Since syncDexState always sets token0 = our token, token1 = WETH, quote_token = WETH
+    // reserve0 = our token reserves, reserve1 = WETH reserves
+    const reserveTokenWei = reserve0  // reserve0 = our token
+    const reserveQuoteWei = reserve1  // reserve1 = WETH
+    
+    console.log(`Token ${token.id}: DEX pool - token0: ${dexPool.token0}, token1: ${dexPool.token1}, quote_token: ${dexPool.quote_token}`)
+    console.log(`Token ${token.id}: Reserve mapping - reserveTokenWei: ${reserveTokenWei}, reserveQuoteWei: ${reserveQuoteWei}`)
 
     // Calculate price (ETH per token)
     const priceEthPerToken = 
