@@ -141,10 +141,15 @@ export async function syncDexState(
         const bufferBlocks = chainId === 6342 ? 1000 : 5000  // MegaETH: 25min, Others: 18hrs
         const estimatedDeploymentBlock = currentBlock - bufferBlocks
         
+        // Enforce consistent token order: token0 = our token, token1 = WETH
+        // This ensures worker logic can always assume amount0 = our token, amount1 = WETH
+        const token0 = token.contract_address  // Our token (not WETH)
+        const token1 = wethAddress            // Always WETH
+        
         const dexPoolsResult = await db.query(`
           INSERT INTO public.dex_pools (token_id, chain_id, pair_address, token0, token1, quote_token, deployment_block, last_processed_block, last_processed_sync_block, token_decimals, weth_decimals, quote_decimals)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        `, [token.id, chainId, pairAddress, token.contract_address, wethAddress, wethAddress, estimatedDeploymentBlock, estimatedDeploymentBlock, estimatedDeploymentBlock - 1, 18, 18, 18])
+        `, [token.id, chainId, pairAddress, token0, token1, wethAddress, estimatedDeploymentBlock, estimatedDeploymentBlock, estimatedDeploymentBlock - 1, 18, 18, 18])
         
         console.log(`[syncDexState] ✅ Added new dex_pools record, rowCount: ${dexPoolsResult.rowCount}, deployment_block: ${estimatedDeploymentBlock} (buffer: ${bufferBlocks} blocks)`)
       } else {

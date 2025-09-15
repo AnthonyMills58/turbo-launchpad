@@ -17,6 +17,7 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
+import { getUsdPrice } from '../lib/getUsdPrice'
 import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID, TOKEN_ID, TOKEN_ID_FROM, TOKEN_ID_TO, CHAIN_ID_FILTER, GRADUATED_ONLY, UNGRADUATED_ONLY, HAS_TEST_FILTERS } from './core/config'
 
 // Event topics
@@ -117,9 +118,27 @@ async function checkChainHealth(chainId: number, provider: ethers.JsonRpcProvide
 /**
  * Main worker function
  */
+// Global ETH price for this worker run
+let currentEthPriceUsd: number | null = null
+
+/**
+ * Get current ETH price for transfer recording
+ */
+function getEthPriceForTransfer(): number | null {
+  return currentEthPriceUsd
+}
+
 async function main(): Promise<boolean> {
   console.log('🚀 Starting Turbo Launchpad Worker V2...')
-console.log('📋 Version: [335] - Railway deployment working correctly')
+  console.log('📋 Version: [400] - Adding USD price support to transfers')
+  
+  // Get current ETH price once at the beginning of worker run
+  currentEthPriceUsd = await getUsdPrice()
+  if (currentEthPriceUsd) {
+    console.log(`💰 Current ETH price: $${currentEthPriceUsd.toFixed(2)}`)
+  } else {
+    console.warn('⚠️ Could not fetch ETH price - USD calculations will be skipped')
+  }
   
   // Acquire global lock to prevent overlapping runs
   const lock = await acquireGlobalLock()
@@ -355,7 +374,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
     }
     
     // Check if SWAP events need work (if graduated)
-    if (dexPool) {
+      if (dexPool) {
       // Refresh dexPool data to get latest cursor values
       const { rows: freshDexPools } = await pool.query<DexPoolRow>(`
         SELECT token_id, chain_id, pair_address, deployment_block, last_processed_block, last_processed_sync_block, token0, token1, quote_token, token_decimals, weth_decimals, quote_decimals
@@ -407,7 +426,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
           try {
             await processSyncChunk(token, freshDexPool, provider, chainId, syncFrom, syncTo)
             console.log(`✅ Token ${token.id}: Processed SYNC chunk ${syncFrom} to ${syncTo}`)
-          } catch (error) {
+    } catch (error) {
             console.error(`❌ Token ${token.id}: Error processing SYNC chunk ${syncFrom} to ${syncTo}:`, error)
             hasDexFinalRetryFailure = true
             throw error
@@ -866,8 +885,8 @@ async function createGraduationRecords(
   // Record 1: User BUY (the transaction that triggered graduation)
   await pool.query(`
     INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, eth_price_usd)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
     userBuyLog.index, // Use actual log index from the original user buy log
@@ -877,14 +896,15 @@ async function createGraduationRecords(
     userEthAmount.toString(), // Use transaction value (ETH paid by user)
     userPriceEthPerToken, // Use calculated price for user transaction
     'BUY',
-    'BC' // Bonding curve operation
+    'BC', // Bonding curve operation
+    getEthPriceForTransfer()
   ])
   
   // Record 2: Graduation Summary (contract to LP pool with addLiquidity amounts)
   await pool.query(`
     INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
     graduationLog.index, // Use actual log index from the original graduation log
@@ -907,7 +927,8 @@ async function createGraduationRecords(
       graduation_tokens: graduationAmount.toString(),
       lp_address: lpToAddress !== '0x0000000000000000000000000000000000000000' ? lpToAddress : null,
       reserves: null // Will be populated when DEX pool is processed
-    })
+    }),
+    getEthPriceForTransfer()
   ])
   
   console.log(`✅ Token ${token.id}: Created 2 graduation records (BUY + GRADUATION)`)
@@ -1048,15 +1069,16 @@ async function processRegularTransfer(
   try {
   await pool.query(`
     INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, eth_price_usd)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
       side = EXCLUDED.side,
-      src = EXCLUDED.src
+      src = EXCLUDED.src,
+      eth_price_usd = EXCLUDED.eth_price_usd
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
     log.index, fromAddress, toAddress, amount.toString(), ethAmount.toString(), priceEthPerToken,
-    side, src
+    side, src, getEthPriceForTransfer()
   ])
   
   console.log(`✅ Token ${token.id}: Recorded ${side} transfer (${src})`)
@@ -1196,8 +1218,8 @@ async function processDexLog(
     try {
     await pool.query(`
       INSERT INTO public.token_transfers
-        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, eth_price_usd)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     `, [
       token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
       log.index,
@@ -1207,7 +1229,8 @@ async function processDexLog(
       ethAmount.toString(),
       priceEthPerToken,
       side,
-      'DEX'
+      'DEX',
+      getEthPriceForTransfer()
     ])
 
     console.log(`Token ${token.id}: Inserted DEX ${side} record`)
