@@ -125,7 +125,6 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
   const lock = await acquireGlobalLock()
   if (!lock) {
     console.log('Another worker run is in progress. Exiting.')
-    await pool.end()
     return
   }
   
@@ -181,7 +180,6 @@ console.log('📋 Version: [335] - Railway deployment working correctly')
   } finally {
     // Release the global lock
     await lock.release()
-    await pool.end()
   }
 }
 
@@ -215,45 +213,14 @@ async function processChain(chainId: number) {
   console.log(`🔗 Setting up provider for chain ${chainId}...`)
   const provider = providerFor(chainId)
   
-  // Get token processing parameters
-  const startToken = parseInt(process.env.START_TOKEN || '10000')
-  const tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
-  
-  console.log(`📊 Looking for tokens starting from ${startToken}, processing ${tokensNumber} tokens for chain ${chainId}...`)
-  
-  // Find the highest available token ID that's <= startToken
-  const { rows: maxTokenRows } = await pool.query(`
-    SELECT MAX(id) as max_id
-    FROM public.tokens 
-    WHERE chain_id = $1 AND id <= $2
-  `, [chainId, startToken])
-  
-  const actualStartToken = maxTokenRows[0]?.max_id
-  if (!actualStartToken) {
-    console.log(`⚠️  No tokens found for chain ${chainId} with ID <= ${startToken}`)
-    return
-  }
-  
-  console.log(`📊 Found highest available token: ${actualStartToken} (requested: ${startToken})`)
-  
-  // If tokensNumber is very large (like default 100000), process all available tokens
-  // Otherwise, limit to the specified number
-  const shouldProcessAll = tokensNumber >= 10000
-  const limitClause = shouldProcessAll ? '' : `LIMIT ${tokensNumber}`
-  
-  if (shouldProcessAll) {
-    console.log(`📊 Processing ALL available tokens starting from token ${actualStartToken}...`)
-  } else {
-    console.log(`📊 Processing ${tokensNumber} tokens starting from token ${actualStartToken}...`)
-  }
+  console.log(`📊 Processing all tokens for chain ${chainId}...`)
   
   const { rows: tokens } = await pool.query<TokenRow>(`
     SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
     FROM public.tokens 
-    WHERE chain_id = $1 AND id <= $2
-    ORDER BY id DESC
-    ${limitClause}
-  `, [chainId, actualStartToken])
+    WHERE chain_id = $1
+    ORDER BY id ASC
+  `, [chainId])
   
   console.log(`📊 Found ${tokens.length} tokens to process:`, tokens.map(t => t.id))
   
