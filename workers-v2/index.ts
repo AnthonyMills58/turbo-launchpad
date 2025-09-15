@@ -17,7 +17,7 @@ import type { PoolClient } from 'pg'
 import pool from '../lib/db'
 import { providerFor } from '../lib/providers'
 import { withRateLimit } from './core/rateLimiting'
-import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID } from './core/config'
+import { getChunkSize, SKIP_HEALTH_CHECK, HEALTH_CHECK_TIMEOUT, MAX_RETRY_ATTEMPTS, LOCK_NS, LOCK_ID, ONLY_TOKEN_ID } from './core/config'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -217,7 +217,13 @@ async function processChain(chainId: number) {
   
   // Get token processing parameters
   const startToken = parseInt(process.env.START_TOKEN || '10000')
-  const tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
+  let tokensNumber = parseInt(process.env.TOKENS_NUMBER || '10000')
+  
+  // If ONLY_TOKEN_ID is set, limit to 1 token
+  if (ONLY_TOKEN_ID) {
+    tokensNumber = 1
+    console.log(`🎯 ONLY_TOKEN_ID=${ONLY_TOKEN_ID} set - limiting to 1 token`)
+  }
   
   console.log(`📊 Looking for tokens starting from ${startToken}, processing ${tokensNumber} tokens for chain ${chainId}...`)
   
