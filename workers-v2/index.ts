@@ -540,9 +540,12 @@ async function processTransferChunk(
       
       // Check if this is a graduation transaction
       const firstLog = logs[0]
-      console.log(`Token ${token.id}: Checking graduation for tx ${tx.hash} with ${logs.length} logs`)
+      // console.log(`Token ${token.id}: Checking graduation for tx ${tx.hash} with ${logs.length} logs`)
       const isGraduation = await detectGraduation(token, firstLog, tx, provider, chainId)
-      console.log(`Token ${token.id}: Graduation detected: ${isGraduation}`)
+      // console.log(`Token ${token.id}: Graduation detected: ${isGraduation}`)
+      if (isGraduation) {
+        console.log(`Token ${token.id}: Graduation detected: ${isGraduation}`)
+      }
       
       if (isGraduation) {
         // Process graduation (creates 2 records: BUY + GRADUATION)
