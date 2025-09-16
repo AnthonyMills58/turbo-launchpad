@@ -1296,8 +1296,6 @@ async function processSyncLog(
     const actualToken1 = await withRateLimit(() => pairContract.token1(), MAX_RETRY_ATTEMPTS, chainId)
     
     // Map reserves to token and ETH based on actual pair order
-    // WETH address is always stored in quote_token field
-    const wethAddress = dexPool.quote_token.toLowerCase()
     
     let reserveTokenWei: bigint
     let reserveQuoteWei: bigint
@@ -1340,7 +1338,7 @@ async function processSyncLog(
           price_eth_per_token = EXCLUDED.price_eth_per_token
       `, [
         chainId, dexPool.pair_address, log.blockNumber, blockTime,
-        reserve0.toString(), reserve1.toString(), priceEthPerToken
+        reserveTokenWei.toString(), reserveQuoteWei.toString(), priceEthPerToken
       ])
 
       console.log(`Token ${token.id}: Inserted SYNC snapshot record`)
