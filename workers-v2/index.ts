@@ -295,9 +295,7 @@ async function processChain(chainId: number) {
  * Process a single token
  */
 async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, chainId: number) {
-  console.log(`🔍 Getting current block for token ${token.id}...`)
   const currentBlock = await withRateLimit(() => provider.getBlockNumber(), 2, chainId)
-  console.log(`🔍 Current block: ${currentBlock}`)
   
   // Determine processing range
   const startBlock = token.last_processed_block + 1
@@ -312,7 +310,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
   
   // Get DEX pool info if graduated
   let dexPool: DexPoolRow | null = null
-  console.log(`Token ${token.id}: is_graduated = ${token.is_graduated}`)
+  // console.log(`Token ${token.id}: is_graduated = ${token.is_graduated}`)
   
   if (token.is_graduated) {
     const { rows } = await pool.query<DexPoolRow>(`
@@ -321,18 +319,12 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
       WHERE token_id = $1 AND chain_id = $2
     `, [token.id, chainId])
     
-    console.log(`Token ${token.id}: Found ${rows.length} DEX pool records`)
-    console.log(`Token ${token.id}: Query was: SELECT * FROM dex_pools WHERE token_id = ${token.id} AND chain_id = ${chainId}`)
     if (rows.length > 0) {
       dexPool = rows[0]
       console.log(`Token ${token.id}: Found DEX pool ${dexPool.pair_address}`)
-      console.log(`Token ${token.id}: Full DEX pool record:`, dexPool)
     } else {
       console.log(`Token ${token.id}: No DEX pool record found despite being graduated`)
-      console.log(`Token ${token.id}: Token details - ID: ${token.id}, Chain: ${chainId}, Contract: ${token.contract_address}`)
     }
-  } else {
-    console.log(`Token ${token.id}: Not graduated - skipping DEX processing`)
   }
   
   // Process in chunks: transfers first, then DEX for each chunk
@@ -484,7 +476,7 @@ async function processTransferChunk(
     toBlock
   }), MAX_RETRY_ATTEMPTS, chainId)
   
-  console.log(`Token ${token.id}: Found ${transferLogs.length} transfer logs`)
+  // console.log(`Token ${token.id}: Found ${transferLogs.length} transfer logs`)
   
   // Check if this block range contains graduation transactions
   // For graduation detection, we need to check if this block range contains graduation patterns
@@ -508,17 +500,17 @@ async function processTransferChunk(
     for (const [txHash, logs] of logsByTx) {
       if (logs.length >= 3) {
         // This might be a graduation transaction - treat as graduation block range
-        console.log(`Token ${token.id}: Detected potential graduation block range (${logs.length} logs in tx ${txHash})`)
+        // console.log(`Token ${token.id}: Detected potential graduation block range (${logs.length} logs in tx ${txHash})`)
         isGraduationBlockRange = true
         break
       }
     }
   }
   
-  console.log(`Token ${token.id}: Block range ${fromBlock}-${toBlock}, graduation block: ${graduationBlock}, is graduation range: ${isGraduationBlockRange}`)
+  // console.log(`Token ${token.id}: Block range ${fromBlock}-${toBlock}, graduation block: ${graduationBlock}, is graduation range: ${isGraduationBlockRange}`)
   
   if (isGraduationBlockRange) {
-    console.log(`Token ${token.id}: Processing graduation block range ${fromBlock}-${toBlock}`)
+    // console.log(`Token ${token.id}: Processing graduation block range ${fromBlock}-${toBlock}`)
     
     // Group logs by transaction for graduation processing
     const logsByTx = new Map<string, ethers.Log[]>()
@@ -543,9 +535,9 @@ async function processTransferChunk(
       // console.log(`Token ${token.id}: Checking graduation for tx ${tx.hash} with ${logs.length} logs`)
       const isGraduation = await detectGraduation(token, firstLog, tx, provider, chainId)
       // console.log(`Token ${token.id}: Graduation detected: ${isGraduation}`)
-      if (isGraduation) {
-        console.log(`Token ${token.id}: Graduation detected: ${isGraduation}`)
-      }
+      // if (isGraduation) {
+      //   console.log(`Token ${token.id}: Graduation detected: ${isGraduation}`)
+      // }
       
       if (isGraduation) {
         // Process graduation (creates 2 records: BUY + GRADUATION)
@@ -556,7 +548,7 @@ async function processTransferChunk(
         // Skip processing individual logs - graduation handles all logs in this transaction
       } else {
         // Process each regular transfer log
-        console.log(`Token ${token.id}: Processing ${logs.length} regular transfer logs`)
+        // console.log(`Token ${token.id}: Processing ${logs.length} regular transfer logs`)
         for (const log of logs) {
           await processTransferLog(token, dexPool, log, provider, chainId)
         }
@@ -819,16 +811,7 @@ async function createGraduationRecords(
   // Get transaction value (ETH paid by user)
   const userEthAmount = tx.value || 0n
   
-  // LOG: Show original BUY record details before consolidation
-  console.log(`\n=== ORIGINAL BUY RECORD (before graduation consolidation) ===`)
-  console.log(`Token ${token.id}: User BUY log found:`)
-  console.log(`  - From: 0x0000... (zero address - mint)`)
-  console.log(`  - To: ${userToAddress}`)
-  console.log(`  - Amount Wei: ${userAmount.toString()}`)
-  console.log(`  - Transaction Value (ETH): ${userEthAmount.toString()}`)
-  console.log(`  - Transaction Hash: ${userBuyLog.transactionHash}`)
-  console.log(`  - Block Number: ${userBuyLog.blockNumber}`)
-  console.log(`=== END ORIGINAL BUY RECORD ===\n`)
+  // console.log(`Token ${token.id}: Processing graduation - User: ${userToAddress}, Amount: ${userAmount.toString()}, ETH: ${userEthAmount.toString()}`)
   
   // Find the add liquidity event to get the actual amounts added to the pool
   let liquidityTokenAmount = 0n
