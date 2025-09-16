@@ -134,7 +134,7 @@ export async function syncTokenState(
     // Previously: Fetched holder count during sync
     // Now: Holder count only fetched on manual user request
 
-    const totalSupply = Number(totalSupplyRaw) - Number(tokenInfoRaw._creatorLockAmount) // Keep in wei for database storage, exclude locked tokens
+    const totalSupply = Number(totalSupplyRaw) // Keep in wei for database storage (includes locked tokens for FDV)
     const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
     const basePrice = Number(tokenInfoRaw._basePrice)

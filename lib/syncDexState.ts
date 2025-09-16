@@ -65,6 +65,18 @@ async function getCirculatingSupplyFromBlockchain(
     allAddresses.delete(lpPoolAddress.toLowerCase())
     console.log(`[getCirculatingSupplyFromBlockchain] Excluding LP pool address: ${lpPoolAddress}`)
   }
+  
+  // Exclude lock contracts (token contract addresses)
+  const { rows: lockContracts } = await db.query(
+    `SELECT DISTINCT LOWER(contract_address) as contract_address
+     FROM public.tokens 
+     WHERE chain_id = $1`,
+    [chainId]
+  )
+  lockContracts.forEach(({ contract_address }) => {
+    allAddresses.delete(contract_address)
+    console.log(`[getCirculatingSupplyFromBlockchain] Excluding lock contract: ${contract_address}`)
+  })
 
   let totalCirculating = 0n
   let checkedAddresses = 0

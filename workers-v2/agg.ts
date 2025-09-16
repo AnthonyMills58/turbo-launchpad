@@ -259,7 +259,7 @@ async function processTokenBalances(
         AND amount_wei != '0'
         AND (
           to_address != '0x0000000000000000000000000000000000000000'  -- Regular transfers
-          OR (from_address = '0x0000000000000000000000000000000000000000' AND src NOT IN ('BUY&LOCK'))  -- BC BUY + CLAIMAIRDROP, exclude LOCK
+          OR from_address = '0x0000000000000000000000000000000000000000'  -- BC BUY + CLAIMAIRDROP + LOCK (all mint operations)
         )
     ) balance_changes
     GROUP BY holder
@@ -347,7 +347,7 @@ async function processTokenStats(
   
   const liquidity_usd = liquidity_eth * eth_price_usd
   
-  // Calculate circulating supply (excludes LP pools and zero address)
+  // Calculate circulating supply (excludes LP pools, excludes lock contracts, excludes zero address)
   const { rows: [{ circulating_supply }] } = await pool.query(`
     SELECT COALESCE(SUM(balance_wei::numeric), 0) as circulating_supply
     FROM public.token_balances
@@ -355,6 +355,9 @@ async function processTokenStats(
       AND holder != '0x0000000000000000000000000000000000000000'
       AND LOWER(holder) NOT IN (
         SELECT LOWER(pair_address) FROM public.dex_pools WHERE chain_id = $2
+      )
+      AND LOWER(holder) NOT IN (
+        SELECT LOWER(contract_address) FROM public.tokens WHERE chain_id = $2
       )
   `, [token.id, chainId])
   
