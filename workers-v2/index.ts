@@ -856,8 +856,8 @@ async function createGraduationRecords(
               'function token1() view returns (address)'
             ], provider)
             
-            const actualToken0 = await pair.token0()
-            const actualToken1 = await pair.token1()
+            const actualToken0 = await withRateLimit(() => pair.token0(), MAX_RETRY_ATTEMPTS, chainId)
+            const actualToken1 = await withRateLimit(() => pair.token1(), MAX_RETRY_ATTEMPTS, chainId)
             
             // Get WETH address from database (quote_token is always WETH)
             const wethAddress = dexPool.quote_token
@@ -1153,8 +1153,8 @@ async function processDexLog(
       'function token1() view returns (address)'
     ], provider)
     
-    const actualToken0 = await pair.token0()
-    const actualToken1 = await pair.token1()
+    const actualToken0 = await withRateLimit(() => pair.token0(), MAX_RETRY_ATTEMPTS, chainId)
+    const actualToken1 = await withRateLimit(() => pair.token1(), MAX_RETRY_ATTEMPTS, chainId)
     
     // Get WETH address from database (quote_token is always WETH)
     const wethAddress = dexPool.quote_token
