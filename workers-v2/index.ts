@@ -916,80 +916,94 @@ async function createGraduationRecords(
   // Calculate price for GRADUATION record (addLiquidity price)
   const graduationPriceEthPerToken = liquidityEthAmount > 0n && liquidityTokenAmount > 0n ? Number(liquidityEthAmount) / Number(liquidityTokenAmount) : 0
   
-  // Record 1: User BUY (the transaction that triggered graduation)
-  await pool.query(`
-    INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, eth_price_usd)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-  `, [
-    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    userBuyLog.index, // Use actual log index from the original user buy log
-    '0x0000000000000000000000000000000000000000', // From zero address (mint)
-    userToAddress, // To user who triggered graduation
-    userAmount.toString(),
-    userEthAmount.toString(), // Use transaction value (ETH paid by user)
-    userPriceEthPerToken, // Use calculated price for user transaction
-    'BUY',
-    'BC', // Bonding curve operation
-    getEthPriceForTransfer()
-  ])
+  // Insert all 3 GRADUATION records in a single transaction for atomicity
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    
+    // Record 1: MINT (zero address to contract) - comes first chronologically
+    await client.query(`
+      INSERT INTO public.token_transfers
+        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    `, [
+      token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+      userBuyLog.index - 1, // Use artificial index to ensure MINT comes before BUY
+      '0x0000000000000000000000000000000000000000', // From zero address
+      token.contract_address, // To contract
+      graduationAmount.toString(), // amount_wei (graduation amount)
+      '0', // amount_eth_wei (no ETH involved in mint)
+      0, // price_eth_per_token (no price for mint)
+      'MINT',
+      'BC', // Bonding curve operation
+      JSON.stringify({
+        type: 'graduation',
+        phase: 'mint',
+        graduation_tokens: graduationAmount.toString(),
+        graduation_trigger: tx.from
+      }),
+      getEthPriceForTransfer()
+    ])
+    
+    // Record 2: User BUY (zero address to user)
+    await client.query(`
+      INSERT INTO public.token_transfers
+        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, eth_price_usd)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    `, [
+      token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+      userBuyLog.index, // Use actual log index from the original user buy log
+      '0x0000000000000000000000000000000000000000', // From zero address (mint)
+      userToAddress, // To user who triggered graduation
+      userAmount.toString(),
+      userEthAmount.toString(), // Use transaction value (ETH paid by user)
+      userPriceEthPerToken, // Use calculated price for user transaction
+      'BUY',
+      'BC', // Bonding curve operation
+      getEthPriceForTransfer()
+    ])
+    
+    // Record 3: Graduation Summary (contract to LP pool with addLiquidity amounts)
+    await client.query(`
+      INSERT INTO public.token_transfers
+        (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    `, [
+      token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+      graduationLog.index, // Use actual log index from the original graduation log
+      token.contract_address, // From contract
+      lpToAddress, // To LP pool (or zero address if not found)
+      liquidityTokenAmount.toString(), // amount_wei (token amount)
+      liquidityEthAmount.toString(),   // amount_eth_wei (ETH amount)
+      graduationPriceEthPerToken, // Use addLiquidity price (amount_eth_wei / amount_wei)
+      'GRADUATION',
+      'BC', // Bonding curve operation
+      JSON.stringify({
+        type: 'graduation',
+        phase: 'summary',
+        addliquidity_tokens: liquidityTokenAmount.toString(),
+        addliquidity_eth: liquidityEthAmount.toString(),
+        addliquidity_price_eth_per_token: graduationPriceEthPerToken,
+        graduation_trigger: tx.from,
+        user_tokens: userAmount.toString(),
+        user_eth: userEthAmount.toString(),
+        graduation_tokens: graduationAmount.toString(),
+        lp_address: lpToAddress !== '0x0000000000000000000000000000000000000000' ? lpToAddress : null,
+        reserves: null // Will be populated when DEX pool is processed
+      }),
+      getEthPriceForTransfer()
+    ])
+    
+    await client.query('COMMIT')
+    console.log(`✅ Token ${token.id}: Successfully inserted 3 graduation records in transaction`)
+  } catch (error) {
+    await client.query('ROLLBACK')
+    console.error(`❌ Token ${token.id}: Error inserting graduation records:`, error)
+    throw error
+  } finally {
+    client.release()
+  }
   
-  // Record 2: MINT (zero address to contract)
-  await pool.query(`
-    INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-  `, [
-    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    userBuyLog.index - 1, // Use artificial index to ensure MINT comes before BUY
-    '0x0000000000000000000000000000000000000000', // From zero address
-    token.contract_address, // To contract
-    graduationAmount.toString(), // amount_wei (graduation amount)
-    '0', // amount_eth_wei (no ETH involved in mint)
-    0, // price_eth_per_token (no price for mint)
-    'MINT',
-    'BC', // Bonding curve operation
-    JSON.stringify({
-      type: 'graduation',
-      phase: 'mint',
-      graduation_tokens: graduationAmount.toString(),
-      graduation_trigger: tx.from
-    }),
-    getEthPriceForTransfer()
-  ])
-  
-  // Record 3: Graduation Summary (contract to LP pool with addLiquidity amounts)
-  await pool.query(`
-    INSERT INTO public.token_transfers
-      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-  `, [
-    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    graduationLog.index, // Use actual log index from the original graduation log
-    token.contract_address, // From contract
-    lpToAddress, // To LP pool (or zero address if not found)
-    liquidityTokenAmount.toString(), // amount_wei (token amount)
-    liquidityEthAmount.toString(),   // amount_eth_wei (ETH amount)
-    graduationPriceEthPerToken, // Use addLiquidity price (amount_eth_wei / amount_wei)
-    'GRADUATION',
-    'BC', // Bonding curve operation
-    JSON.stringify({
-      type: 'graduation',
-      phase: 'summary',
-      addliquidity_tokens: liquidityTokenAmount.toString(),
-      addliquidity_eth: liquidityEthAmount.toString(),
-      addliquidity_price_eth_per_token: graduationPriceEthPerToken,
-      graduation_trigger: tx.from,
-      user_tokens: userAmount.toString(),
-      user_eth: userEthAmount.toString(),
-      graduation_tokens: graduationAmount.toString(),
-      lp_address: lpToAddress !== '0x0000000000000000000000000000000000000000' ? lpToAddress : null,
-      reserves: null // Will be populated when DEX pool is processed
-    }),
-    getEthPriceForTransfer()
-  ])
-  
-  console.log(`✅ Token ${token.id}: Created 3 graduation records (BUY + MINT + GRADUATION)`)
 }
 
 /**
