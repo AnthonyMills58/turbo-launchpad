@@ -370,7 +370,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
       } catch (error) {
         console.error(`❌ Token ${token.id}: Error processing BC chunk ${bcFrom} to ${bcTo}:`, error)
         hasFinalRetryFailure = true
-        throw error
+        // Don't throw - continue with other operations (SWAP, SYNC)
       }
     }
     
@@ -399,7 +399,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
           } catch (error) {
             console.error(`❌ Token ${token.id}: Error processing SWAP chunk ${swapFrom} to ${swapTo}:`, error)
             hasDexFinalRetryFailure = true
-            throw error
+            // Don't throw - continue with other operations (SYNC)
           }
         }
       }
@@ -430,7 +430,7 @@ async function processToken(token: TokenRow, provider: ethers.JsonRpcProvider, c
     } catch (error) {
             console.error(`❌ Token ${token.id}: Error processing SYNC chunk ${syncFrom} to ${syncTo}:`, error)
             hasDexFinalRetryFailure = true
-            throw error
+            // Don't throw - continue with next token
           }
         }
       }
