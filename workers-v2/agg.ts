@@ -369,7 +369,7 @@ async function processTokenStats(
       AND amount_eth_wei IS NOT NULL
   `, [token.id, chainId])
   
-  const volume_24h_usd = Number(volume_24h_eth) * eth_price_usd
+  // const volume_24h_usd = Number(volume_24h_eth) * eth_price_usd // Not used - column doesn't exist
   
   // Calculate market cap and FDV
   const circulating_supply_tokens = Number(circulating_supply) / 1e18
@@ -389,13 +389,12 @@ async function processTokenStats(
       liquidity_eth = $5,
       liquidity_usd = $6,
       volume_24h_eth = $7,
-      volume_24h_usd = $8,
       volume_24h_updated_at = NOW(),
       updated_at = NOW()
-    WHERE id = $9 AND chain_id = $10
+    WHERE id = $8 AND chain_id = $9
   `, [
     current_price, market_cap, fdv, total_supply,
-    liquidity_eth, liquidity_usd, volume_24h_eth, volume_24h_usd,
+    liquidity_eth, liquidity_usd, volume_24h_eth,
     token.id, chainId
   ])
   
