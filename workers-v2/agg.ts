@@ -236,34 +236,28 @@ async function processTokenBalances(
       holder,
       SUM(balance_change) as balance_wei
     FROM (
-      -- Subtract from 'from' addresses (include BC SELL, exclude LOCK operations)
+      -- Subtract from 'from' addresses (unless from_address is zero address)
       SELECT 
         LOWER(from_address) as holder,
         -amount_wei::numeric as balance_change
       FROM public.token_transfers 
       WHERE token_id = $1 AND chain_id = $2
         AND amount_wei != '0'
-        AND (
-          from_address != '0x0000000000000000000000000000000000000000'  -- Regular transfers
-          OR to_address = '0x0000000000000000000000000000000000000000'  -- BC SELL (burn to zero address)
-        )
+        AND from_address != '0x0000000000000000000000000000000000000000'
       
       UNION ALL
       
-      -- Add to 'to' addresses (include BC BUY, exclude LOCK operations)
+      -- Add to 'to' addresses (unless to_address is zero address)
       SELECT 
         LOWER(to_address) as holder,
         amount_wei::numeric as balance_change
       FROM public.token_transfers 
       WHERE token_id = $1 AND chain_id = $2
         AND amount_wei != '0'
-        AND (
-          to_address != '0x0000000000000000000000000000000000000000'  -- Regular transfers
-          OR from_address = '0x0000000000000000000000000000000000000000'  -- BC BUY + CLAIMAIRDROP + LOCK (all mint operations)
-        )
+        AND to_address != '0x0000000000000000000000000000000000000000'
     ) balance_changes
     GROUP BY holder
-    HAVING SUM(balance_change) > 0
+    HAVING SUM(balance_change) != 0
   `, [token.id, chainId])
   
   // Clean up zero balances

@@ -934,7 +934,31 @@ async function createGraduationRecords(
     getEthPriceForTransfer()
   ])
   
-  // Record 2: Graduation Summary (contract to LP pool with addLiquidity amounts)
+  // Record 2: MINT (zero address to contract)
+  await pool.query(`
+    INSERT INTO public.token_transfers
+      (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+  `, [
+    token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
+    graduationLog.index + 0.1, // Use artificial index to avoid constraint violation
+    '0x0000000000000000000000000000000000000000', // From zero address
+    token.contract_address, // To contract
+    graduationAmount.toString(), // amount_wei (graduation amount)
+    '0', // amount_eth_wei (no ETH involved in mint)
+    0, // price_eth_per_token (no price for mint)
+    'MINT',
+    'BC', // Bonding curve operation
+    JSON.stringify({
+      type: 'graduation',
+      phase: 'mint',
+      graduation_tokens: graduationAmount.toString(),
+      graduation_trigger: tx.from
+    }),
+    getEthPriceForTransfer()
+  ])
+  
+  // Record 3: Graduation Summary (contract to LP pool with addLiquidity amounts)
   await pool.query(`
     INSERT INTO public.token_transfers
       (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
@@ -965,7 +989,7 @@ async function createGraduationRecords(
     getEthPriceForTransfer()
   ])
   
-  console.log(`✅ Token ${token.id}: Created 2 graduation records (BUY + GRADUATION)`)
+  console.log(`✅ Token ${token.id}: Created 3 graduation records (BUY + MINT + GRADUATION)`)
 }
 
 /**
