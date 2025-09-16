@@ -1285,12 +1285,38 @@ async function processSyncLog(
     const reserve0 = BigInt(r0.toString())
     const reserve1 = BigInt(r1.toString())
 
-    // Since syncDexState always sets token0 = our token, token1 = WETH, quote_token = WETH
-    // reserve0 = our token reserves, reserve1 = WETH reserves
-    const reserveTokenWei = reserve0  // reserve0 = our token
-    const reserveQuoteWei = reserve1  // reserve1 = WETH
+    // Determine actual token order from the DEX pair contract
+    // Get the actual token0 and token1 from the pair contract
+    const pairContract = new ethers.Contract(dexPool.pair_address, [
+      'function token0() view returns (address)',
+      'function token1() view returns (address)'
+    ], provider)
     
-    console.log(`Token ${token.id}: DEX pool - token0: ${dexPool.token0}, token1: ${dexPool.token1}, quote_token: ${dexPool.quote_token}`)
+    const actualToken0 = await withRateLimit(() => pairContract.token0(), MAX_RETRY_ATTEMPTS, chainId)
+    const actualToken1 = await withRateLimit(() => pairContract.token1(), MAX_RETRY_ATTEMPTS, chainId)
+    
+    // Map reserves to token and ETH based on actual pair order
+    // WETH address is always stored in quote_token field
+    const wethAddress = dexPool.quote_token.toLowerCase()
+    
+    let reserveTokenWei: bigint
+    let reserveQuoteWei: bigint
+    
+    if (actualToken0.toLowerCase() === token.contract_address.toLowerCase()) {
+      // Our token is token0, WETH is token1
+      reserveTokenWei = reserve0
+      reserveQuoteWei = reserve1
+    } else if (actualToken1.toLowerCase() === token.contract_address.toLowerCase()) {
+      // Our token is token1, WETH is token0  
+      reserveTokenWei = reserve1
+      reserveQuoteWei = reserve0
+    } else {
+      console.log(`Token ${token.id}: Warning - token ${token.contract_address} not found in pair ${dexPool.pair_address}`)
+      console.log(`Token ${token.id}: Pair tokens - token0: ${actualToken0}, token1: ${actualToken1}`)
+      return
+    }
+    
+    console.log(`Token ${token.id}: DEX pool - actual token0: ${actualToken0}, actual token1: ${actualToken1}`)
     console.log(`Token ${token.id}: Reserve mapping - reserveTokenWei: ${reserveTokenWei}, reserveQuoteWei: ${reserveQuoteWei}`)
 
     // Calculate price (ETH per token)
