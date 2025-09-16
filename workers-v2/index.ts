@@ -1348,6 +1348,7 @@ async function processSyncLog(
     }
   } catch (error) {
     console.error(`Token ${token.id}: Error processing SYNC log:`, error)
+    throw error // Re-throw to stop processing and prevent cursor advancement
   }
 }
 
