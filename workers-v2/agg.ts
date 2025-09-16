@@ -210,7 +210,7 @@ async function processTokenBalances(
     SELECT token_id, chain_id, block_number, block_time, from_address, to_address, 
            amount_wei, amount_eth_wei, price_eth_per_token, side, src
     FROM public.token_transfers 
-    WHERE token_id = $1 AND chain_id = $2
+    WHERE token_id = $1 AND chain_id = $2 
     ORDER BY block_number ASC, log_index ASC
   `, [token.id, chainId])
   
@@ -228,33 +228,39 @@ async function processTokenBalances(
   `, [token.id, chainId])
   
   // Calculate cumulative balances using SQL aggregation
-  await pool.query(`
-    INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+        await pool.query(`
+          INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
     SELECT 
       $1 as token_id,
       $2 as chain_id,
       holder,
       SUM(balance_change) as balance_wei
     FROM (
-      -- Subtract from 'from' addresses
+      -- Subtract from 'from' addresses (include BC SELL, exclude LOCK operations)
       SELECT 
         LOWER(from_address) as holder,
         -amount_wei::numeric as balance_change
       FROM public.token_transfers 
       WHERE token_id = $1 AND chain_id = $2
-        AND from_address != '0x0000000000000000000000000000000000000000'
         AND amount_wei != '0'
+        AND (
+          from_address != '0x0000000000000000000000000000000000000000'  -- Regular transfers
+          OR to_address = '0x0000000000000000000000000000000000000000'  -- BC SELL (burn to zero address)
+        )
       
       UNION ALL
       
-      -- Add to 'to' addresses  
+      -- Add to 'to' addresses (include BC BUY, exclude LOCK operations)
       SELECT 
         LOWER(to_address) as holder,
         amount_wei::numeric as balance_change
       FROM public.token_transfers 
       WHERE token_id = $1 AND chain_id = $2
-        AND to_address != '0x0000000000000000000000000000000000000000'
         AND amount_wei != '0'
+        AND (
+          to_address != '0x0000000000000000000000000000000000000000'  -- Regular transfers
+          OR (from_address = '0x0000000000000000000000000000000000000000' AND src NOT IN ('BUY&LOCK'))  -- BC BUY + CLAIMAIRDROP, exclude LOCK
+        )
     ) balance_changes
     GROUP BY holder
     HAVING SUM(balance_change) > 0
@@ -393,7 +399,7 @@ async function processTokenStats(
       updated_at = NOW()
     WHERE id = $8 AND chain_id = $9
   `, [
-    current_price, market_cap, fdv, total_supply,
+    current_price, market_cap, fdv, total_supply, // total_supply is already in wei from token_balances
     liquidity_eth, liquidity_usd, volume_24h_eth,
     token.id, chainId
   ])
@@ -421,11 +427,11 @@ async function processToken(token: TokenRow, chainId: number): Promise<void> {
     await processTokenStats(token, chainId)
     
     console.log(`✅ Token ${token.id}: Completed all aggregations`)
-    
-  } catch (error) {
+      
+    } catch (error) {
     console.error(`❌ Token ${token.id}: Error processing:`, error)
-    throw error
-  }
+      throw error
+    }
 }
 
 /**

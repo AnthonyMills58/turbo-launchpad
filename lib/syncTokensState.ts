@@ -134,7 +134,7 @@ export async function syncTokenState(
     // Previously: Fetched holder count during sync
     // Now: Holder count only fetched on manual user request
 
-    const totalSupply = Number(totalSupplyRaw) / 1e18
+    const totalSupply = Number(totalSupplyRaw) - Number(tokenInfoRaw._creatorLockAmount) // Keep in wei for database storage, exclude locked tokens
     const creatorLockAmount = Number(tokenInfoRaw._creatorLockAmount) / 1e18
     const totalRaised = Number(ethers.formatEther(tokenInfoRaw._totalRaised))
     const basePrice = Number(tokenInfoRaw._basePrice)
@@ -172,12 +172,13 @@ export async function syncTokenState(
       marketCap = rows[0]?.market_cap || 0
     } else {
       // For pre-graduation tokens, calculate FDV and market cap
-      fdv = totalSupply * currentPrice
+      // Convert totalSupply from wei to tokens for calculations
+      const totalSupplyTokens = totalSupply / 1e18
+      fdv = totalSupplyTokens * currentPrice
       
       // Simple contract-based calculation (fast)
-      const totalSupplyWei = BigInt(Math.floor(totalSupply * 1e18))
       const creatorLockWei = BigInt(Math.floor(creatorLockAmount * 1e18))
-      const circulatingSupplyWei = totalSupplyWei - creatorLockWei
+      const circulatingSupplyWei = BigInt(Math.floor(totalSupply)) - creatorLockWei
       const circulatingSupply = Number(circulatingSupplyWei) / 1e18
       marketCap = circulatingSupply * currentPrice
     }

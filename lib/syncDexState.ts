@@ -12,7 +12,8 @@ import db from './db'
 async function getCirculatingSupplyFromBlockchain(
   contractAddress: string, 
   chainId: number,
-  provider: ethers.JsonRpcProvider
+  provider: ethers.JsonRpcProvider,
+  lpPoolAddress?: string
 ): Promise<number> {
   const contract = new ethers.Contract(contractAddress, TurboTokenABI.abi, provider)
   
@@ -58,6 +59,12 @@ async function getCirculatingSupplyFromBlockchain(
   const allAddresses = new Set<string>()
   knownAddresses.forEach(({ holder }) => allAddresses.add(holder))
   recentAddresses.forEach(addr => allAddresses.add(addr))
+  
+  // Exclude LP pool address if provided (to avoid chicken-and-egg problem)
+  if (lpPoolAddress) {
+    allAddresses.delete(lpPoolAddress.toLowerCase())
+    console.log(`[getCirculatingSupplyFromBlockchain] Excluding LP pool address: ${lpPoolAddress}`)
+  }
 
   let totalCirculating = 0n
   let checkedAddresses = 0
@@ -242,7 +249,8 @@ export async function syncDexState(
       const fdv = price * Number(ethers.formatUnits(totalSupply, decimals))
       
       // Market Cap: Use actual circulating supply from blockchain (like worker logic)
-      const circulatingSupply = await getCirculatingSupplyFromBlockchain(token.contract_address, chainId, provider)
+      // Pass the LP pool address to exclude it from circulating supply calculation
+      const circulatingSupply = await getCirculatingSupplyFromBlockchain(token.contract_address, chainId, provider, pairAddress)
       const marketCap = price * circulatingSupply
 
       console.log('[syncDexState] FDV (ETH):', fdv)
