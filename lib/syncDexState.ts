@@ -97,6 +97,12 @@ export async function syncDexState(
       return
     }
 
+    // Check if token is already on DEX - if so, quit immediately to avoid overwriting worker calculations
+    if (token.on_dex) {
+      console.log('[syncDexState] Token already on DEX, skipping to preserve worker calculations')
+      return
+    }
+
     const chain = chainsById[chainId]
     if (!chain) {
       console.warn('[syncDexState] Unsupported chain ID:', chainId)

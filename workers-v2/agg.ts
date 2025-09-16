@@ -375,8 +375,8 @@ async function processTokenStats(
   const circulating_supply_tokens = Number(circulating_supply) / 1e18
   const total_supply_tokens = Number(total_supply) / 1e18
   
-  const market_cap = circulating_supply_tokens * current_price * eth_price_usd
-  const fdv = total_supply_tokens * current_price * eth_price_usd
+  const market_cap = circulating_supply_tokens * current_price
+  const fdv = total_supply_tokens * current_price
   
   // Update tokens table
   await pool.query(`

@@ -334,7 +334,7 @@ const TokenCard = memo(({
             {/* Volume Box */}
             <div className="bg-[#23263a] rounded-lg p-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">Vol <sup className="text-[10px]">24h</sup></span>
+                <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
                 <span className="text-sm font-semibold text-white">
                   {token.volume_24h_eth !== undefined && token.volume_24h_eth !== null && token.volume_24h_eth > 0 && usdPrice ? (
                     formatUSDValue(token.volume_24h_eth, usdPrice)
