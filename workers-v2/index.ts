@@ -675,6 +675,7 @@ async function processTransferLog(
         await processRegularTransfer(token, dexPool, log, tx, fromAddress, toAddress, amount, blockTime, chainId, provider)
   } catch (error) {
     console.error(`❌ Failed to process transfer log ${log.transactionHash}:`, error)
+    throw error // Re-throw to stop processing and prevent cursor advancement
   }
 }
 
@@ -1257,6 +1258,7 @@ async function processDexLog(
     }
   } catch (error) {
     console.error(`Token ${token.id}: Error processing DEX log:`, error)
+    throw error // Re-throw to stop processing and prevent cursor advancement
   }
 }
 
