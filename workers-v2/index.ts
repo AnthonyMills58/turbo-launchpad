@@ -192,6 +192,31 @@ async function main(): Promise<boolean> {
       }
     }
     
+    // Run aggregations after all data processing is complete
+    console.log('\n📊 Running aggregations...')
+    try {
+      const { spawn } = await import('child_process')
+      const aggProcess = spawn('npx', ['ts-node', 'workers-v2/agg.ts'], {
+        stdio: 'inherit',
+        cwd: process.cwd()
+      })
+      
+      await new Promise<void>((resolve, reject) => {
+        aggProcess.on('close', (code: number | null) => {
+          if (code === 0) {
+            console.log('✅ Aggregations completed successfully!')
+            resolve()
+          } else {
+            console.error(`❌ Aggregations failed with code ${code}`)
+            reject(new Error(`Aggregations failed with code ${code}`))
+          }
+        })
+      })
+    } catch (aggError) {
+      console.error('❌ Failed to run aggregations:', aggError)
+      // Don't fail the entire worker if aggregations fail
+    }
+    
     console.log('\n✅ Worker V2 cycle completed successfully!')
     return true // Indicate successful completion
   } catch (error) {
