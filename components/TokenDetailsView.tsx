@@ -264,7 +264,7 @@ export default function TokenDetailsView({
     }
     
     checkAndSyncDex()
-  }, [contract_address, chainId, onRefresh, token.id])
+  }, [contract_address, chainId, onRefresh, token])
 
   // Cleanup effect to track component unmount
   useEffect(() => {

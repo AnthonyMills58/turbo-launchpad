@@ -26,6 +26,12 @@ type SyncFields = {
   // NEW: lifetime lock model
   creator_locking_closed: boolean
   creator_lock_cumulative: number | null
+
+  // Aggregation fields (from worker calculations)
+  holder_count: number
+  volume_24h_eth: number
+  liquidity_eth: number
+  liquidity_usd: number
 }
 
 // RPCs by chain
@@ -176,6 +182,16 @@ export async function syncTokenState(
       marketCap = circulatingSupply * currentPrice
     }
 
+    // Fetch additional fields from database (calculated by aggregation worker)
+    const { rows: aggRows } = await db.query(
+      'SELECT holder_count, volume_24h_eth, liquidity_eth, liquidity_usd FROM tokens WHERE id = $1',
+      [tokenId]
+    )
+    const holderCount = aggRows[0]?.holder_count || 0
+    const volume24hEth = aggRows[0]?.volume_24h_eth || 0
+    const liquidityEth = aggRows[0]?.liquidity_eth || 0
+    const liquidityUsd = aggRows[0]?.liquidity_usd || 0
+
     // Airdrops
     const airdropAllocations: Record<string, { amount: number; claimed: boolean }> = {}
     if (airdropFinalized) {
@@ -221,6 +237,12 @@ export async function syncTokenState(
 
       creator_locking_closed: creatorLockingClosed,
       creator_lock_cumulative: creatorLockCumulative,
+
+      // Aggregation fields (from worker calculations)
+      holder_count: holderCount,
+      volume_24h_eth: volume24hEth,
+      liquidity_eth: liquidityEth,
+      liquidity_usd: liquidityUsd,
     }
 
     await db.query(

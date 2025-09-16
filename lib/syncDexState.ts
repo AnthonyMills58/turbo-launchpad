@@ -22,14 +22,6 @@ async function getCirculatingSupplyFromBlockchain(
      FROM public.token_balances 
      WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)
      UNION
-     SELECT DISTINCT LOWER(trader) as holder
-     FROM public.token_trades 
-     WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)
-     UNION
-     SELECT DISTINCT LOWER(from_address) as holder
-     FROM public.token_transfers 
-     WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)
-     UNION
      SELECT DISTINCT LOWER(to_address) as holder
      FROM public.token_transfers 
      WHERE token_id = (SELECT id FROM public.tokens WHERE contract_address = $1 AND chain_id = $2)`,
