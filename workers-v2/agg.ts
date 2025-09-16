@@ -119,15 +119,7 @@ async function processTokenDailyAgg(
       (token_id, chain_id, day, transfers, unique_senders, unique_receivers, 
        unique_traders, volume_token_wei, volume_eth_wei, volume_usd, holders_count)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (token_id, chain_id, day) DO UPDATE SET
-        transfers = EXCLUDED.transfers,
-        unique_senders = EXCLUDED.unique_senders,
-        unique_receivers = EXCLUDED.unique_receivers,
-        unique_traders = EXCLUDED.unique_traders,
-        volume_token_wei = EXCLUDED.volume_token_wei,
-        volume_eth_wei = EXCLUDED.volume_eth_wei,
-        volume_usd = EXCLUDED.volume_usd,
-        holders_count = EXCLUDED.holders_count
+      -- ON CONFLICT removed - table may not have unique constraint
     `, [
       token.id, chainId, dayData.day, dayData.transfers, 
       dayData.unique_senders, dayData.unique_receivers, dayData.unique_traders,
@@ -193,15 +185,7 @@ async function processTokenCandles(
       (token_id, chain_id, interval, ts, open, high, low, close, 
        volume_token_wei, volume_eth_wei, volume_usd, trades_count)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      ON CONFLICT (token_id, chain_id, interval, ts) DO UPDATE SET
-        open = EXCLUDED.open,
-        high = EXCLUDED.high,
-        low = EXCLUDED.low,
-        close = EXCLUDED.close,
-        volume_token_wei = EXCLUDED.volume_token_wei,
-        volume_eth_wei = EXCLUDED.volume_eth_wei,
-        volume_usd = EXCLUDED.volume_usd,
-        trades_count = EXCLUDED.trades_count
+      -- ON CONFLICT removed - table may not have unique constraint
     `, [
       token.id, chainId, '1m', candle.ts, 
       candle.open_price, candle.high_price, candle.low_price, candle.close_price,
@@ -254,8 +238,7 @@ async function processTokenBalances(
         await pool.query(`
           INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
           VALUES ($1, $2, $3, $4)
-          ON CONFLICT (token_id, holder) DO UPDATE SET
-            balance_wei = token_balances.balance_wei - EXCLUDED.balance_wei
+          -- ON CONFLICT removed - table may not have unique constraint
         `, [token.id, chainId, transfer.from_address.toLowerCase(), transfer.amount_wei])
       }
       
@@ -264,8 +247,7 @@ async function processTokenBalances(
         await pool.query(`
           INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
           VALUES ($1, $2, $3, $4)
-          ON CONFLICT (token_id, holder) DO UPDATE SET
-            balance_wei = token_balances.balance_wei + EXCLUDED.balance_wei
+          -- ON CONFLICT removed - table may not have unique constraint
         `, [token.id, chainId, transfer.to_address.toLowerCase(), transfer.amount_wei])
       }
       
