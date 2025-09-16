@@ -306,7 +306,10 @@ async function processTokenStats(
     SELECT 
       ps.price_eth_per_token,
       ps.reserve0_wei,
-      ps.reserve1_wei
+      ps.reserve1_wei,
+      dp.quote_token,
+      dp.token0,
+      dp.token1
     FROM public.pair_snapshots ps
     JOIN public.dex_pools dp ON ps.pair_address = dp.pair_address
     WHERE dp.token_id = $1 AND dp.chain_id = $2
@@ -321,9 +324,12 @@ async function processTokenStats(
     const price = priceData[0]
     current_price = Number(price.price_eth_per_token) || 0
     
-    // Since pair_snapshots data is already correctly mapped (reserve0_wei = token, reserve1_wei = WETH)
-    // we can use reserve1_wei directly for liquidity calculation
-    liquidity_eth = Number(price.reserve1_wei) / 1e18
+    // Calculate liquidity (quote token reserves)
+    if (price.quote_token.toLowerCase() === price.token0.toLowerCase()) {
+      liquidity_eth = Number(price.reserve0_wei) / 1e18
+    } else {
+      liquidity_eth = Number(price.reserve1_wei) / 1e18
+    }
   }
   
   // Get current ETH price for USD calculations
