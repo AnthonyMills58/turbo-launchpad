@@ -503,7 +503,7 @@ async function processChain(chainId: number): Promise<void> {
 /**
  * Main function
  */
-async function main(): Promise<boolean> {
+export async function main(): Promise<boolean> {
   console.log('🚀 Starting Aggregation Worker...')
   console.log('📋 Version: [400] - Token balances processing')
   
