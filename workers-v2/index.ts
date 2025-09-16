@@ -497,10 +497,9 @@ async function processTransferChunk(
     }
     
     // Check if any transaction has graduation pattern (3+ transfer logs)
-    for (const [txHash, logs] of logsByTx) {
+    for (const [, logs] of logsByTx) {
       if (logs.length >= 3) {
         // This might be a graduation transaction - treat as graduation block range
-        // console.log(`Token ${token.id}: Detected potential graduation block range (${logs.length} logs in tx ${txHash})`)
         isGraduationBlockRange = true
         break
       }

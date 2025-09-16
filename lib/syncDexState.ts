@@ -142,7 +142,7 @@ export async function syncDexState(
       return
     }
 
-    let isNowOnDex = token.on_dex
+    let isNowOnDex: boolean = token.on_dex || false
 
     // === Always ensure dex_pools record exists when DEX pair is found ===
     try {
