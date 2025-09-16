@@ -227,34 +227,38 @@ async function processTokenBalances(
     WHERE token_id = $1 AND chain_id = $2
   `, [token.id, chainId])
   
-  // Process each transfer to update balances
-  for (const transfer of transfers) {
-    try {
-      // Skip zero transfers
-      if (transfer.amount_wei === '0') continue
+  // Calculate cumulative balances using SQL aggregation
+  await pool.query(`
+    INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
+    SELECT 
+      $1 as token_id,
+      $2 as chain_id,
+      holder,
+      SUM(balance_change) as balance_wei
+    FROM (
+      -- Subtract from 'from' addresses
+      SELECT 
+        LOWER(from_address) as holder,
+        -amount_wei::numeric as balance_change
+      FROM public.token_transfers 
+      WHERE token_id = $1 AND chain_id = $2
+        AND from_address != '0x0000000000000000000000000000000000000000'
+        AND amount_wei != '0'
       
-      // Update from address balance (subtract)
-      if (transfer.from_address !== '0x0000000000000000000000000000000000000000') {
-        await pool.query(`
-          INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-          VALUES ($1, $2, $3, $4)
-          -- ON CONFLICT removed - table may not have unique constraint
-        `, [token.id, chainId, transfer.from_address.toLowerCase(), transfer.amount_wei])
-      }
+      UNION ALL
       
-      // Update to address balance (add)
-      if (transfer.to_address !== '0x0000000000000000000000000000000000000000') {
-        await pool.query(`
-          INSERT INTO public.token_balances (token_id, chain_id, holder, balance_wei)
-          VALUES ($1, $2, $3, $4)
-          -- ON CONFLICT removed - table may not have unique constraint
-        `, [token.id, chainId, transfer.to_address.toLowerCase(), transfer.amount_wei])
-      }
-      
-    } catch (error) {
-      console.error(`Token ${token.id}: Error processing transfer:`, error)
-    }
-  }
+      -- Add to 'to' addresses  
+      SELECT 
+        LOWER(to_address) as holder,
+        amount_wei::numeric as balance_change
+      FROM public.token_transfers 
+      WHERE token_id = $1 AND chain_id = $2
+        AND to_address != '0x0000000000000000000000000000000000000000'
+        AND amount_wei != '0'
+    ) balance_changes
+    GROUP BY holder
+    HAVING SUM(balance_change) > 0
+  `, [token.id, chainId])
   
   // Clean up zero balances
   await pool.query(`
@@ -309,7 +313,7 @@ async function processTokenStats(
     FROM public.pair_snapshots ps
     JOIN public.dex_pools dp ON ps.pair_address = dp.pair_address
     WHERE dp.token_id = $1 AND dp.chain_id = $2
-    ORDER BY ps.block_number DESC, ps.log_index DESC
+    ORDER BY ps.block_number DESC
     LIMIT 1
   `, [token.id, chainId])
   
