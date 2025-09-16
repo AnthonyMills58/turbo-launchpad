@@ -941,7 +941,7 @@ async function createGraduationRecords(
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
   `, [
     token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
-    graduationLog.index + 1, // Use artificial index to avoid constraint violation
+    userBuyLog.index - 1, // Use artificial index to ensure MINT comes before BUY
     '0x0000000000000000000000000000000000000000', // From zero address
     token.contract_address, // To contract
     graduationAmount.toString(), // amount_wei (graduation amount)
