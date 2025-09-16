@@ -335,7 +335,7 @@ async function processTokenStats(
   // Get current ETH price for USD calculations
   const { rows: ethPriceData } = await pool.query(`
     SELECT price_usd FROM public.eth_price_cache 
-    ORDER BY id DESC LIMIT 1
+    ORDER BY fetched_at DESC LIMIT 1
   `)
   const eth_price_usd = ethPriceData.length > 0 ? Number(ethPriceData[0].price_usd) : 0
   
