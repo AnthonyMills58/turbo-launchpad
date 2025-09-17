@@ -588,8 +588,8 @@ export default function TokenDetailsView({
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">Holders</span>
                         <span className="text-sm font-semibold text-white">
-                          {token.holders_count !== undefined && token.holders_count !== null
-                            ? formatLargeNumber(token.holders_count)
+                          {token.holder_count !== undefined && token.holder_count !== null
+                            ? formatLargeNumber(token.holder_count)
                             : '—'}
                         </span>
                       </div>
