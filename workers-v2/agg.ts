@@ -79,7 +79,7 @@ async function processTokenDailyAgg(
       END) as unique_traders,
       SUM(amount_wei::numeric) as volume_token_wei,
       SUM(COALESCE(amount_eth_wei::numeric, 0)) as volume_eth_wei,
-      SUM(COALESCE(amount_eth_wei::numeric, 0) * COALESCE(eth_price_usd, 0)) as volume_usd
+      SUM((COALESCE(amount_eth_wei::numeric, 0) / 1e18) * COALESCE(eth_price_usd, 0)) as volume_usd
     FROM public.token_transfers 
     WHERE token_id = $1 AND chain_id = $2
       AND block_time >= $3
