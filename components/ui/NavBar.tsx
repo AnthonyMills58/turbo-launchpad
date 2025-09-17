@@ -65,7 +65,7 @@ export default function NavBar() {
         onClick={() => router.push('/')}
         className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
-        <AiFillHome className="text-xl" />
+        <span className="text-2xl">🚀</span>
         <span>Turbo Launch</span>
       </button>
       <button

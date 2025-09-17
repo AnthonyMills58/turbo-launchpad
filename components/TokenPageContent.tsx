@@ -163,10 +163,10 @@ const TokenCard = memo(({
           onSelect(token.id.toString())
         }
       }}
-      className={`group cursor-pointer rounded-xl p-2 border transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
+      className={`group cursor-pointer rounded-2xl p-2 border transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
         isSelected
-          ? 'bg-[#23263a] ring-2 ring-purple-400 border-purple-500'
-          : 'bg-[#1b1e2b] border-[#2a2d3a] hover:bg-[#2a2e4a] hover:border-[#3a3d4a]'
+          ? 'bg-gray-800/40 ring-2 ring-purple-400 border-purple-500'
+          : 'bg-gray-800/40 border-[#2a2d3a] hover:bg-gray-700/40 hover:border-[#3a3d4a]'
       }`}
     >
       {/* Three Section Layout */}
@@ -265,10 +265,10 @@ const TokenCard = memo(({
         {/* First row: Price, FDV, and Holders */}
         <div className="grid grid-cols-3 gap-2 mb-2">
           {/* Price */}
-          <div className="bg-[#23263a] rounded-lg p-2">
+          <div className="bg-transparent border border-gray-600 rounded-xl p-2">
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Price</span>
-              <div className="text-sm font-semibold text-white text-right">
+              <div className="text-sm text-gray-400 text-right">
                 <div>
                   {token.current_price !== undefined && token.current_price !== null && usdPrice ? (
                     formatUSDValue(getNumericPrice(), usdPrice)
@@ -281,10 +281,10 @@ const TokenCard = memo(({
           </div>
           
           {/* FDV/Cap */}
-          <div className="bg-[#23263a] rounded-lg p-2">
+          <div className="bg-transparent border border-gray-600 rounded-xl p-2">
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">{getFDVLabel()}</span>
-              <div className="text-sm font-semibold text-white text-right">
+              <div className="text-sm text-gray-400 text-right">
                 <div>
                   {usdPrice && getFDV() !== null ? (
                     formatUSDValue(getFDV()!, usdPrice)
@@ -298,7 +298,7 @@ const TokenCard = memo(({
 
           {/* Holders */}
           <div 
-            className="bg-[#23263a] rounded-lg p-2 cursor-pointer hover:bg-[#2a2e4a] transition-colors"
+            className="bg-transparent border border-gray-600 rounded-xl p-2 cursor-pointer hover:bg-transparent transition-colors"
             onClick={(e) => {
               e.stopPropagation()
               if (token.contract_address && token.chain_id) {
@@ -312,7 +312,7 @@ const TokenCard = memo(({
                 <Users size={12} className="text-gray-400" />
                 <span className="text-xs text-gray-400">Holders</span>
               </div>
-              <div className="text-sm font-semibold text-white text-right">
+              <div className="text-sm text-gray-400 text-right">
                 <div>
                   {updatingHolders.has(token.id) ? (
                     <span className="text-gray-400">...</span>
@@ -332,10 +332,10 @@ const TokenCard = memo(({
           /* On DEX: Volume + Liquidity in single row */
           <div className="grid grid-cols-2 gap-2">
             {/* Volume Box */}
-            <div className="bg-[#23263a] rounded-lg p-3">
+            <div className="bg-transparent border border-gray-600 rounded-xl p-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
-                <span className="text-sm font-semibold text-white">
+                <span className="text-sm text-gray-400">
                   {token.volume_24h_eth !== undefined && token.volume_24h_eth !== null && token.volume_24h_eth > 0 && usdPrice ? (
                     formatUSDValue(token.volume_24h_eth, usdPrice)
                   ) : (
@@ -346,10 +346,10 @@ const TokenCard = memo(({
             </div>
             
             {/* Liquidity Box */}
-            <div className="bg-[#23263a] rounded-lg p-3">
+            <div className="bg-transparent border border-gray-600 rounded-xl p-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Liquidity</span>
-                <span className="text-sm font-semibold text-white">
+                <span className="text-sm text-gray-400">
                   {token.liquidity_eth !== undefined && token.liquidity_eth !== null && token.liquidity_eth > 0 && usdPrice ? (
                     formatUSDValue(token.liquidity_eth, usdPrice)
                   ) : (
@@ -367,7 +367,7 @@ const TokenCard = memo(({
           </div>
         ) : (
           /* In Progress: Flaunch-style progress bar */
-          <div className="bg-[#23263a] rounded-lg p-3">
+          <div className="bg-transparent border border-gray-600 rounded-xl p-3">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 {/* Rocket Icon */}
@@ -588,7 +588,7 @@ export default function TokenPageContent() {
 
   // Skeleton loading component
   const SkeletonCard = () => (
-    <div className="bg-[#1b1e2b] border border-[#2a2d3a] rounded-xl p-2 animate-pulse">
+    <div className="bg-gray-800/40 border border-[#2a2d3a] rounded-2xl p-2 animate-pulse">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 flex-1">
           <div className="w-16 h-16 bg-gray-700 rounded-lg"></div>
@@ -634,7 +634,7 @@ export default function TokenPageContent() {
 
   return (
     <div className="min-h-screen bg-transparent p-4 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-9">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (
