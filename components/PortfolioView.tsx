@@ -65,7 +65,7 @@ export default function PortfolioView() {
 
   return (
     <div className="w-full flex justify-center">
-      <div className="max-w-[580px] w-full bg-[#151827] p-6 rounded-lg shadow-lg">
+      <div className="max-w-[580px] w-full bg-transparent p-6 rounded-lg shadow-lg">
         <h1 className="text-2xl mb-6 text-gray-300 text-center">Your Portfolio</h1>
 
         {!isConnected ? (

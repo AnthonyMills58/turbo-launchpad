@@ -446,7 +446,7 @@ export default function CreateTokenForm() {
                 src={logoPreview}
                 alt="Logo Preview"
                 baseWidth={80}
-                className="rounded-lg border border-gray-600 bg-[#1b1e2b]"
+                className="rounded-lg border border-gray-600 bg-transparent"
               />
             )}
           </div>
@@ -474,7 +474,7 @@ export default function CreateTokenForm() {
             </div>
 
             {form.image && imageValid && (
-              <div className="w-20 h-20 rounded-md border border-gray-600 bg-[#1b1e2b] flex items-center justify-center overflow-hidden">
+              <div className="w-20 h-20 rounded-md border border-gray-600 bg-transparent flex items-center justify-center overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={form.image}

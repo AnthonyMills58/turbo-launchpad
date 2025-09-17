@@ -8,10 +8,12 @@ export default function CreateTokenPage() {
   useNetworkAlert()
 
   return (
-    <div className="min-h-screen bg-[#0d0f1a] text-white flex justify-center items-start pt-8 px-2">
-      <div className="w-full max-w-xl bg-[#151827] p-4 rounded-lg shadow-lg">
-        <h1 className="text-2xl font-bold mb-4 text-center">Create Your Token</h1>
-        <CreateTokenForm />
+    <div className="min-h-screen bg-gradient-to-br from-green-800/60 via-black to-purple-800/50 shadow-2xl shadow-green-500/60">
+      <div className="min-h-screen bg-transparent text-white flex justify-center items-start pt-8 px-2">
+        <div className="w-full max-w-xl bg-transparent p-4 rounded-lg shadow-lg">
+          <h1 className="text-2xl font-bold mb-4 text-center">Create Your Token</h1>
+          <CreateTokenForm />
+        </div>
       </div>
     </div>
   )
