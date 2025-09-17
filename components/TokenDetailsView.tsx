@@ -4,12 +4,12 @@ import { Token } from '@/types/token'
 import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
-import CreatorBuySection from './CreatorBuySection' 
+import CreatorBuySection from './CreatorBuySection'
 import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
-import { Copy} from 'lucide-react'
+import { Copy } from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 import PublicSellSection from './PublicSellSection'
 import { useSync } from '@/lib/SyncContext'
@@ -54,7 +54,6 @@ export default function TokenDetailsView({
 
   const isCreator =
     !!address && address.toLowerCase() === token.creator_wallet.toLowerCase()
-  const isGraduated = token.is_graduated
   const contract_address = token.contract_address
 
   const chainMap = {
@@ -67,10 +66,10 @@ export default function TokenDetailsView({
   const explorerBaseUrl = chain?.blockExplorers?.default.url ?? ''
   const explorerLink = `${explorerBaseUrl}/address/${token.contract_address}`
 
-  // ======== unified graduation flag ========
-  const graduated = token.on_dex || isGraduated
+  // unified graduation flag
+  const graduated = token.on_dex || token.is_graduated
 
-  // ======== compute unlock time and canUnlock ========
+  // compute unlock time and canUnlock
   const unlockTime: number | null = useMemo(() => {
     if (token.creator_unlock_time && token.creator_unlock_time > 0) {
       return token.creator_unlock_time
@@ -106,9 +105,7 @@ export default function TokenDetailsView({
   type AirdropAllocations =
     | string[]
     | Record<string, string | number>
-
   const allocations = token.airdrop_allocations as AirdropAllocations | undefined
-
   const hasAirdrops =
     (Array.isArray(allocations) && allocations.length > 0) ||
     (!!allocations &&
@@ -153,8 +150,6 @@ export default function TokenDetailsView({
   }
 
   const [userTokenBalance, setUserTokenBalance] = useState<number | null>(null)
-  const [userEthBalance, setUserEthBalance] = useState<number | null>(null)
-  console.log(userEthBalance)
 
   useEffect(() => {
     const fetchTokenBalance = async () => {
@@ -162,8 +157,6 @@ export default function TokenDetailsView({
         if (!window.ethereum || !token?.contract_address) return
         const provider = new ethers.BrowserProvider(window.ethereum)
         const signer = await provider.getSigner()
-        const eth = await provider.getBalance(await signer.getAddress())
-        setUserEthBalance(parseFloat(ethers.formatEther(eth)))
         const contract = new ethers.Contract(
           token.contract_address,
           TurboTokenABI.abi,
@@ -227,8 +220,7 @@ export default function TokenDetailsView({
     }
   }, [])
 
-  
-
+  // ===== Helpers to mirror card formatting =====
   const getNumericPrice = (): number => {
     if (token.current_price !== undefined && token.current_price !== null) {
       return Number(token.current_price)
@@ -246,8 +238,7 @@ export default function TokenDetailsView({
   }
 
   const getFDVLabel = (): string => {
-    if (token.on_dex) return 'FDV'
-    return 'Cap'
+    return token.on_dex ? 'FDV' : 'Cap'
   }
 
   const formatUSDValue = (ethValue: number, usdPriceLocal: number | null) => {
@@ -304,16 +295,18 @@ export default function TokenDetailsView({
   }
 
   const createdTime = token.created_at ? formatRelativeTime(token.created_at) : '—'
-  // ========================================================================
 
+  // ========= JSX =========
   try {
+
+    
     return (
-      <div className="w-full p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
+      <div className="w-full p-0 bg-[#1b1e2b] text-white">
         {/* ======= Responsive layout: Stats (left, flex-1) + Actions (right, fixed) ======= */}
-        <div className="flex flex-col lg:flex-row items-start gap-6">
+        <div className="flex flex-col lg:flex-row items-start gap-0">
           {/* ================= LEFT: STATS CARD ================= */}
           <div className="group rounded-xl p-3 border bg-[#1b1e2b] border-[#2a2d3a] flex-1">
-            {/* Header row: Avatar | token + creator + tokeninfo inline (left-aligned) | progress below */}
+            {/* Header row: Avatar | token + creator | token-info (moves below on narrow) | progress below */}
             <div className="mb-4">
               <div className="flex items-start gap-3">
                 {/* Avatar */}
@@ -341,14 +334,15 @@ export default function TokenDetailsView({
                     </div>
                   )}
                 </div>
-    
-                {/* Right side: token + creator + tokeninfo inline, all left-aligned */}
+
+                {/* Right side: token + creator + tokeninfo layout */}
                 <div className="flex flex-col w-full">
+                  {/* Row that can wrap: token + creator + tokeninfo */}
                   <div className="flex items-start gap-4 flex-wrap">
-                    {/* Token section (LEFT, flush with avatar) */}
+                    {/* Token section */}
                     <div className="flex flex-col items-start text-left" title={token.name}>
                       <h3 className="font-semibold text-white truncate w-full">{token.symbol}</h3>
-    
+
                       {/* Contract + copy */}
                       <div className="flex items-center gap-2 text-xs text-gray-400">
                         <span className="font-mono">
@@ -366,8 +360,8 @@ export default function TokenDetailsView({
                         </button>
                         {copied && <span className="text-green-400 text-xs">Copied!</span>}
                       </div>
-    
-                      {/* Links */}
+
+                      {/* On DEX + Explorer links */}
                       {token.on_dex && token.dex_listing_url && (
                         <a
                           href={token.dex_listing_url}
@@ -391,8 +385,8 @@ export default function TokenDetailsView({
                         View on Explorer
                       </a>
                     </div>
-    
-                    {/* Creator section (immediately after token, also left-aligned) */}
+
+                    {/* Creator section */}
                     <div className="flex justify-start">
                       <UserProfile
                         wallet={token.creator_wallet}
@@ -405,12 +399,52 @@ export default function TokenDetailsView({
                         centerAlign={false}
                       />
                     </div>
-    
-                    {/* NEW: Token info section (name + 3-line clamped description) */}
-                    <div className="flex flex-col items-start text-left max-w-xl min-w-0">
-                      <div className="text-sm">
-                        <span className="text-gray-400">Token name:</span>{' '}
-                        <span className="text-white font-medium">{token.name || '—'}</span>
+
+                    {/* Token info (name + moved links) — full width below on small */}
+                    <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto">
+                      <div className="text-sm flex items-center gap-2 min-w-0">
+                        <span className="text-gray-400">Token name:</span>
+                        <span className="text-white font-medium truncate">{token.name || '—'}</span>
+
+                        {/* moved links from right panel */}
+                        <span className="flex items-center gap-3 ml-2 text-blue-400 font-semibold">
+                          {token.website && (
+                            <a
+                              href={/^https?:\/\//i.test(token.website) ? token.website : `https://${token.website}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 hover:text-blue-300"
+                              title="Website"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              🌐 <span className="underline">Website</span>
+                            </a>
+                          )}
+                          {token.twitter && (
+                            <a
+                              href={/^https?:\/\//i.test(token.twitter) ? token.twitter : `https://${token.twitter}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 hover:text-blue-300"
+                              title="Social"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              🐦 <span className="underline">Social</span>
+                            </a>
+                          )}
+                          {token.telegram && (
+                            <a
+                              href={/^https?:\/\//i.test(token.telegram) ? token.telegram : `https://${token.telegram}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 hover:text-blue-300"
+                              title="Community"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              💬 <span className="underline">Community</span>
+                            </a>
+                          )}
+                        </span>
                       </div>
 
                       {token.description && (
@@ -420,8 +454,8 @@ export default function TokenDetailsView({
                             display: '-webkit-box',
                             WebkitLineClamp: 3,
                             WebkitBoxOrient: 'vertical',
-                            overflowWrap: 'anywhere',   // fallback for very long unbroken strings
-                            wordBreak: 'break-word',    // ensure words break within the box
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
                           }}
                           title={token.description}
                         >
@@ -430,8 +464,8 @@ export default function TokenDetailsView({
                       )}
                     </div>
                   </div>
-    
-                  {/* Progress bar spanning the whole right column (below token + creator + tokeninfo) */}
+
+                  {/* Progress bar spanning below token + creator + tokeninfo */}
                   {!token.on_dex && (
                     <div className="mt-2">
                       <div className="flex items-center justify-between mb-1">
@@ -448,7 +482,6 @@ export default function TokenDetailsView({
                         </span>
                       </div>
                       <div className="relative h-3 rounded-full overflow-hidden border border-[#2a2d3a]">
-                        {/* Animated stripes */}
                         <div
                           className="absolute inset-0"
                           style={{
@@ -463,7 +496,6 @@ export default function TokenDetailsView({
                             animation: 'moveStripes 1.28s linear infinite',
                           }}
                         />
-                        {/* Fill */}
                         <div
                           className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
                           style={{
@@ -484,7 +516,7 @@ export default function TokenDetailsView({
                 </div>
               </div>
             </div>
-    
+
             {/* ========= ONE-LINE (wrap) STATS — border-only pills ========= */}
             <div className="flex flex-wrap gap-2 mb-3">
               {/* Price */}
@@ -498,7 +530,7 @@ export default function TokenDetailsView({
                   </span>
                 </div>
               </div>
-    
+
               {/* FDV / Cap */}
               <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                 <div className="flex items-center justify-between">
@@ -508,7 +540,7 @@ export default function TokenDetailsView({
                   </span>
                 </div>
               </div>
-    
+
               {/* Holders */}
               <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                 <div className="flex items-center justify-between">
@@ -520,7 +552,7 @@ export default function TokenDetailsView({
                   </span>
                 </div>
               </div>
-    
+
               {/* Vol24h */}
               <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                 <div className="flex items-center justify-between">
@@ -537,7 +569,7 @@ export default function TokenDetailsView({
                   </span>
                 </div>
               </div>
-    
+
               {/* Liquidity */}
               <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                 <div className="flex items-center justify-between">
@@ -552,7 +584,7 @@ export default function TokenDetailsView({
                   </span>
                 </div>
               </div>
-    
+
               {/* Supply */}
               <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                 <div className="flex items-center justify-between">
@@ -565,7 +597,7 @@ export default function TokenDetailsView({
                 </div>
               </div>
             </div>
-    
+
             {/* ===== Edit Token Info — inline inside stats (creator only) ===== */}
             {isCreator && (
               <div className="mt-2">
@@ -575,7 +607,7 @@ export default function TokenDetailsView({
                 >
                   {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
                 </button>
-    
+
                 {isEditing && (
                   <div className="mt-3 border border-[#2a2d3a] rounded-lg p-3 bg-[#1f2332]">
                     <EditTokenForm
@@ -591,46 +623,9 @@ export default function TokenDetailsView({
               </div>
             )}
           </div>
-    
+
           {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
           <div className="w-full max-w-sm space-y-4">
-            {(token.website || token.twitter || token.telegram) && (
-              <div className="p-3 rounded-lg border border-[#2a2d3a] bg-[#1f2332] text-sm">
-                <div className="flex flex-wrap gap-4 text-blue-400">
-                  {token.website && (
-                    <a
-                      href={token.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline flex items-center gap-1"
-                    >
-                      🌐 <span className="underline">Website</span>
-                    </a>
-                  )}
-                  {token.twitter && (
-                    <a
-                      href={token.twitter}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline flex items-center gap-1"
-                    >
-                      🐦 <span className="underline">Social</span>
-                    </a>
-                  )}
-                  {token.telegram && (
-                    <a
-                      href={token.telegram}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline flex items-center gap-1"
-                    >
-                      💬 <span className="underline">Community</span>
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-    
             {/* CREATOR / PUBLIC ACTIONS */}
             {isCreator ? (
               <>
@@ -649,17 +644,17 @@ export default function TokenDetailsView({
                     </button>
                   </div>
                 )}
-    
+
                 {!graduated && canCreatorBuyLock && (
                   <CreatorBuySection token={token} onSuccess={onRefresh} />
                 )}
-    
+
                 {!graduated && <AirdropForm token={token} onSuccess={onRefresh} />}
-    
+
                 {!graduated && userTokenBalance !== null && userTokenBalance > 0 && (
                   <PublicSellSection token={token} onSuccess={onRefresh} />
                 )}
-    
+
                 {graduated && hasAirdrops && <AirdropForm token={token} onSuccess={onRefresh} />}
               </>
             ) : (
@@ -680,18 +675,9 @@ export default function TokenDetailsView({
         </div>
       </div>
     )
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
   } catch (error) {
     console.error('TokenDetailsView render error:', error)
     return (
@@ -710,6 +696,7 @@ export default function TokenDetailsView({
     )
   }
 }
+
 
 
 
