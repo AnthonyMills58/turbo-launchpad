@@ -266,7 +266,7 @@ export default function ProfileForm() {
 
   if (!address) {
     return (
-      <div className="bg-[#1e1f25] p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
+      <div className="bg-transparent p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
         <p className="text-center text-lg text-white">
           🔒 Please connect your wallet to edit your profile.
         </p>
@@ -275,7 +275,7 @@ export default function ProfileForm() {
   }
 
   return (
-    <div className="bg-[#1e1f25] p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
+    <div className="bg-transparent p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
       <h2 className="text-lg font-bold text-white mb-4">Your Profile</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -305,7 +305,7 @@ export default function ProfileForm() {
           
           {/* Current Avatar Display */}
           {currentAvatarUrl && !selectedFile && (
-            <div className="mb-3 p-3 bg-[#2a2d3a] rounded-md border border-[#3a3d4a]">
+            <div className="mb-3 p-3 bg-transparent rounded-md border border-[#3a3d4a]">
               <div className="flex items-center justify-between">
                 <div className="text-xs text-gray-300">
                   <p>Avatar is currently set</p>
@@ -396,18 +396,18 @@ export default function ProfileForm() {
                 src={avatarPreview}
                 alt="Avatar Preview"
                 baseWidth={96}
-                className="rounded-lg border border-gray-600 bg-[#1b1e2b]"
+                className="rounded-lg border border-gray-600 bg-transparent"
               />
             ) : currentAvatarUrl ? (
               <LogoContainer
                 src={currentAvatarUrl}
                 alt="Current Avatar"
                 baseWidth={96}
-                className="rounded-lg border border-gray-600 bg-[#1b1e2b]"
+                className="rounded-lg border border-gray-600 bg-transparent"
                 onError={() => setCurrentAvatarUrl(null)}
               />
             ) : (
-              <div className="w-24 h-16 rounded-lg border border-gray-600 bg-[#1b1e2b] flex items-center justify-center text-gray-400 text-xs">
+              <div className="w-24 h-16 rounded-lg border border-gray-600 bg-transparent flex items-center justify-center text-gray-400 text-xs">
                 No avatar
               </div>
             )}
