@@ -301,11 +301,51 @@ export default function TokenDetailsView({
 
     
     return (
-      <div className="w-full p-0 bg-[#1b1e2b] text-white">
+      <div className="w-full p-0 bg-transparent text-white">
         {/* ======= Responsive layout: Stats (left, flex-1) + Actions (right, fixed) ======= */}
         <div className="flex flex-col lg:flex-row items-start gap-0">
           {/* ================= LEFT: STATS CARD ================= */}
-          <div className="group rounded-xl p-3 border bg-[#1b1e2b] border-[#2a2d3a] flex-1">
+          <div className="group rounded-xl p-3 border bg-transparent border-gray-600 flex-1 relative">
+            {/* Social media icons - responsive positioning */}
+            <div className="absolute top-3 right-3 hidden lg:flex items-center gap-1 text-blue-400">
+              {token.website && (
+                <a
+                  href={/^https?:\/\//i.test(token.website) ? token.website : `https://${token.website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center hover:text-blue-300 text-lg"
+                  title="Website"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  🌐
+                </a>
+              )}
+              {token.twitter && (
+                <a
+                  href={/^https?:\/\//i.test(token.twitter) ? token.twitter : `https://${token.twitter}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center hover:text-blue-300 text-lg"
+                  title="Social"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  🐦
+                </a>
+              )}
+              {token.telegram && (
+                <a
+                  href={/^https?:\/\//i.test(token.telegram) ? token.telegram : `https://${token.telegram}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center hover:text-blue-300 text-lg"
+                  title="Community"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  💬
+                </a>
+              )}
+            </div>
+
             {/* Header row: Avatar | token + creator | token-info (moves below on narrow) | progress below */}
             <div className="mb-4">
               <div className="flex items-start gap-3">
@@ -315,7 +355,7 @@ export default function TokenDetailsView({
                     <LogoContainer
                       src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
                       alt={token.name}
-                      baseWidth={112}
+                      baseWidth={202}
                       className="rounded-lg"
                       draggable={false}
                       onError={() => {}}
@@ -324,12 +364,12 @@ export default function TokenDetailsView({
                     <ExternalImageContainer
                       src={token.image}
                       alt={token.name}
-                      baseWidth={112}
+                      baseWidth={202}
                       className="rounded-lg"
                       draggable={false}
                     />
                   ) : (
-                    <div className="w-28 h-28 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                    <div className="w-[202px] h-[202px] bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
                       {token.symbol[0]}
                     </div>
                   )}
@@ -382,12 +422,12 @@ export default function TokenDetailsView({
                         title="View on Explorer"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        View on Explorer
+                        On Explorer ↗
                       </a>
                     </div>
 
                     {/* Creator section */}
-                    <div className="flex justify-start">
+                    <div className="flex justify-start items-start">
                       <UserProfile
                         wallet={token.creator_wallet}
                         showAvatar={false}
@@ -402,22 +442,22 @@ export default function TokenDetailsView({
 
                     {/* Token info (name + moved links) — full width below on small */}
                     <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto">
-                      <div className="text-sm flex items-center gap-2 min-w-0">
+                      <div className="text-sm flex items-start gap-2 min-w-0">
                         <span className="text-gray-400">Token name:</span>
                         <span className="text-white font-medium truncate">{token.name || '—'}</span>
-
-                        {/* moved links from right panel */}
-                        <span className="flex items-center gap-3 ml-2 text-blue-400 font-semibold">
+                        
+                        {/* Social media icons for mobile - visible on small screens only */}
+                        <span className="flex items-center gap-1 ml-2 text-blue-400 lg:hidden">
                           {token.website && (
                             <a
                               href={/^https?:\/\//i.test(token.website) ? token.website : `https://${token.website}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 hover:text-blue-300"
+                              className="inline-flex items-center hover:text-blue-300 text-lg"
                               title="Website"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              🌐 <span className="underline">Website</span>
+                              🌐
                             </a>
                           )}
                           {token.twitter && (
@@ -425,11 +465,11 @@ export default function TokenDetailsView({
                               href={/^https?:\/\//i.test(token.twitter) ? token.twitter : `https://${token.twitter}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 hover:text-blue-300"
+                              className="inline-flex items-center hover:text-blue-300 text-lg"
                               title="Social"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              🐦 <span className="underline">Social</span>
+                              🐦
                             </a>
                           )}
                           {token.telegram && (
@@ -437,11 +477,11 @@ export default function TokenDetailsView({
                               href={/^https?:\/\//i.test(token.telegram) ? token.telegram : `https://${token.telegram}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 hover:text-blue-300"
+                              className="inline-flex items-center hover:text-blue-300 text-lg"
                               title="Community"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              💬 <span className="underline">Community</span>
+                              💬
                             </a>
                           )}
                         </span>
@@ -456,10 +496,15 @@ export default function TokenDetailsView({
                             WebkitBoxOrient: 'vertical',
                             overflowWrap: 'anywhere',
                             wordBreak: 'break-word',
+                            fontSize: '0.7em',
                           }}
                           title={token.description}
                         >
-                          {token.description}
+                          {token.description.split(' ').map(word => 
+                            word.length > 30 
+                              ? word.match(/.{1,30}/g)?.join(' ') || word
+                              : word
+                          ).join(' ')}
                         </p>
                       )}
                     </div>
@@ -481,16 +526,16 @@ export default function TokenDetailsView({
                             : '0%'}
                         </span>
                       </div>
-                      <div className="relative h-3 rounded-full overflow-hidden border border-[#2a2d3a]">
+                      <div className="relative h-4 rounded-full overflow-hidden border border-[#2a2d3a]">
                         <div
                           className="absolute inset-0"
                           style={{
                             backgroundImage: `repeating-linear-gradient(
                               -45deg,
-                              rgba(100,100,100,0.15) 0px,
-                              rgba(100,100,100,0.15) 12px,
-                              rgba(255,255,255,0.08) 12px,
-                              rgba(255,255,255,0.08) 20px
+                              rgba(100,100,100,0.25) 0px,
+                              rgba(100,100,100,0.25) 12px,
+                              rgba(255,255,255,0.15) 12px,
+                              rgba(255,255,255,0.15) 20px
                             )`,
                             backgroundSize: '20px 20px',
                             animation: 'moveStripes 1.28s linear infinite',
@@ -513,103 +558,106 @@ export default function TokenDetailsView({
                       </div>
                     </div>
                   )}
+
+                  {/* Stats section directly below progress bar */}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {/* Price */}
+                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">Price</span>
+                        <span className="text-sm font-semibold text-white">
+                          {token.current_price !== undefined && token.current_price !== null && usdPrice
+                            ? formatUSDValue(getNumericPrice(), usdPrice)
+                            : '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* FDV / Cap */}
+                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">{getFDVLabel()}</span>
+                        <span className="text-sm font-semibold text-white">
+                          {usdPrice && getFDV() !== null ? formatUSDValue(getFDV()!, usdPrice) : '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Holders */}
+                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">Holders</span>
+                        <span className="text-sm font-semibold text-white">
+                          {token.holders_count !== undefined && token.holders_count !== null
+                            ? formatLargeNumber(token.holders_count)
+                            : '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Volume 24h (only if on DEX) */}
+                    {token.on_dex && (
+                      <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
+                          <span className="text-sm font-semibold text-white">
+                            {token.volume_24h_eth !== undefined &&
+                            token.volume_24h_eth !== null &&
+                            token.volume_24h_eth > 0 &&
+                            usdPrice
+                              ? formatUSDValue(token.volume_24h_eth, usdPrice)
+                              : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Liquidity (only if on DEX) */}
+                    {token.on_dex && (
+                      <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-400">Liquidity</span>
+                          <span className="text-sm font-semibold text-white">
+                            {token.liquidity_eth !== undefined &&
+                            token.liquidity_eth !== null &&
+                            token.liquidity_eth > 0 &&
+                            usdPrice
+                              ? formatUSDValue(token.liquidity_eth, usdPrice)
+                              : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Supply */}
+                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">Supply</span>
+                        <span className="text-sm font-semibold text-white">
+                          {token.total_supply !== undefined && token.total_supply !== null
+                            ? formatLargeNumber(Number(token.total_supply) / 1e18)
+                            : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* ========= ONE-LINE (wrap) STATS — border-only pills ========= */}
-            <div className="flex flex-wrap gap-2 mb-3">
-              {/* Price */}
-              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">Price</span>
-                  <span className="text-sm font-semibold text-white">
-                    {token.current_price !== undefined && token.current_price !== null && usdPrice
-                      ? formatUSDValue(getNumericPrice(), usdPrice)
-                      : '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* FDV / Cap */}
-              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{getFDVLabel()}</span>
-                  <span className="text-sm font-semibold text-white">
-                    {usdPrice && getFDV() !== null ? formatUSDValue(getFDV()!, usdPrice) : '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Holders */}
-              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">Holders</span>
-                  <span className="text-sm font-semibold text-white">
-                    {token.holder_count !== null && token.holder_count !== undefined
-                      ? token.holder_count.toLocaleString()
-                      : '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Vol24h */}
-              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">
-                    Vol<sub className="text-[10px]">24h</sub>
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {token.volume_24h_eth !== undefined &&
-                    token.volume_24h_eth !== null &&
-                    token.volume_24h_eth > 0 &&
-                    usdPrice
-                      ? formatUSDValue(token.volume_24h_eth, usdPrice)
-                      : '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Liquidity */}
-              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">Liquidity</span>
-                  <span className="text-sm font-semibold text-white">
-                    {token.liquidity_eth !== undefined &&
-                    token.liquidity_eth !== null &&
-                    token.liquidity_eth > 0 &&
-                    usdPrice
-                      ? formatUSDValue(token.liquidity_eth, usdPrice)
-                      : '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Supply */}
-              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">Supply</span>
-                  <span className="text-sm font-semibold text-white">
-                    {token.total_supply !== undefined && token.total_supply !== null
-                      ? formatLargeNumber(Number(token.total_supply) / 1e18)
-                      : '—'}
-                  </span>
-                </div>
-              </div>
-            </div>
 
             {/* ===== Edit Token Info — inline inside stats (creator only) ===== */}
             {isCreator && (
               <div className="mt-2">
                 <button
                   onClick={() => setIsEditing(!isEditing)}
-                  className="w-full px-5 py-2 rounded-md font-semibold text-white text-sm transition bg-gray-800 hover:bg-gray-700"
+                  className="w-full px-5 py-2 rounded-md font-semibold text-white text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
                 >
                   {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
                 </button>
 
                 {isEditing && (
-                  <div className="mt-3 border border-[#2a2d3a] rounded-lg p-3 bg-[#1f2332]">
+                  <div className="mt-3 border border-[#2a2d3a] rounded-lg p-3 bg-transparent">
                     <EditTokenForm
                       token={token}
                       onSuccess={() => {
@@ -625,7 +673,7 @@ export default function TokenDetailsView({
           </div>
 
           {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
-          <div className="w-full max-w-sm space-y-4">
+          <div className="w-full max-w-sm space-y-4 border border-gray-600 rounded-xl p-3 bg-transparent">
             {/* CREATOR / PUBLIC ACTIONS */}
             {isCreator ? (
               <>
@@ -681,7 +729,7 @@ export default function TokenDetailsView({
   } catch (error) {
     console.error('TokenDetailsView render error:', error)
     return (
-      <div className="max-w-4xl mx-auto mt-0 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
+      <div className="max-w-4xl mx-auto mt-0 p-6 bg-transparent rounded-lg shadow-lg text-white">
         <div className="text-center text-red-400">
           <h2 className="text-xl font-bold mb-4">Error loading token details</h2>
           <p className="text-sm mb-4">Something went wrong while loading this token.</p>
