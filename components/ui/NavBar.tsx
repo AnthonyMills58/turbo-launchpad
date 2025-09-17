@@ -7,7 +7,6 @@ import { useRef, useEffect, useState } from 'react'
 import { FiSliders } from 'react-icons/fi'
 import { FaSearch } from 'react-icons/fa'
 //import { MdOutlineFolderOpen } from 'react-icons/md'
-import { AiFillHome } from 'react-icons/ai'
 import { useFilters } from '@/lib/FiltersContext'
 import { HiOutlinePlusCircle } from 'react-icons/hi'
 
