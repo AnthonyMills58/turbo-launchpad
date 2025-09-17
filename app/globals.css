@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap');
 
 /* Animated stripes for progress bars */
 @keyframes moveStripes {
@@ -34,8 +35,16 @@ html, body {
   --foreground: #ededed;  /* your project light text */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: 'Inter', var(--font-geist-sans);
+  --font-mono: 'JetBrains Mono', var(--font-geist-mono);
+  
+  /* Font combinations for testing */
+  --font-inter: 'Inter', sans-serif;
+  --font-jetbrains: 'JetBrains Mono', monospace;
+  --font-poppins: 'Poppins', sans-serif;
+  --font-fira: 'Fira Code', monospace;
+  --font-roboto: 'Roboto', sans-serif;
+  --font-roboto-mono: 'Roboto Mono', monospace;
 }
 
 
@@ -49,8 +58,18 @@ html, body {
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: 'Comic Neue', cursive !important;
   overflow-x: hidden; /* ✅ Prevents sideways scroll if any */
+}
+
+/* Force Comic Neue font on all elements */
+* {
+  font-family: 'Comic Neue', cursive !important;
+}
+
+/* Use system monospace fonts for code/address elements */
+code, pre, .font-mono, [class*="mono"], .contract-address, input, textarea, button {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace !important;
 }
 
 
