@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
 import { Web3Providers } from '@/components/providers'
@@ -7,13 +7,13 @@ import NavBarWrapper from '@/components/ui/NavBarWrapper'
 import { FiltersProvider } from '@/lib/FiltersContext'
 import { SyncProvider } from '@/lib/SyncContext' // ✅ NEW
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
 })
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const jetbrainsMono = JetBrains_Mono({
+  variable: '--font-jetbrains-mono',
   subsets: ['latin'],
 })
 
@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0d0f1a] text-white min-h-screen`}
+        className={`${inter.variable} ${jetbrainsMono.variable} antialiased bg-transparent text-white min-h-screen`}
       >
         <Web3Providers>
           <SyncProvider> {/* ✅ Wrap everything here */}

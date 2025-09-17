@@ -58,7 +58,7 @@ export default function NavBar() {
   }, [showFilters])
 
   return (
-    <nav className="w-full bg-[#151827] text-white shadow-md p-4 flex flex-wrap items-center justify-between sticky top-0 z-50">
+    <nav className="w-full bg-transparent text-white shadow-md p-4 flex flex-wrap items-center justify-between sticky top-0 z-50">
       {/* Left Nav */}
       <div className="flex items-center space-x-1">
       <button
