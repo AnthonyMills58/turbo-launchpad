@@ -4,22 +4,21 @@ import { Token } from '@/types/token'
 import { useAccount, useChainId, usePublicClient, useWriteContract } from 'wagmi'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
-import CreatorBuySection from './CreatorBuySection'
+import CreatorBuySection from './CreatorBuySection' 
 import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
-import { Copy } from 'lucide-react'
+import { Copy} from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 import PublicSellSection from './PublicSellSection'
 import { useSync } from '@/lib/SyncContext'
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
-import 'react-circular-progressbar/dist/styles.css'
 import { formatLargeNumber } from '@/lib/displayFormats'
 import { checkIfTokenOnDex } from '@/lib/checkDexListing'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
 import UserProfile from './UserProfile'
+import { formatPriceMetaMask } from '@/lib/ui-utils'
 
 type TokenDetailsViewProps = {
   token: Token
@@ -34,8 +33,6 @@ export default function TokenDetailsView({
   onBack,
   onRefresh,
 }: TokenDetailsViewProps) {
-  // Debug logging removed - issue fixed
-  
   const { address } = useAccount()
   const publicClient = usePublicClient()
   const chainId = useChainId()
@@ -45,8 +42,7 @@ export default function TokenDetailsView({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
-  const [copiedCreator, setCopiedCreator] = useState(false)
-  
+
   // Track if we've already synced this token to prevent infinite loops
   const syncedTokens = useRef(new Set<number>())
   // Track ongoing sync operations to prevent race conditions
@@ -59,8 +55,6 @@ export default function TokenDetailsView({
   const isCreator =
     !!address && address.toLowerCase() === token.creator_wallet.toLowerCase()
   const isGraduated = token.is_graduated
-  const raised = token.eth_raised
-  const cap = token.raise_target
   const contract_address = token.contract_address
 
   const chainMap = {
@@ -73,10 +67,10 @@ export default function TokenDetailsView({
   const explorerBaseUrl = chain?.blockExplorers?.default.url ?? ''
   const explorerLink = `${explorerBaseUrl}/address/${token.contract_address}`
 
-  // ======== NEW: unified graduation flag ========
+  // ======== unified graduation flag ========
   const graduated = token.on_dex || isGraduated
 
-  // ======== NEW: compute unlock time and canUnlock ========
+  // ======== compute unlock time and canUnlock ========
   const unlockTime: number | null = useMemo(() => {
     if (token.creator_unlock_time && token.creator_unlock_time > 0) {
       return token.creator_unlock_time
@@ -105,14 +99,13 @@ export default function TokenDetailsView({
   const canCreatorBuyLock =
     isCreator &&
     !graduated &&
-    !token.creator_locking_closed && // 🔒 respect contract flag
+    !token.creator_locking_closed &&
     lifetimeLeft > 0
-  // ========================================================
 
   // Detect whether airdrops exist (array or map supported)
   type AirdropAllocations =
-    | string[] // array of addresses
-    | Record<string, string | number> // map of address -> amount
+    | string[]
+    | Record<string, string | number>
 
   const allocations = token.airdrop_allocations as AirdropAllocations | undefined
 
@@ -135,7 +128,6 @@ export default function TokenDetailsView({
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
 
-      // Full sync into DB
       await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -158,12 +150,6 @@ export default function TokenDetailsView({
     navigator.clipboard.writeText(token.contract_address)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
-  }
-
-  const handleCopyCreator = () => {
-    navigator.clipboard.writeText(token.creator_wallet)
-    setCopiedCreator(true)
-    setTimeout(() => setCopiedCreator(false), 1500)
   }
 
   const [userTokenBalance, setUserTokenBalance] = useState<number | null>(null)
@@ -194,458 +180,518 @@ export default function TokenDetailsView({
 
   useEffect(() => {
     if (!contract_address || !chainId) return
-    
-    // Add debouncing - prevent sync if called too recently
-    const now = Date.now()
-    if (now - lastSyncTime.current < 2000) { // 2 second debounce
-      console.log('[TokenDetailsView] Debouncing sync call, too recent')
+
+    const nowTs = Date.now()
+    if (nowTs - lastSyncTime.current < 2000) {
       return
     }
-    
-    // Prevent infinite loops - only sync each token once per session
-    if (syncedTokens.current.has(token.id)) {
-      console.log('[TokenDetailsView] Token already synced this session, skipping')
-      return
-    }
-    
-    // Prevent race conditions - don't start new sync if one is already running
-    if (syncingTokens.current.has(token.id)) {
-      console.log('[TokenDetailsView] Token sync already in progress, skipping')
-      return
-    }
-    
-    console.log('[TokenDetailsView] Starting DEX sync for token', token.id, 'at', new Date().toISOString())
-    
-    // Two-step process: Check if on DEX, then sync if needed
+    if (syncedTokens.current.has(token.id)) return
+    if (syncingTokens.current.has(token.id)) return
+
     const checkAndSyncDex = async () => {
       try {
-        // Mark as syncing to prevent race conditions
         syncingTokens.current.add(token.id)
         lastSyncTime.current = Date.now()
-        
-        console.log('[TokenDetailsView] Checking if token is on DEX...')
-        // Step 1: Quick client-side check if token is on DEX
+
         const isOnDex = await checkIfTokenOnDex(contract_address, chainId)
-        
+
         if (isOnDex) {
-          console.log('[TokenDetailsView] Token is on DEX, syncing state...')
-          
-          // Step 2: Call API to sync DEX state (price, FDV, volume, market cap)
           const response = await fetch('/api/sync-dex-state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, chainId })
+            body: JSON.stringify({ token, chainId }),
           })
-          
+
           if (response.ok) {
-            // Mark as synced to prevent future calls
             syncedTokens.current.add(token.id)
-            console.log('[TokenDetailsView] DEX sync successful, calling onRefresh...')
-            // Only call onRefresh if component is still mounted
-            if (isMounted.current) {
-              onRefresh()
-            } else {
-              console.log('[TokenDetailsView] Component unmounted, skipping onRefresh')
-            }
+            if (isMounted.current) onRefresh()
           } else {
             console.error('Failed to sync DEX state:', await response.text())
           }
         } else {
-          console.log('[TokenDetailsView] Token not on DEX, skipping sync')
-          // Mark as checked even if not on DEX to prevent re-checking
           syncedTokens.current.add(token.id)
         }
       } catch (error) {
         console.error('Error in checkAndSyncDex:', error)
       } finally {
-        // Always remove from syncing set when done
         syncingTokens.current.delete(token.id)
       }
     }
-    
+
     checkAndSyncDex()
   }, [contract_address, chainId, onRefresh, token])
 
-  // Cleanup effect to track component unmount
   useEffect(() => {
     return () => {
       isMounted.current = false
     }
   }, [])
 
-  // Add error boundary for production debugging
+  
+
+  const getNumericPrice = (): number => {
+    if (token.current_price !== undefined && token.current_price !== null) {
+      return Number(token.current_price)
+    }
+    return 0
+  }
+
+  const getFDV = (): number | null => {
+    if (token.on_dex && token.fdv !== undefined) {
+      return Number(token.fdv)
+    } else if (!token.on_dex) {
+      return Number(token.eth_raised) || 0
+    }
+    return null
+  }
+
+  const getFDVLabel = (): string => {
+    if (token.on_dex) return 'FDV'
+    return 'Cap'
+  }
+
+  const formatUSDValue = (ethValue: number, usdPriceLocal: number | null) => {
+    if (!usdPriceLocal || ethValue === 0 || ethValue === null) return '—'
+    const usdValue = ethValue * usdPriceLocal
+
+    if (usdValue < 0.001) {
+      const usdInfo = formatPriceMetaMask(usdValue)
+      if (usdInfo.type === 'metamask') {
+        return (
+          <span>
+            ${usdInfo.value}
+            <sub className="text-xs font-normal" style={{ fontSize: '0.72em' }}>
+              {usdInfo.zeros}
+            </sub>
+            {usdInfo.digits}
+          </span>
+        )
+      }
+      return `$${usdInfo.value}`
+    }
+
+    if (usdValue >= 1000) {
+      return `$${formatLargeNumber(usdValue)}`
+    }
+
+    if (usdValue >= 0.1) {
+      return `$${usdValue.toFixed(2)}`
+    } else if (usdValue >= 0.01) {
+      return `$${usdValue.toFixed(3)}`
+    } else {
+      return `$${usdValue.toFixed(4)}`
+    }
+  }
+
+  const formatRelativeTime = (dateString: string): string => {
+    const nowDate = new Date()
+    const created = new Date(dateString)
+    const diffMs = nowDate.getTime() - created.getTime()
+
+    const diffSeconds = Math.floor(diffMs / 1000)
+    const diffMinutes = Math.floor(diffSeconds / 60)
+    const diffHours = Math.floor(diffMinutes / 60)
+    const diffDays = Math.floor(diffHours / 24)
+    const diffMonths = Math.floor(diffDays / 30)
+    const diffYears = Math.floor(diffDays / 365)
+
+    if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`
+    if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    if (diffMinutes > 0) return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`
+    return 'Just now'
+  }
+
+  const createdTime = token.created_at ? formatRelativeTime(token.created_at) : '—'
+  // ========================================================================
+
   try {
     return (
-      <div className="max-w-4xl mx-auto mt-0 p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
-      <button
-        onClick={onBack}
-        className="text-sm text-gray-400 hover:text-white transition mb-6"
-      >
-        ← Back to all tokens
-      </button>
-
-      <div className="flex flex-col sm:flex-row gap-6">
-        {/* Left side: Image + Basic Info */}
-        <div className="flex-shrink-0">
-          {token.token_logo_asset_id ? (
-            <>
-              <LogoContainer
-                     src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
-                     alt={token.name}
-                     baseWidth={128}
-                     className="rounded-xl"
-                     draggable={false}
-                     onError={() => {
-                       // Fallback to placeholder if media fails to load
-                       // The LogoContainer will handle the error internally
-                     }}
-                   />
-            </>
-          ) : token.image ? (
-            <>
-              <ExternalImageContainer
-                src={token.image}
-                alt={token.name}
-                baseWidth={128}
-                className="rounded-xl"
-                draggable={false}
-              />
-            </>
-          ) : null}
-          
-          {/* Fallback placeholder */}
-                                               <div className={`w-32 h-20 bg-gray-700 rounded-xl flex items-center justify-center text-2xl font-bold ${token.token_logo_asset_id || token.image ? 'hidden' : ''}`}>
-               {token.symbol[0]}
-             </div>
-        </div>
-
-        {/* Right side: Details + Buttons */}
-        <div className="flex-grow">
-          <h1 className="text-3xl font-bold mb-2">
-            {token.name} <span className="text-gray-400">({token.symbol})</span>
-          </h1>
-          <p className="text-gray-300 mb-4">{token.description}</p>
-
-          {(token.website || token.twitter || token.telegram) && (
-            <div className="mb-4 text-sm">
-              <div className="flex flex-wrap gap-4 text-blue-400">
-                {token.website && (
-                  <a
-                    href={token.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline flex items-center gap-1"
-                  >
-                    🌐 <span className="underline">Website</span>
-                  </a>
-                )}
-                {token.twitter && (
-                  <a
-                    href={token.twitter}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline flex items-center gap-1"
-                  >
-                    🐦 <span className="underline">Social</span>
-                  </a>
-                )}
-                {token.telegram && (
-                  <a
-                    href={token.telegram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline flex items-center gap-1"
-                  >
-                    💬 <span className="underline">Community</span>
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Contract Info */}
-          <div className="flex items-center flex-wrap mb-4 space-x-2 font-mono text-sm text-gray-400 select-all">
-            <span>Contract:</span>
-            <span>
-              {token.contract_address.slice(0, 6)}...
-              {token.contract_address.slice(-4)}
-            </span>
-            <button
-              onClick={handleCopy}
-              className="text-gray-400 hover:text-white transition"
-            >
-              <Copy size={16} />
-            </button>
-            {copied && (
-              <span className="text-green-400 ml-2 text-xs">Copied!</span>
-            )}
-            <a
-              href={explorerLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:underline ml-4 text-xs"
-            >
-              View on Explorer
-            </a>
-          </div>
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm text-gray-300 mb-6">
-            {/* Creator Address */}
-            <div className="flex items-center gap-2">
-              <UserProfile wallet={token.creator_wallet} showAvatar={true} showName={true} showCreatorLabel={true} />
-              <button
-                onClick={handleCopyCreator}
-                className="text-gray-400 hover:text-white transition"
-              >
-                <Copy size={16} />
-              </button>
-              {copiedCreator && (
-                <span className="text-green-400 ml-2 text-xs">Copied!</span>
-              )}
-            </div>
-
-            {token.created_at && (
-              <div className="text-sm text-gray-400 mb-1">
-                Created:
-                <div className="text-white">
-                  {new Date(token.created_at).toLocaleDateString()}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <span className="font-semibold text-white">Status</span>
-              <p
-                className={`font-semibold ${
-                  token.on_dex
-                    ? 'text-blue-400'
-                    : isGraduated
-                    ? 'text-green-400'
-                    : 'text-yellow-400'
-                }`}
-              >
-                {token.on_dex
-                  ? `Listed on ${token.dex ?? 'DEX'}`
-                  : isGraduated
-                  ? 'Graduated'
-                  : 'In Progress'}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4 mt-0">
-              <div className="w-14 h-14">
-                <CircularProgressbar
-                  value={
-                    Number(cap) > 0
-                      ? Math.min((Number(raised) / Number(cap)) * 100, 999)
-                      : 0
-                  }
-                  text={
-                    Number(cap) === 0 || Number(raised) === 0
-                      ? '0%'
-                      : (Number(raised) / Number(cap)) * 100 < 1
-                      ? '<1%'
-                      : `${Math.floor((Number(raised) / Number(cap)) * 100)}%`
-                  }
-                  styles={buildStyles({
-                    textSize: '1.8rem',
-                    textColor: '#ffffff',
-                    pathColor: '#10B981',
-                    trailColor: '#374151',
-                  })}
-                />
-              </div>
-
-              <div>
-                <span className="font-semibold text-white">Raised</span>
-                <p>
-                  {formatLargeNumber(Number(raised || 0))} / {formatLargeNumber(cap || 0)} ETH
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <span className="font-semibold text-white">Current Price</span>
-              <div className="text-sm text-white">
-                <p>
-                  {token.current_price !== undefined && token.current_price !== null
-                    ? `${formatLargeNumber(Number(token.current_price))} ETH`
-                    : '–'}
-                </p>
-                {usdPrice && token.current_price !== undefined && token.current_price !== null && (
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    (${formatLargeNumber(Number(token.current_price) * usdPrice)})
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <span className="font-semibold text-white">Max Supply</span>
-              <p>{Number(token.supply || 0).toLocaleString()}</p>
-            </div>
-
-            <div>
-              <span className="font-semibold text-white">Locked by Creator</span>
-              <p>
-                {token.creator_lock_amount
-                  ? Number(token.creator_lock_amount).toLocaleString()
-                  : '0'}
-              </p>
-              {/* (Optional) show ETA pre-grad */}
-              {!graduated && unlockTime && (
-                <p className="text-xs text-gray-500">
-                  Early unlock {cooldownReached ? 'available now' : 'at'}{' '}
-                  {new Date(unlockTime * 1000).toLocaleString()}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <span className="font-semibold text-white">FDV</span>
-              <p>
-                {token.fdv !== undefined && token.fdv !== null
-                  ? `${formatLargeNumber(Number(token.fdv))} ETH`
-                  : '–'}
-              </p>
-            </div>
-
-            {token.on_dex && token.market_cap !== undefined && token.market_cap !== null && (
-              <div>
-                <span className="font-semibold text-white">Market Cap</span>
-                <p className="text-sm text-white">
-                  {formatLargeNumber(Number(token.market_cap))} ETH
-                  {usdPrice && (
-                    <span className="text-gray-400">
-                      {' '}
-                      (${formatLargeNumber(token.market_cap * usdPrice)})
-                    </span>
-                  )}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* If token is already deployed, optionally show a link */}
-          {token.on_dex && token.dex_listing_url && (
-            <div className="mt-6">
-              <h2 className="text-white font-semibold text-lg mb-2">
-                ✅ Token is Deployed to DEX
-              </h2>
-              <a
-                href={token.dex_listing_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:underline text-sm"
-              >
-                View Listing on DEX ↗
-              </a>
-            </div>
-          )}
-
-          {/* ====== CREATOR ACTIONS ====== */}
-          {isCreator && (
-            <div className="flex flex-col space-y-4">
-              {/* Show Unlock when allowed (pre- or post-graduation) */}
-              {canUnlock && (
-                <button
-                  onClick={handleUnlock}
-                  disabled={isUnlocking}
-                  className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
-                    isUnlocking
-                      ? 'bg-neutral-700 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
-                  }`}
-                >
-                  {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
-                </button>
-              )}
-
-              {/* Buy & Airdrop before graduation */}
-              {!graduated && (
-                <div className="flex flex-col md:flex-row md:items-start gap-4">
-                  {canCreatorBuyLock ? (
-                   <CreatorBuySection token={token} onSuccess={onRefresh} />
-                 ) : (
-                   <div className="w-full md:w-7/16 text-xs text-gray-400 border border-gray-700 rounded-md p-3">
-                     <div className="font-semibold text-white mb-1">Creator Buy &amp; Lock unavailable</div>
-                     {token.creator_locking_closed ? (
-                      <span>Locking is closed by the contract</span>
-                     ) : (
-                       <span>
-                         Lifetime 20% cap reached ({lifetimeUsed.toLocaleString()}).
-                       </span>                      )}                    </div>
-                  )}
-
-                  <AirdropForm token={token} onSuccess={onRefresh} />
-                </div>
-              )}
-
-
-              {/* Creator public sell (pre-grad only if they have balance) */}
-              {!graduated && userTokenBalance !== null && userTokenBalance > 0 && (
-                <div className="w-full md:w-1/2">
-                  <PublicSellSection token={token} onSuccess={onRefresh} />
-                </div>
-              )}
-
-              {/* Post-graduation: keep AirdropForm only if airdrops exist */}
-              {graduated && hasAirdrops && (
-                <AirdropForm token={token} onSuccess={onRefresh} />
-              )}
-
-              {/* ✏️ Edit Token Info */}
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className="w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition bg-gray-800 hover:bg-gray-700"
-              >
-                {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
-              </button>
-
-              {isEditing && (
-                <EditTokenForm
-                  token={token}
-                  onSuccess={() => {
-                    setIsEditing(false)
-                    onRefresh()
-                  }}
-                  onCancel={() => setIsEditing(false)}
-                />
-              )}
-            </div>
-          )}
-
-          {/* ====== PUBLIC / NON-CREATOR ACTIONS ====== */}
-          {!isCreator && (
-            <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
-              {/* Pre-grad: buy/sell on curve */}
-              {!graduated && (
-                <>
-                  <div className="w-full md:w-3/4">
-                    <PublicBuySection token={token} onSuccess={onRefresh} />
-                  </div>
-
-                  {userTokenBalance !== null && userTokenBalance > 0 && (
-                    <div className="w-full md:w-1/2">
-                      <PublicSellSection token={token} onSuccess={onRefresh} />
+      <div className="w-full p-6 bg-[#1b1e2b] rounded-lg shadow-lg text-white">
+        {/* ======= Responsive layout: Stats (left, flex-1) + Actions (right, fixed) ======= */}
+        <div className="flex flex-col lg:flex-row items-start gap-6">
+          {/* ================= LEFT: STATS CARD ================= */}
+          <div className="group rounded-xl p-3 border bg-[#1b1e2b] border-[#2a2d3a] flex-1">
+            {/* Header row: Avatar | token + creator + tokeninfo inline (left-aligned) | progress below */}
+            <div className="mb-4">
+              <div className="flex items-start gap-3">
+                {/* Avatar */}
+                <div className="flex-shrink-0">
+                  {token.token_logo_asset_id ? (
+                    <LogoContainer
+                      src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
+                      alt={token.name}
+                      baseWidth={112}
+                      className="rounded-lg"
+                      draggable={false}
+                      onError={() => {}}
+                    />
+                  ) : token.image ? (
+                    <ExternalImageContainer
+                      src={token.image}
+                      alt={token.name}
+                      baseWidth={112}
+                      className="rounded-lg"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="w-28 h-28 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                      {token.symbol[0]}
                     </div>
                   )}
-                </>
-              )}
-
-              {/* Post-grad: claim airdrops */}
-              {graduated && (
-                <div className="w-full md:w-1/3">
-                  <AirdropClaimForm token={token} />
                 </div>
-              )}
+    
+                {/* Right side: token + creator + tokeninfo inline, all left-aligned */}
+                <div className="flex flex-col w-full">
+                  <div className="flex items-start gap-4 flex-wrap">
+                    {/* Token section (LEFT, flush with avatar) */}
+                    <div className="flex flex-col items-start text-left" title={token.name}>
+                      <h3 className="font-semibold text-white truncate w-full">{token.symbol}</h3>
+    
+                      {/* Contract + copy */}
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <span className="font-mono">
+                          {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCopy()
+                          }}
+                          className="text-gray-400 hover:text-white transition"
+                          title="Copy contract address"
+                        >
+                          <Copy size={12} />
+                        </button>
+                        {copied && <span className="text-green-400 text-xs">Copied!</span>}
+                      </div>
+    
+                      {/* Links */}
+                      {token.on_dex && token.dex_listing_url && (
+                        <a
+                          href={token.dex_listing_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1"
+                          title="View on DEX"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          On DEX ↗
+                        </a>
+                      )}
+                      <a
+                        href={explorerLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors mt-1"
+                        title="View on Explorer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        View on Explorer
+                      </a>
+                    </div>
+    
+                    {/* Creator section (immediately after token, also left-aligned) */}
+                    <div className="flex justify-start">
+                      <UserProfile
+                        wallet={token.creator_wallet}
+                        showAvatar={false}
+                        showName={true}
+                        showCreatorLabel={false}
+                        showTime={true}
+                        createdTime={createdTime}
+                        layout="compact"
+                        centerAlign={false}
+                      />
+                    </div>
+    
+                    {/* NEW: Token info section (name + 3-line clamped description) */}
+                    <div className="flex flex-col items-start text-left max-w-xl min-w-0">
+                      <div className="text-sm">
+                        <span className="text-gray-400">Token name:</span>{' '}
+                        <span className="text-white font-medium">{token.name || '—'}</span>
+                      </div>
+
+                      {token.description && (
+                        <p
+                          className="mt-1 text-sm text-gray-300 w-full break-words overflow-hidden"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflowWrap: 'anywhere',   // fallback for very long unbroken strings
+                            wordBreak: 'break-word',    // ensure words break within the box
+                          }}
+                          title={token.description}
+                        >
+                          {token.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+    
+                  {/* Progress bar spanning the whole right column (below token + creator + tokeninfo) */}
+                  {!token.on_dex && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-white">Graduation Progress</span>
+                        <span className="text-sm font-semibold text-orange-400">
+                          {token.raise_target && token.eth_raised
+                            ? `${Math.min(
+                                Math.floor(
+                                  (Number(token.eth_raised) / Number(token.raise_target)) * 100
+                                ),
+                                100
+                              )}%`
+                            : '0%'}
+                        </span>
+                      </div>
+                      <div className="relative h-3 rounded-full overflow-hidden border border-[#2a2d3a]">
+                        {/* Animated stripes */}
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            backgroundImage: `repeating-linear-gradient(
+                              -45deg,
+                              rgba(100,100,100,0.15) 0px,
+                              rgba(100,100,100,0.15) 12px,
+                              rgba(255,255,255,0.08) 12px,
+                              rgba(255,255,255,0.08) 20px
+                            )`,
+                            backgroundSize: '20px 20px',
+                            animation: 'moveStripes 1.28s linear infinite',
+                          }}
+                        />
+                        {/* Fill */}
+                        <div
+                          className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
+                          style={{
+                            width:
+                              token.raise_target && token.eth_raised
+                                ? `${Math.min(
+                                    (Number(token.eth_raised) / Number(token.raise_target)) * 100,
+                                    100
+                                  )}%`
+                                : '0%',
+                          }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          )}
+    
+            {/* ========= ONE-LINE (wrap) STATS — border-only pills ========= */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {/* Price */}
+              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Price</span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.current_price !== undefined && token.current_price !== null && usdPrice
+                      ? formatUSDValue(getNumericPrice(), usdPrice)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+    
+              {/* FDV / Cap */}
+              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{getFDVLabel()}</span>
+                  <span className="text-sm font-semibold text-white">
+                    {usdPrice && getFDV() !== null ? formatUSDValue(getFDV()!, usdPrice) : '—'}
+                  </span>
+                </div>
+              </div>
+    
+              {/* Holders */}
+              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Holders</span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.holder_count !== null && token.holder_count !== undefined
+                      ? token.holder_count.toLocaleString()
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+    
+              {/* Vol24h */}
+              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">
+                    Vol<sub className="text-[10px]">24h</sub>
+                  </span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.volume_24h_eth !== undefined &&
+                    token.volume_24h_eth !== null &&
+                    token.volume_24h_eth > 0 &&
+                    usdPrice
+                      ? formatUSDValue(token.volume_24h_eth, usdPrice)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+    
+              {/* Liquidity */}
+              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Liquidity</span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.liquidity_eth !== undefined &&
+                    token.liquidity_eth !== null &&
+                    token.liquidity_eth > 0 &&
+                    usdPrice
+                      ? formatUSDValue(token.liquidity_eth, usdPrice)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+    
+              {/* Supply */}
+              <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Supply</span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.total_supply !== undefined && token.total_supply !== null
+                      ? formatLargeNumber(Number(token.total_supply) / 1e18)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+    
+            {/* ===== Edit Token Info — inline inside stats (creator only) ===== */}
+            {isCreator && (
+              <div className="mt-2">
+                <button
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="w-full px-5 py-2 rounded-md font-semibold text-white text-sm transition bg-gray-800 hover:bg-gray-700"
+                >
+                  {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
+                </button>
+    
+                {isEditing && (
+                  <div className="mt-3 border border-[#2a2d3a] rounded-lg p-3 bg-[#1f2332]">
+                    <EditTokenForm
+                      token={token}
+                      onSuccess={() => {
+                        setIsEditing(false)
+                        onRefresh()
+                      }}
+                      onCancel={() => setIsEditing(false)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+    
+          {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
+          <div className="w-full max-w-sm space-y-4">
+            {(token.website || token.twitter || token.telegram) && (
+              <div className="p-3 rounded-lg border border-[#2a2d3a] bg-[#1f2332] text-sm">
+                <div className="flex flex-wrap gap-4 text-blue-400">
+                  {token.website && (
+                    <a
+                      href={token.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline flex items-center gap-1"
+                    >
+                      🌐 <span className="underline">Website</span>
+                    </a>
+                  )}
+                  {token.twitter && (
+                    <a
+                      href={token.twitter}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline flex items-center gap-1"
+                    >
+                      🐦 <span className="underline">Social</span>
+                    </a>
+                  )}
+                  {token.telegram && (
+                    <a
+                      href={token.telegram}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline flex items-center gap-1"
+                    >
+                      💬 <span className="underline">Community</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+    
+            {/* CREATOR / PUBLIC ACTIONS */}
+            {isCreator ? (
+              <>
+                {canUnlock && (
+                  <div>
+                    <button
+                      onClick={handleUnlock}
+                      disabled={isUnlocking}
+                      className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+                        isUnlocking
+                          ? 'bg-neutral-700 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
+                      }`}
+                    >
+                      {isUnlocking ? 'Unlocking...' : '🔓 Unlock Creator Tokens'}
+                    </button>
+                  </div>
+                )}
+    
+                {!graduated && canCreatorBuyLock && (
+                  <CreatorBuySection token={token} onSuccess={onRefresh} />
+                )}
+    
+                {!graduated && <AirdropForm token={token} onSuccess={onRefresh} />}
+    
+                {!graduated && userTokenBalance !== null && userTokenBalance > 0 && (
+                  <PublicSellSection token={token} onSuccess={onRefresh} />
+                )}
+    
+                {graduated && hasAirdrops && <AirdropForm token={token} onSuccess={onRefresh} />}
+              </>
+            ) : (
+              <>
+                {!graduated && (
+                  <>
+                    <PublicBuySection token={token} onSuccess={onRefresh} />
+                    {userTokenBalance !== null && userTokenBalance > 0 && (
+                      <PublicSellSection token={token} onSuccess={onRefresh} />
+                    )}
+                  </>
+                )}
+                {graduated && <AirdropClaimForm token={token} />}
+              </>
+            )}
+          </div>
+          {/* ================= /RIGHT: ACTIONS ================= */}
         </div>
       </div>
-    </div>
-  )
+    )
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
   } catch (error) {
     console.error('TokenDetailsView render error:', error)
     return (
@@ -664,6 +710,8 @@ export default function TokenDetailsView({
     )
   }
 }
+
+
 
 
 
