@@ -582,7 +582,7 @@ export default function TokenPageContent() {
     }
 
     return (
-      <div className="min-h-screen bg-transparent p-6">
+      <div className="min-h-screen bg-transparent p-0">
         <TokenDetailsView
           key={refreshKey}
           token={activeToken}
