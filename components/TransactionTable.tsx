@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
+import { useChainId } from 'wagmi'
 
 interface Transaction {
   block_time: string
@@ -24,6 +26,7 @@ interface TransactionTableProps {
 }
 
 export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }: TransactionTableProps) {
+  const chainId = useChainId()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -33,6 +36,16 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
     side: '',
     maker: ''
   })
+
+  // Chain explorer setup
+  const chainMap = {
+    [megaethTestnet.id]: megaethTestnet,
+    [megaethMainnet.id]: megaethMainnet,
+    [sepoliaTestnet.id]: sepoliaTestnet,
+  } as const
+
+  const chain = chainMap[chainId as keyof typeof chainMap]
+  const explorerBaseUrl = chain?.blockExplorers?.default.url ?? ''
 
   const pageSize = 20
 
@@ -141,6 +154,22 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
+  // Get trader display name (profile name or shortened address)
+  const getTraderDisplayName = async (address: string): Promise<string> => {
+    try {
+      const response = await fetch(`/api/profile?wallet=${address}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.profile?.display_name) {
+          return data.profile.display_name
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile:', error)
+    }
+    return formatAddress(address)
+  }
+
   // Calculate USD value
   const calculateUSDValue = (ethWei: string, ethPriceUsd: number): string => {
     const ethAmount = parseFloat(ethWei) / 1e18
@@ -227,8 +256,10 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
               transactions.map((tx, index) => {
                 const traderAddress = getTraderAddress(tx)
                 const tokenAmount = formatLargeNumber(parseFloat(tx.amount_wei) / 1e18)
-                const ethAmount = formatLargeNumber(parseFloat(tx.amount_eth_wei) / 1e18)
+                const ethAmount = parseFloat(tx.amount_eth_wei) / 1e18
+                const ethDisplay = ethAmount > 0 ? ethAmount.toFixed(4) : '0.0000'
                 const usdValue = calculateUSDValue(tx.amount_eth_wei, tx.eth_price_usd)
+                const explorerLink = `${explorerBaseUrl}/tx/${tx.tx_hash}`
 
                 return (
                   <tr key={`${tx.tx_hash}-${index}`} className="border-b border-gray-700 hover:bg-gray-800/20">
@@ -242,7 +273,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                       {usdValue}
                     </td>
                     <td className="py-3 px-2 text-sm text-gray-300">
-                      {ethAmount}
+                      {ethDisplay}
                     </td>
                     <td className="py-3 px-2 text-sm text-gray-300">
                       {tokenAmount}
@@ -252,7 +283,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                     </td>
                     <td className="py-3 px-2 text-sm">
                       <a
-                        href={`https://etherscan.io/tx/${tx.tx_hash}`}
+                        href={explorerLink}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-gray-400 hover:text-white transition-colors"
