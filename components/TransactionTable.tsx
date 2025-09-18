@@ -87,11 +87,6 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
       const response = await fetch(`/api/transactions?${params}`)
       if (response.ok) {
         const data = await response.json()
-        console.log('🔍 Frontend received data:', {
-          transactions: data.transactions?.length,
-          transactionTypes: data.transactionTypes,
-          totalCount: data.totalCount
-        })
         setTransactions(data.transactions || [])
         setTotalPages(data.totalPages || 1)
         setTotalCount(data.totalCount || 0)
@@ -109,10 +104,6 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
     fetchTransactions(1)
   }, [tokenId, filters, fetchTransactions])
 
-  // Debug: log when availableTransactionTypes changes
-  useEffect(() => {
-    console.log('🔍 availableTransactionTypes updated:', availableTransactionTypes)
-  }, [availableTransactionTypes])
 
   // Get trader address based on transaction type
   const getTraderAddress = (transaction: Transaction): string => {
@@ -226,17 +217,17 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
           <select
             value={filters.side}
             onChange={(e) => handleSideFilter(e.target.value)}
-            className="px-3 py-1 bg-transparent border border-gray-600 text-white text-sm rounded"
+            className="px-3 py-1 bg-gray-800 border border-gray-600 text-white text-sm rounded"
           >
-            <option value="">All</option>
+            <option value="" className="bg-gray-800 text-white">All</option>
             {availableTransactionTypes.length > 0 ? (
               availableTransactionTypes.map((type) => (
-                <option key={type.side} value={type.side}>
+                <option key={type.side} value={type.side} className="bg-gray-800 text-white">
                   {type.side} ({type.count})
                 </option>
               ))
             ) : (
-              <option disabled>Loading types...</option>
+              <option disabled className="bg-gray-800 text-white">Loading types...</option>
             )}
           </select>
         </div>
