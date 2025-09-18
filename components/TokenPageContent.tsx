@@ -267,7 +267,7 @@ const TokenCard = memo(({
           {/* Price */}
           <div className="bg-transparent border border-gray-600 p-2 border-r-0 last:border-r">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Price</span>
+              <span className="text-[10px] text-gray-400">Price</span>
               <div className="text-sm text-gray-400 text-right">
                 <div>
                   {token.current_price !== undefined && token.current_price !== null && usdPrice ? (
@@ -283,7 +283,7 @@ const TokenCard = memo(({
           {/* FDV/Cap */}
           <div className="bg-transparent border border-gray-600 p-2 border-r-0 last:border-r">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">{getFDVLabel()}</span>
+              <span className="text-[10px] text-gray-400">{getFDVLabel()}</span>
               <div className="text-sm text-gray-400 text-right">
                 <div>
                   {usdPrice && getFDV() !== null ? (
@@ -310,7 +310,7 @@ const TokenCard = memo(({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
                 <Users size={12} className="text-gray-400" />
-                <span className="text-xs text-gray-400">Holders</span>
+                <span className="text-[10px] text-gray-400">Holders</span>
               </div>
               <div className="text-sm text-gray-400 text-right">
                 <div>
@@ -334,7 +334,7 @@ const TokenCard = memo(({
             {/* Volume Box */}
             <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
+                <span className="text-[10px] text-gray-400">Vol<sub className="text-[8px]">24h</sub></span>
                 <span className="text-sm text-gray-400">
                   {token.volume_24h_eth !== undefined && token.volume_24h_eth !== null && token.volume_24h_eth > 0 && usdPrice ? (
                     formatUSDValue(token.volume_24h_eth, usdPrice)
@@ -348,7 +348,7 @@ const TokenCard = memo(({
             {/* Liquidity Box */}
             <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">Liquidity</span>
+                <span className="text-[10px] text-gray-400">Liquidity</span>
                 <span className="text-sm text-gray-400">
                   {token.liquidity_eth !== undefined && token.liquidity_eth !== null && token.liquidity_eth > 0 && usdPrice ? (
                     formatUSDValue(token.liquidity_eth, usdPrice)
@@ -649,7 +649,7 @@ export default function TokenPageContent() {
   return (
     <div className="min-h-screen bg-transparent p-2 sm:p-4 md:p-6">
       <div className="flex justify-center w-full">
-        <div className="grid grid-cols-4 gap-8 max-w-[1600px]">
+        <div className="flex flex-wrap justify-center gap-8 max-w-[1600px]">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (
