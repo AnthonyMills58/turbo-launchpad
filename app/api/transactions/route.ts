@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Pool } from 'pg'
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-})
+import pool from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +9,7 @@ export async function GET(request: NextRequest) {
     const pageSize = parseInt(searchParams.get('pageSize') || '20')
     const side = searchParams.get('side')
     const maker = searchParams.get('maker')
+    const creatorWallet = searchParams.get('creatorWallet')
 
     if (!tokenId) {
       return NextResponse.json({ error: 'Token ID is required' }, { status: 400 })
@@ -22,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     // Build WHERE clause
     let whereClause = 'tt.token_id = $1 AND tt.side != \'MINT\''
-    const params: any[] = [tokenId]
+    const params: (string | number)[] = [tokenId]
     let paramIndex = 2
 
     if (side) {
@@ -35,17 +32,16 @@ export async function GET(request: NextRequest) {
       whereClause += ` AND (
         tt.from_address ILIKE $${paramIndex} OR 
         tt.to_address ILIKE $${paramIndex} OR
-        t.creator_wallet ILIKE $${paramIndex}
+        $${paramIndex + 1} ILIKE $${paramIndex}
       )`
-      params.push(`%${maker}%`)
-      paramIndex++
+      params.push(`%${maker}%`, creatorWallet || '')
+      paramIndex += 2
     }
 
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total
       FROM token_transfers tt
-      JOIN tokens t ON tt.token_id = t.id
       WHERE ${whereClause}
     `
     
@@ -65,10 +61,8 @@ export async function GET(request: NextRequest) {
         tt.price_eth_per_token,
         tt.side,
         tt.src,
-        tt.eth_price_usd,
-        t.creator_wallet
+        tt.eth_price_usd
       FROM token_transfers tt
-      JOIN tokens t ON tt.token_id = t.id
       WHERE ${whereClause}
       ORDER BY tt.block_time DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

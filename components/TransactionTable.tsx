@@ -21,9 +21,10 @@ interface Transaction {
 interface TransactionTableProps {
   tokenId: number
   tokenSymbol: string
+  creatorWallet: string
 }
 
-export default function TransactionTable({ tokenId, tokenSymbol }: TransactionTableProps) {
+export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }: TransactionTableProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -44,6 +45,7 @@ export default function TransactionTable({ tokenId, tokenSymbol }: TransactionTa
         tokenId: tokenId.toString(),
         page: page.toString(),
         pageSize: pageSize.toString(),
+        creatorWallet: creatorWallet,
         ...(filters.side && { side: filters.side }),
         ...(filters.maker && { maker: filters.maker })
       })
@@ -61,7 +63,7 @@ export default function TransactionTable({ tokenId, tokenSymbol }: TransactionTa
     } finally {
       setLoading(false)
     }
-  }, [tokenId, filters.side, filters.maker])
+  }, [tokenId, creatorWallet, filters.side, filters.maker])
 
   useEffect(() => {
     fetchTransactions(1)
@@ -73,7 +75,7 @@ export default function TransactionTable({ tokenId, tokenSymbol }: TransactionTa
       case 'BUY&LOCK':
       case 'GRADUATION':
       case 'UNLOCK':
-        return transaction.creator_wallet || ''
+        return creatorWallet
       case 'BUY':
       case 'CLAIMAIRDROP':
         return transaction.to_address

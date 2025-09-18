@@ -672,6 +672,25 @@ export default function TokenDetailsView({
                     />
                   </div>
                 )}
+
+                {showTransactions && (
+                  <div className="mt-3 border border-[#2a2d3a] p-3 bg-transparent">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-semibold text-white">Transactions</h3>
+                      <button
+                        onClick={() => setShowTransactions(false)}
+                        className="text-gray-400 hover:text-white transition-colors text-xl"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <TransactionTable 
+                      tokenId={token.id} 
+                      tokenSymbol={token.symbol}
+                      creatorWallet={token.creator_wallet}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -748,25 +767,6 @@ export default function TokenDetailsView({
           {/* ================= /RIGHT: ACTIONS ================= */}
         </div>
 
-        {/* Transaction Table Modal */}
-        {showTransactions && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#0d0f1a] border border-gray-600 rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
-              <div className="flex items-center justify-between p-4 border-b border-gray-600">
-                <h2 className="text-xl font-semibold text-white">Transactions</h2>
-                <button
-                  onClick={() => setShowTransactions(false)}
-                  className="text-gray-400 hover:text-white transition-colors text-2xl"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-                <TransactionTable tokenId={token.id} tokenSymbol={token.symbol} />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     )
 
