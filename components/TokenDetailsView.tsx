@@ -348,7 +348,7 @@ export default function TokenDetailsView({
 
             {/* Header row: Avatar | token + creator | token-info (moves below on narrow) | progress below */}
             <div>
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-1">
                 {/* Avatar */}
                 <div className="flex-shrink-0 border border-gray-500">
                   {token.token_logo_asset_id ? (
@@ -380,13 +380,13 @@ export default function TokenDetailsView({
                   {/* Row that can wrap: token + creator + tokeninfo */}
                   <div className="flex items-start gap-0 flex-wrap">
                     {/* Token section */}
-                    <div className="flex flex-col items-start text-left border border-gray-500 p-3 h-28" title={token.name}>
+                    <div className="flex flex-col items-start text-left border border-gray-500 p-1 h-28" title={token.name}>
                       <h3 className="font-semibold text-white truncate w-full">{token.symbol}</h3>
 
                       {/* Contract + copy */}
-                      <div className="flex items-center gap-4 text-xs text-gray-400">
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
                         <span className="font-mono">
-                          {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
+                          {token.contract_address.slice(0, 4)}...{token.contract_address.slice(-4)}
                         </span>
                         <button
                           onClick={(e) => {
@@ -427,7 +427,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Creator section */}
-                    <div className="flex justify-start items-start border border-gray-500 p-3 h-28">
+                    <div className="flex justify-start items-start border border-gray-500 p-1 h-28">
                       <UserProfile
                         wallet={token.creator_wallet}
                         showAvatar={false}
@@ -441,7 +441,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Token info (name + moved links) — full width below on small */}
-                    <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto p-3">
+                    <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto py-1 px-1 pl-2">
                       <div className="text-sm flex items-start gap-2 min-w-0">
                         <span className="text-gray-400">Token name:</span>
                         <span className="text-white font-medium truncate">{token.name || '—'}</span>
@@ -512,7 +512,7 @@ export default function TokenDetailsView({
 
                   {/* Progress bar spanning below token + creator + tokeninfo */}
                   {!token.on_dex && (
-                    <div className="mt-2">
+                    <div className="mt-4 w-full max-w-[600px]">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-white">Graduation Progress</span>
                         <span className="text-sm font-semibold text-orange-400">
@@ -559,92 +559,94 @@ export default function TokenDetailsView({
                     </div>
                   )}
 
-                  {/* Stats section directly below progress bar */}
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {/* Price */}
-                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">Price</span>
-                        <span className="text-sm font-semibold text-white">
-                          {token.current_price !== undefined && token.current_price !== null && usdPrice
-                            ? formatUSDValue(getNumericPrice(), usdPrice)
-                            : '—'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* FDV / Cap */}
-                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">{getFDVLabel()}</span>
-                        <span className="text-sm font-semibold text-white">
-                          {usdPrice && getFDV() !== null ? formatUSDValue(getFDV()!, usdPrice) : '—'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Holders */}
-                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">Holders</span>
-                        <span className="text-sm font-semibold text-white">
-                          {token.holder_count !== undefined && token.holder_count !== null
-                            ? formatLargeNumber(token.holder_count)
-                            : '—'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Volume 24h (only if on DEX) */}
-                    {token.on_dex && (
-                      <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
-                          <span className="text-sm font-semibold text-white">
-                            {token.volume_24h_eth !== undefined &&
-                            token.volume_24h_eth !== null &&
-                            token.volume_24h_eth > 0 &&
-                            usdPrice
-                              ? formatUSDValue(token.volume_24h_eth, usdPrice)
-                              : '—'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Liquidity (only if on DEX) */}
-                    {token.on_dex && (
-                      <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-400">Liquidity</span>
-                          <span className="text-sm font-semibold text-white">
-                            {token.liquidity_eth !== undefined &&
-                            token.liquidity_eth !== null &&
-                            token.liquidity_eth > 0 &&
-                            usdPrice
-                              ? formatUSDValue(token.liquidity_eth, usdPrice)
-                              : '—'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Supply */}
-                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">Supply</span>
-                        <span className="text-sm font-semibold text-white">
-                          {token.total_supply !== undefined && token.total_supply !== null
-                            ? formatLargeNumber(Number(token.total_supply) / 1e18)
-                            : '—'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  
                 </div>
               </div>
             </div>
 
+
+            {/* Stats section directly below progress bar */}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {/* Price */}
+              <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Price</span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.current_price !== undefined && token.current_price !== null && usdPrice
+                      ? formatUSDValue(getNumericPrice(), usdPrice)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* FDV / Cap */}
+              <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{getFDVLabel()}</span>
+                  <span className="text-sm font-semibold text-white">
+                    {usdPrice && getFDV() !== null ? formatUSDValue(getFDV()!, usdPrice) : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Holders */}
+              <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Holders</span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.holder_count !== undefined && token.holder_count !== null
+                      ? formatLargeNumber(token.holder_count)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Volume 24h (only if on DEX) */}
+              {token.on_dex && (
+                <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
+                    <span className="text-sm font-semibold text-white">
+                      {token.volume_24h_eth !== undefined &&
+                      token.volume_24h_eth !== null &&
+                      token.volume_24h_eth > 0 &&
+                      usdPrice
+                        ? formatUSDValue(token.volume_24h_eth, usdPrice)
+                        : '—'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Liquidity (only if on DEX) */}
+              {token.on_dex && (
+                <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">Liquidity</span>
+                    <span className="text-sm font-semibold text-white">
+                      {token.liquidity_eth !== undefined &&
+                      token.liquidity_eth !== null &&
+                      token.liquidity_eth > 0 &&
+                      usdPrice
+                        ? formatUSDValue(token.liquidity_eth, usdPrice)
+                        : '—'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Supply */}
+              <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Supply</span>
+                  <span className="text-sm font-semibold text-white">
+                    {token.total_supply !== undefined && token.total_supply !== null
+                      ? formatLargeNumber(Number(token.total_supply) / 1e18)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             {/* ===== Edit Token Info — inline inside stats (creator only) ===== */}
             {isCreator && (

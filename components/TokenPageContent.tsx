@@ -212,7 +212,7 @@ const TokenCard = memo(({
             {/* Contract Address */}
           <div className="flex items-center gap-2 text-xs text-gray-400 justify-center">
               <span className="font-mono">
-                {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
+                {token.contract_address.slice(0, 4)}...{token.contract_address.slice(-4)}
               </span>
               <button
                 onClick={(e) => {

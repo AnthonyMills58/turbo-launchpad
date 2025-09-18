@@ -195,7 +195,7 @@ export default function AirdropForm({
           {onChainAirdrops.map((a, i) => (
             <div key={`onchain-${i}`} className="flex justify-between items-center mb-1">
               <div className="truncate w-32">
-                {a.address.slice(0, 6)}...{a.address.slice(-4)}
+                {a.address.slice(0, 4)}...{a.address.slice(-4)}
               </div>
               <div className="flex items-center gap-1 justify-end min-w-[80px]">
                 <span className="text-white text-xs">{a.amount}</span>

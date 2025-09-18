@@ -127,9 +127,10 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                <>
                  {displayName ? (
                    <>
-                     {/* Line 1: Creator name (when profile exists) */}
+                     {/* Line 1: CREATOR label */}
+                     <div className="text-xs text-gray-400 font-medium">CREATOR</div>
+                     {/* Line 2: Creator name */}
                      <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-sm">
-                       <span className="text-gray-400">by</span>
                        <span 
                          className="text-gray-400 truncate max-w-[80px]"
                          title={displayName}
@@ -137,7 +138,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                          {displayName}
                        </span>
                      </div>
-                     {/* Line 2: Time only (address removed) */}
+                     {/* Line 3: Time */}
                      {createdTime && (
                        <span className="text-sm text-gray-400">
                          {createdTime}
@@ -146,12 +147,10 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                    </>
                  ) : (
                    <>
-                     {/* Line 1: Centered "by" (when no profile exists) */}
-                     <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-1 text-sm">
-                       <span className="text-gray-400">by</span>
-                     </div>
+                     {/* Line 1: CREATOR label (when no profile exists) */}
+                     <div className="text-xs text-gray-400 font-medium">CREATOR</div>
                      {/* Line 2: Address with copy icon (when no profile exists) */}
-                     <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+                     <div className="flex items-center gap-2 text-xs text-gray-400">
                        <span className="font-mono">{wallet.slice(0, 4)}...{wallet.slice(-4)}</span>
                        <button
                          onClick={(e) => {
@@ -177,11 +176,11 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
              ) : (
                <>
                  <span className="text-sm text-gray-300 hover:text-white transition-colors cursor-pointer">
-                   {displayName || 'by '}
+                   {displayName || ''}
                  </span>
                  {showTime ? (
                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                     <span>{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+                     <span>{wallet.slice(0, 4)}...{wallet.slice(-4)}</span>
                      <button
                        onClick={(e) => {
                          e.stopPropagation()
@@ -196,7 +195,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                    </div>
                  ) : (
                    <span className="text-xs text-gray-400">
-                     {wallet.slice(0, 6)}...{wallet.slice(-4)}
+                     {wallet.slice(0, 4)}...{wallet.slice(-4)}
                    </span>
                  )}
                </>
@@ -236,7 +235,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                
                {/* Creator address with copy functionality */}
                <div className="flex items-center justify-center gap-2 text-xs text-gray-400 mb-2">
-                 <span className="font-mono">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+                 <span className="font-mono">{wallet.slice(0, 4)}...{wallet.slice(-4)}</span>
                  <button
                    onClick={(e) => {
                      e.stopPropagation()
