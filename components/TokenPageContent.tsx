@@ -649,7 +649,7 @@ export default function TokenPageContent() {
   return (
     <div className="min-h-screen bg-transparent p-2 sm:p-4 md:p-6">
       <div className="flex justify-center w-full">
-        <div className="grid grid-cols-4 gap-8 max-w-[1600px]">
+        <div className="flex flex-wrap justify-center gap-8 max-w-[1600px]">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (
