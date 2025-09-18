@@ -43,7 +43,7 @@ export default function TokenDetailsView({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
-  const [showTransactions, setShowTransactions] = useState(false)
+  const [showTransactions, setShowTransactions] = useState(true)
   const [showHolders, setShowHolders] = useState(false)
   const [showChart, setShowChart] = useState(false)
 
