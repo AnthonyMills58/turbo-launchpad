@@ -305,7 +305,7 @@ export default function TokenDetailsView({
         {/* ======= Responsive layout: Stats (left, flex-1) + Actions (right, fixed) ======= */}
         <div className="flex flex-col lg:flex-row items-start gap-0">
           {/* ================= LEFT: STATS CARD ================= */}
-          <div className="group rounded-xl p-3 border bg-transparent border-gray-600 flex-1 relative">
+          <div className="group  p-3 border bg-transparent border-gray-600 flex-1 relative">
             {/* Social media icons - responsive positioning */}
             <div className="absolute top-3 right-3 hidden lg:flex items-center gap-1 text-blue-400">
               {token.website && (
@@ -356,7 +356,7 @@ export default function TokenDetailsView({
                       src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
                       alt={token.name}
                       baseWidth={202}
-                      className="rounded-lg"
+                      className=""
                       draggable={false}
                       onError={() => {}}
                     />
@@ -365,11 +365,11 @@ export default function TokenDetailsView({
                       src={token.image}
                       alt={token.name}
                       baseWidth={202}
-                      className="rounded-lg"
+                      className=""
                       draggable={false}
                     />
                   ) : (
-                    <div className="w-[202px] h-[202px] bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                    <div className="w-[202px] h-[202px] bg-gradient-to-br from-purple-500 to-indigo-500  flex items-center justify-center text-white font-bold text-sm">
                       {token.symbol[0]}
                     </div>
                   )}
@@ -380,7 +380,7 @@ export default function TokenDetailsView({
                   {/* Row that can wrap: token + creator + tokeninfo */}
                   <div className="flex items-start gap-4 flex-wrap">
                     {/* Token section */}
-                    <div className="flex flex-col items-start text-left" title={token.name}>
+                    <div className="flex flex-col items-start text-left border border-gray-500 p-3" title={token.name}>
                       <h3 className="font-semibold text-white truncate w-full">{token.symbol}</h3>
 
                       {/* Contract + copy */}
@@ -427,7 +427,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Creator section */}
-                    <div className="flex justify-start items-start">
+                    <div className="flex justify-start items-start border border-gray-500 p-3">
                       <UserProfile
                         wallet={token.creator_wallet}
                         showAvatar={false}
@@ -441,7 +441,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Token info (name + moved links) — full width below on small */}
-                    <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto">
+                    <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto border border-gray-500 p-3">
                       <div className="text-sm flex items-start gap-2 min-w-0">
                         <span className="text-gray-400">Token name:</span>
                         <span className="text-white font-medium truncate">{token.name || '—'}</span>
@@ -526,7 +526,7 @@ export default function TokenDetailsView({
                             : '0%'}
                         </span>
                       </div>
-                      <div className="relative h-4 rounded-full overflow-hidden border border-[#2a2d3a]">
+                      <div className="relative h-4  overflow-hidden border border-[#2a2d3a]">
                         <div
                           className="absolute inset-0"
                           style={{
@@ -542,7 +542,7 @@ export default function TokenDetailsView({
                           }}
                         />
                         <div
-                          className="relative h-full rounded-full transition-all duration-500 ease-out overflow-hidden"
+                          className="relative h-full  transition-all duration-500 ease-out overflow-hidden"
                           style={{
                             width:
                               token.raise_target && token.eth_raised
@@ -562,7 +562,7 @@ export default function TokenDetailsView({
                   {/* Stats section directly below progress bar */}
                   <div className="flex flex-wrap gap-2 mt-3">
                     {/* Price */}
-                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">Price</span>
                         <span className="text-sm font-semibold text-white">
@@ -574,7 +574,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* FDV / Cap */}
-                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">{getFDVLabel()}</span>
                         <span className="text-sm font-semibold text-white">
@@ -584,7 +584,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Holders */}
-                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">Holders</span>
                         <span className="text-sm font-semibold text-white">
@@ -597,7 +597,7 @@ export default function TokenDetailsView({
 
                     {/* Volume 24h (only if on DEX) */}
                     {token.on_dex && (
-                      <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                      <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
                           <span className="text-sm font-semibold text-white">
@@ -614,7 +614,7 @@ export default function TokenDetailsView({
 
                     {/* Liquidity (only if on DEX) */}
                     {token.on_dex && (
-                      <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                      <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-400">Liquidity</span>
                           <span className="text-sm font-semibold text-white">
@@ -630,7 +630,7 @@ export default function TokenDetailsView({
                     )}
 
                     {/* Supply */}
-                    <div className="rounded-lg border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
+                    <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">Supply</span>
                         <span className="text-sm font-semibold text-white">
@@ -651,13 +651,13 @@ export default function TokenDetailsView({
               <div className="mt-2">
                 <button
                   onClick={() => setIsEditing(!isEditing)}
-                  className="w-full px-5 py-2 rounded-md font-semibold text-white text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
+                  className="w-full px-5 py-2  font-semibold text-white text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
                 >
                   {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
                 </button>
 
                 {isEditing && (
-                  <div className="mt-3 border border-[#2a2d3a] rounded-lg p-3 bg-transparent">
+                  <div className="mt-3 border border-[#2a2d3a]  p-3 bg-transparent">
                     <EditTokenForm
                       token={token}
                       onSuccess={() => {
@@ -673,7 +673,7 @@ export default function TokenDetailsView({
           </div>
 
           {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
-          <div className="w-full max-w-sm space-y-4 border border-gray-600 rounded-xl p-3 bg-transparent">
+          <div className="w-full max-w-sm space-y-4 border border-gray-600  p-3 bg-transparent">
             {/* CREATOR / PUBLIC ACTIONS */}
             {isCreator ? (
               <>
@@ -682,7 +682,7 @@ export default function TokenDetailsView({
                     <button
                       onClick={handleUnlock}
                       disabled={isUnlocking}
-                      className={`w-full px-5 py-2.5 rounded-md font-semibold text-white text-sm transition ${
+                      className={`w-full px-5 py-2.5  font-semibold text-white text-sm transition ${
                         isUnlocking
                           ? 'bg-neutral-700 cursor-not-allowed'
                           : 'bg-gradient-to-r from-green-600 to-blue-600 hover:brightness-110'
@@ -729,7 +729,7 @@ export default function TokenDetailsView({
   } catch (error) {
     console.error('TokenDetailsView render error:', error)
     return (
-      <div className="max-w-4xl mx-auto mt-0 p-6 bg-transparent rounded-lg shadow-lg text-white">
+      <div className="max-w-4xl mx-auto mt-0 p-6 bg-transparent  shadow-lg text-white">
         <div className="text-center text-red-400">
           <h2 className="text-xl font-bold mb-4">Error loading token details</h2>
           <p className="text-sm mb-4">Something went wrong while loading this token.</p>
