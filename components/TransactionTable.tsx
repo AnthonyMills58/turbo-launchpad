@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { useState, useEffect, useCallback, memo } from 'react'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Copy } from 'lucide-react'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { useChainId } from 'wagmi'
-import { formatValue, formatLargeNumber } from '@/lib/displayFormats'
+import { formatLargeNumber } from '@/lib/displayFormats'
+import { formatPriceMetaMask } from '@/lib/ui-utils'
+import Image from 'next/image'
 
 interface Transaction {
   block_time: string
@@ -25,6 +27,136 @@ interface TransactionTableProps {
   tokenSymbol: string
   creatorWallet: string
 }
+
+// Helper function to format addresses
+const formatAddress = (address: string): string => {
+  if (!address) return ''
+  return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
+
+// Memoized TraderDisplay component to prevent re-renders
+const TraderDisplay = memo(({ address }: { address: string }) => {
+  const [profile, setProfile] = useState<{display_name: string, avatar_asset_id?: string, bio?: string} | null>(null)
+  const [showTooltip, setShowTooltip] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+    
+    const loadProfile = async () => {
+      try {
+        const response = await fetch(`/api/profile?wallet=${address}`)
+        if (response.ok && isMounted) {
+          const data = await response.json()
+          if (data.success && data.profile?.display_name && isMounted) {
+            setProfile(data.profile)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error)
+      }
+    }
+    
+    loadProfile()
+    
+    return () => {
+      isMounted = false
+    }
+  }, [address])
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(address)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy address:', error)
+    }
+  }
+
+  const displayName = profile?.display_name
+  const hasProfile = !!displayName
+
+  return (
+    <div 
+      className="relative inline-block"
+      onMouseEnter={() => hasProfile && setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-gray-300">
+          {hasProfile ? `${displayName} (${formatAddress(address)})` : formatAddress(address)}
+        </span>
+        {hasProfile && (
+          <button
+            onClick={handleCopy}
+            className="hover:text-white transition-colors"
+            title="Copy wallet address"
+          >
+            <Copy className="w-3 h-3 text-gray-400" />
+          </button>
+        )}
+      </div>
+      
+      {/* Tooltip similar to UserProfile */}
+      {showTooltip && hasProfile && (
+        <div className="absolute z-[9999] top-full right-0 transform translate-x-0 -mt-3 px-4 py-3 bg-[#1b1e2b] border-2 border-gray-600 rounded-xl shadow-2xl shadow-gray-500/20 text-white text-xs min-w-64 max-w-80 w-fit transition-all duration-200 ease-in-out opacity-100">
+          <div className="flex items-start gap-4">
+            {/* Left side: Avatar */}
+            <div className="flex-shrink-0">
+              {profile.avatar_asset_id ? (
+                <div className="w-24 h-24 rounded-full overflow-hidden flex-shrink-0 bg-gray-700 ring-2 ring-purple-400/20 shadow-lg">
+                  <Image
+                    src={`/api/media/${profile.avatar_asset_id}?v=thumb`}
+                    alt={displayName}
+                    width={96}
+                    height={96}
+                    className="w-full h-full object-cover object-center"
+                  />
+                </div>
+              ) : (
+                <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl text-white shadow-lg ring-2 ring-purple-400/20">
+                  {address[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+            
+            {/* Right side: Profile info */}
+            <div className="flex-1 min-w-0">
+              <div className="text-white text-sm font-bold mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent truncate">
+                {displayName}
+              </div>
+              
+              {/* Address with copy functionality */}
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-400 mb-2">
+                <span className="font-mono">{formatAddress(address)}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleCopy()
+                  }}
+                  className="hover:text-white transition-colors"
+                  title="Copy wallet address"
+                >
+                  <Copy size={12} />
+                </button>
+                {copied && <span className="text-green-400 text-xs">Copied!</span>}
+              </div>
+              
+              {profile.bio && (
+                <div className="text-xs text-gray-300 line-clamp-3">
+                  {profile.bio}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
+TraderDisplay.displayName = 'TraderDisplay'
 
 export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }: TransactionTableProps) {
   const chainId = useChainId()
@@ -137,33 +269,37 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
     }
   }
 
-  // Format address
-  const formatAddress = (address: string): string => {
-    if (!address) return ''
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
-  }
 
-  // Get trader display name (profile name or shortened address)
-  const getTraderDisplayName = async (address: string): Promise<string> => {
-    try {
-      const response = await fetch(`/api/profile?wallet=${address}`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.profile?.display_name) {
-          return data.profile.display_name
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch profile:', error)
-    }
-    return formatAddress(address)
-  }
+
 
   // Calculate USD value
   const calculateUSDValue = (ethWei: string, ethPriceUsd: number): string => {
     const ethAmount = parseFloat(ethWei) / 1e18
     const usdValue = ethAmount * ethPriceUsd
     return `$${usdValue.toFixed(2)}`
+  }
+
+  // Format ETH value using same logic as USD
+  const formatETHValue = (ethAmount: number): string => {
+    if (ethAmount < 0.001) {
+      const ethInfo = formatPriceMetaMask(ethAmount)
+      if (ethInfo.type === 'metamask') {
+        return `${ethInfo.value}${ethInfo.zeros}${ethInfo.digits}`
+      }
+      return ethInfo.value
+    }
+
+    if (ethAmount >= 1000) {
+      return formatLargeNumber(ethAmount)
+    }
+
+    if (ethAmount >= 0.1) {
+      return ethAmount.toFixed(2)
+    } else if (ethAmount >= 0.01) {
+      return ethAmount.toFixed(3)
+    } else {
+      return ethAmount.toFixed(4)
+    }
   }
 
   // Pagination handlers
@@ -246,7 +382,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                 const traderAddress = getTraderAddress(tx)
                 const tokenAmount = formatLargeNumber(parseFloat(tx.amount_wei) / 1e18)
                 const ethAmount = parseFloat(tx.amount_eth_wei) / 1e18
-                const ethDisplay = formatValue(ethAmount)
+                const ethDisplay = formatETHValue(ethAmount)
                 const usdValue = calculateUSDValue(tx.amount_eth_wei, tx.eth_price_usd)
                 const explorerLink = `${explorerBaseUrl}/tx/${tx.tx_hash}`
 
@@ -268,7 +404,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                       {tokenAmount}
                     </td>
                     <td className="py-3 px-2 text-sm text-gray-300">
-                      {formatAddress(traderAddress)}
+                      <TraderDisplay address={traderAddress} />
                     </td>
                     <td className="py-3 px-2 text-sm">
                       <a
@@ -339,3 +475,4 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
     </div>
   )
 }
+

@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
     
     console.log('🔍 Transaction API Debug:', {
       tokenId,
+      side,
+      maker,
       whereClause,
       params,
       totalCount
@@ -77,7 +79,10 @@ export async function GET(request: NextRequest) {
     params.push(pageSize, offset)
     const { rows: transactions } = await pool.query(transactionsQuery, params)
     
+    // Debug: log transaction types found
+    const transactionTypes = transactions.map(tx => tx.side)
     console.log('📊 Transactions found:', transactions.length)
+    console.log('📊 Transaction types found:', [...new Set(transactionTypes)])
 
     const totalPages = Math.ceil(totalCount / pageSize)
 

@@ -44,6 +44,8 @@ export default function TokenDetailsView({
   const [isEditing, setIsEditing] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [showTransactions, setShowTransactions] = useState(false)
+  const [showHolders, setShowHolders] = useState(false)
+  const [showChart, setShowChart] = useState(false)
 
   // Track if we've already synced this token to prevent infinite loops
   const syncedTokens = useRef(new Set<number>())
@@ -679,20 +681,44 @@ export default function TokenDetailsView({
             <div className="mt-2 hidden md:block">
               <div className="flex">
                 <button
-                  onClick={() => setShowTransactions(true)}
-                  className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
+                  onClick={() => {
+                    setShowTransactions(true)
+                    setShowHolders(false)
+                    setShowChart(false)
+                  }}
+                  className={`flex-1 px-5 py-2 text-sm transition border border-r-0 ${
+                    showTransactions 
+                      ? 'text-white border-gray-500' 
+                      : 'text-gray-400 bg-transparent border-gray-600 hover:border-gray-500'
+                  }`}
                 >
                   📄 Transactions
                 </button>
                 <button
-                  onClick={() => {/* TODO: Add holders functionality */}}
-                  className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
+                  onClick={() => {
+                    setShowHolders(true)
+                    setShowTransactions(false)
+                    setShowChart(false)
+                  }}
+                  className={`flex-1 px-5 py-2 text-sm transition border border-r-0 ${
+                    showHolders 
+                      ? 'text-white border-gray-500' 
+                      : 'text-gray-400 bg-transparent border-gray-600 hover:border-gray-500'
+                  }`}
                 >
                   👥 Holders
                 </button>
                 <button
-                  onClick={() => {/* TODO: Add chart functionality */}}
-                  className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
+                  onClick={() => {
+                    setShowChart(true)
+                    setShowTransactions(false)
+                    setShowHolders(false)
+                  }}
+                  className={`flex-1 px-5 py-2 text-sm transition border ${
+                    showChart 
+                      ? 'text-white border-gray-500' 
+                      : 'text-gray-400 bg-transparent border-gray-600 hover:border-gray-500'
+                  }`}
                 >
                   📈 Chart
                 </button>
@@ -701,20 +727,33 @@ export default function TokenDetailsView({
               {/* Transaction Table - appears below buttons */}
               {showTransactions && (
                 <div className="mt-3 border border-[#2a2d3a] p-3 bg-transparent">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold text-white">Transactions</h3>
-                    <button
-                      onClick={() => setShowTransactions(false)}
-                      className="text-gray-400 hover:text-white transition-colors text-xl"
-                    >
-                      ×
-                    </button>
-                  </div>
                   <TransactionTable 
                     tokenId={token.id} 
                     tokenSymbol={token.symbol}
                     creatorWallet={token.creator_wallet}
                   />
+                </div>
+              )}
+
+              {/* Holders Mock - appears below buttons */}
+              {showHolders && (
+                <div className="mt-3 border border-[#2a2d3a] p-3 bg-transparent">
+                  <div className="text-center py-8 text-gray-400">
+                    <div className="text-2xl mb-2">👥</div>
+                    <div className="text-lg font-medium mb-1">Holders</div>
+                    <div className="text-sm">Holders functionality coming soon...</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Chart Mock - appears below buttons */}
+              {showChart && (
+                <div className="mt-3 border border-[#2a2d3a] p-3 bg-transparent">
+                  <div className="text-center py-8 text-gray-400">
+                    <div className="text-2xl mb-2">📈</div>
+                    <div className="text-lg font-medium mb-1">Price Chart</div>
+                    <div className="text-sm">Chart functionality coming soon...</div>
+                  </div>
                 </div>
               )}
             </div>
