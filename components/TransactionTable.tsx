@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 
 interface Transaction {
@@ -37,7 +37,7 @@ export default function TransactionTable({ tokenId, tokenSymbol }: TransactionTa
   const pageSize = 20
 
   // Fetch transactions
-  const fetchTransactions = async (page: number = 1) => {
+  const fetchTransactions = useCallback(async (page: number = 1) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -61,11 +61,11 @@ export default function TransactionTable({ tokenId, tokenSymbol }: TransactionTa
     } finally {
       setLoading(false)
     }
-  }
+  }, [tokenId, filters.side, filters.maker])
 
   useEffect(() => {
     fetchTransactions(1)
-  }, [tokenId, filters])
+  }, [tokenId, filters, fetchTransactions])
 
   // Get trader address based on transaction type
   const getTraderAddress = (transaction: Transaction): string => {

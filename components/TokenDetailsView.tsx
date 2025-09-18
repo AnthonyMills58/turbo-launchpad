@@ -12,6 +12,7 @@ import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { Copy } from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 import PublicSellSection from './PublicSellSection'
+import TransactionTable from './TransactionTable'
 import { useSync } from '@/lib/SyncContext'
 import { formatLargeNumber } from '@/lib/displayFormats'
 import { checkIfTokenOnDex } from '@/lib/checkDexListing'
@@ -42,6 +43,7 @@ export default function TokenDetailsView({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
+  const [showTransactions, setShowTransactions] = useState(false)
 
   // Track if we've already synced this token to prevent infinite loops
   const syncedTokens = useRef(new Set<number>())
@@ -676,7 +678,7 @@ export default function TokenDetailsView({
             {/* ===== Transaction, Holders, and Chart Buttons — hidden on mobile ===== */}
             <div className="mt-2 hidden md:flex">
               <button
-                onClick={() => {/* TODO: Add transaction functionality */}}
+                onClick={() => setShowTransactions(true)}
                 className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
               >
                 📄 Transactions
@@ -745,6 +747,26 @@ export default function TokenDetailsView({
           </div>
           {/* ================= /RIGHT: ACTIONS ================= */}
         </div>
+
+        {/* Transaction Table Modal */}
+        {showTransactions && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#0d0f1a] border border-gray-600 rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-gray-600">
+                <h2 className="text-xl font-semibold text-white">Transactions</h2>
+                <button
+                  onClick={() => setShowTransactions(false)}
+                  className="text-gray-400 hover:text-white transition-colors text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+                <TransactionTable tokenId={token.id} tokenSymbol={token.symbol} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
 
