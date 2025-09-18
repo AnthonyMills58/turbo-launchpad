@@ -672,48 +672,51 @@ export default function TokenDetailsView({
                     />
                   </div>
                 )}
-
-                {showTransactions && (
-                  <div className="mt-3 border border-[#2a2d3a] p-3 bg-transparent">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-lg font-semibold text-white">Transactions</h3>
-                      <button
-                        onClick={() => setShowTransactions(false)}
-                        className="text-gray-400 hover:text-white transition-colors text-xl"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <TransactionTable 
-                      tokenId={token.id} 
-                      tokenSymbol={token.symbol}
-                      creatorWallet={token.creator_wallet}
-                    />
-                  </div>
-                )}
               </div>
             )}
 
             {/* ===== Transaction, Holders, and Chart Buttons — hidden on mobile ===== */}
-            <div className="mt-2 hidden md:flex">
-              <button
-                onClick={() => setShowTransactions(true)}
-                className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
-              >
-                📄 Transactions
-              </button>
-              <button
-                onClick={() => {/* TODO: Add holders functionality */}}
-                className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
-              >
-                👥 Holders
-              </button>
-              <button
-                onClick={() => {/* TODO: Add chart functionality */}}
-                className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
-              >
-                📈 Chart
-              </button>
+            <div className="mt-2 hidden md:block">
+              <div className="flex">
+                <button
+                  onClick={() => setShowTransactions(true)}
+                  className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
+                >
+                  📄 Transactions
+                </button>
+                <button
+                  onClick={() => {/* TODO: Add holders functionality */}}
+                  className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
+                >
+                  👥 Holders
+                </button>
+                <button
+                  onClick={() => {/* TODO: Add chart functionality */}}
+                  className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
+                >
+                  📈 Chart
+                </button>
+              </div>
+
+              {/* Transaction Table - appears below buttons */}
+              {showTransactions && (
+                <div className="mt-3 border border-[#2a2d3a] p-3 bg-transparent">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-white">Transactions</h3>
+                    <button
+                      onClick={() => setShowTransactions(false)}
+                      className="text-gray-400 hover:text-white transition-colors text-xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <TransactionTable 
+                    tokenId={token.id} 
+                    tokenSymbol={token.symbol}
+                    creatorWallet={token.creator_wallet}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

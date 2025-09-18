@@ -186,7 +186,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
         </div>
         
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400">Maker:</label>
+          <label className="text-sm text-gray-400">Trader:</label>
           <input
             type="text"
             value={filters.maker}
@@ -207,7 +207,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
               <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">USD</th>
               <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">ETH</th>
               <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">{tokenSymbol}</th>
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Maker</th>
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Trader</th>
               <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Tx</th>
             </tr>
           </thead>
