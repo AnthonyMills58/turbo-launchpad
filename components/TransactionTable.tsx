@@ -1,0 +1,320 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+
+interface Transaction {
+  id: string
+  block_time: string
+  tx_hash: string
+  from_address: string
+  to_address: string
+  amount_wei: string
+  amount_eth_wei: string
+  price_eth_per_token: string
+  side: string
+  src: string
+  eth_price_usd: number
+  creator_wallet?: string
+}
+
+interface TransactionTableProps {
+  tokenId: number
+  tokenSymbol: string
+}
+
+export default function TransactionTable({ tokenId, tokenSymbol }: TransactionTableProps) {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [filters, setFilters] = useState({
+    side: '',
+    maker: ''
+  })
+
+  const pageSize = 20
+
+  // Fetch transactions
+  const fetchTransactions = async (page: number = 1) => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        tokenId: tokenId.toString(),
+        page: page.toString(),
+        pageSize: pageSize.toString(),
+        ...(filters.side && { side: filters.side }),
+        ...(filters.maker && { maker: filters.maker })
+      })
+
+      const response = await fetch(`/api/transactions?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setTransactions(data.transactions || [])
+        setTotalPages(data.totalPages || 1)
+        setTotalCount(data.totalCount || 0)
+        setCurrentPage(page)
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchTransactions(1)
+  }, [tokenId, filters])
+
+  // Get trader address based on transaction type
+  const getTraderAddress = (transaction: Transaction): string => {
+    switch (transaction.side) {
+      case 'BUY&LOCK':
+      case 'GRADUATION':
+      case 'UNLOCK':
+        return transaction.creator_wallet || ''
+      case 'BUY':
+      case 'CLAIMAIRDROP':
+        return transaction.to_address
+      case 'SELL':
+        return transaction.from_address
+      default:
+        return ''
+    }
+  }
+
+  // Get transaction type color
+  const getTransactionColor = (side: string): string => {
+    switch (side) {
+      case 'BUY':
+      case 'BUY&LOCK':
+        return 'text-green-400'
+      case 'SELL':
+        return 'text-orange-400'
+      case 'GRADUATION':
+        return 'text-blue-400'
+      case 'UNLOCK':
+        return 'text-purple-400'
+      case 'CLAIMAIRDROP':
+        return 'text-gray-400'
+      default:
+        return 'text-gray-400'
+    }
+  }
+
+  // Format large numbers
+  const formatLargeNumber = (value: string | number): string => {
+    const num = typeof value === 'string' ? parseFloat(value) : value
+    if (num >= 1e9) {
+      return `${(num / 1e9).toFixed(2).replace(/\.?0+$/, '')}B`
+    } else if (num >= 1e6) {
+      return `${(num / 1e6).toFixed(2).replace(/\.?0+$/, '')}M`
+    } else if (num >= 1e3) {
+      return `${(num / 1e3).toFixed(2).replace(/\.?0+$/, '')}K`
+    }
+    return num.toFixed(2)
+  }
+
+  // Format time ago
+  const formatTimeAgo = (timestamp: string): string => {
+    const now = new Date()
+    const time = new Date(timestamp)
+    const diffMs = now.getTime() - time.getTime()
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffDays > 0) {
+      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+    } else if (diffHours > 0) {
+      return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    } else {
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`
+    }
+  }
+
+  // Format address
+  const formatAddress = (address: string): string => {
+    if (!address) return ''
+    return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+  // Calculate USD value
+  const calculateUSDValue = (ethWei: string, ethPriceUsd: number): string => {
+    const ethAmount = parseFloat(ethWei) / 1e18
+    const usdValue = ethAmount * ethPriceUsd
+    return `$${usdValue.toFixed(2)}`
+  }
+
+  // Pagination handlers
+  const goToFirstPage = () => fetchTransactions(1)
+  const goToPrevPage = () => currentPage > 1 && fetchTransactions(currentPage - 1)
+  const goToNextPage = () => currentPage < totalPages && fetchTransactions(currentPage + 1)
+  const goToLastPage = () => fetchTransactions(totalPages)
+
+  // Filter handlers
+  const handleSideFilter = (side: string) => {
+    setFilters(prev => ({ ...prev, side }))
+  }
+
+  const handleMakerFilter = (maker: string) => {
+    setFilters(prev => ({ ...prev, maker }))
+  }
+
+  return (
+    <div className="w-full bg-transparent">
+      {/* Filters */}
+      <div className="mb-4 flex flex-wrap gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-400">Type:</label>
+          <select
+            value={filters.side}
+            onChange={(e) => handleSideFilter(e.target.value)}
+            className="px-3 py-1 bg-transparent border border-gray-600 text-white text-sm rounded"
+          >
+            <option value="">All</option>
+            <option value="BUY">Buy</option>
+            <option value="SELL">Sell</option>
+            <option value="BUY&LOCK">Buy & Lock</option>
+            <option value="UNLOCK">Unlock</option>
+            <option value="GRADUATION">Graduation</option>
+            <option value="CLAIMAIRDROP">Claim Airdrop</option>
+          </select>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-400">Maker:</label>
+          <input
+            type="text"
+            value={filters.maker}
+            onChange={(e) => handleMakerFilter(e.target.value)}
+            placeholder="Address or ENS name"
+            className="px-3 py-1 bg-transparent border border-gray-600 text-white text-sm rounded min-w-[200px]"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-gray-600">
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Date</th>
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Type</th>
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">USD</th>
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">ETH</th>
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">{tokenSymbol}</th>
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Maker</th>
+              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Tx</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="text-center py-8 text-gray-400">
+                  Loading transactions...
+                </td>
+              </tr>
+            ) : transactions.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center py-8 text-gray-400">
+                  No transactions found
+                </td>
+              </tr>
+            ) : (
+              transactions.map((tx) => {
+                const traderAddress = getTraderAddress(tx)
+                const tokenAmount = formatLargeNumber(parseFloat(tx.amount_wei) / 1e18)
+                const ethAmount = formatLargeNumber(parseFloat(tx.amount_eth_wei) / 1e18)
+                const usdValue = calculateUSDValue(tx.amount_eth_wei, tx.eth_price_usd)
+
+                return (
+                  <tr key={tx.id} className="border-b border-gray-700 hover:bg-gray-800/20">
+                    <td className="py-3 px-2 text-sm text-gray-300">
+                      {formatTimeAgo(tx.block_time)}
+                    </td>
+                    <td className={`py-3 px-2 text-sm font-medium ${getTransactionColor(tx.side)}`}>
+                      {tx.side}
+                    </td>
+                    <td className="py-3 px-2 text-sm text-gray-300">
+                      {usdValue}
+                    </td>
+                    <td className="py-3 px-2 text-sm text-gray-300">
+                      {ethAmount}
+                    </td>
+                    <td className="py-3 px-2 text-sm text-gray-300">
+                      {tokenAmount}
+                    </td>
+                    <td className="py-3 px-2 text-sm text-gray-300">
+                      {formatAddress(traderAddress)}
+                    </td>
+                    <td className="py-3 px-2 text-sm">
+                      <a
+                        href={`https://etherscan.io/tx/${tx.tx_hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-400 hover:text-white transition-colors"
+                      >
+                        🔗
+                      </a>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between mt-4">
+        <div className="text-sm text-gray-400">
+          Showing {transactions.length} of {totalCount} transactions
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <button
+            onClick={goToFirstPage}
+            disabled={currentPage === 1}
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="First page"
+          >
+            <ChevronsLeft size={16} />
+          </button>
+          
+          <button
+            onClick={goToPrevPage}
+            disabled={currentPage === 1}
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Previous page"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          
+          <span className="px-3 py-1 text-sm text-gray-300">
+            Page {currentPage} of {totalPages}
+          </span>
+          
+          <button
+            onClick={goToNextPage}
+            disabled={currentPage === totalPages}
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Next page"
+          >
+            <ChevronRight size={16} />
+          </button>
+          
+          <button
+            onClick={goToLastPage}
+            disabled={currentPage === totalPages}
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Last page"
+          >
+            <ChevronsRight size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
