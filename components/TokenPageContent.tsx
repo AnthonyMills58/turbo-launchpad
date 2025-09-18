@@ -332,7 +332,7 @@ const TokenCard = memo(({
           /* On DEX: Volume + Liquidity in single row */
           <div className="grid grid-cols-2">
             {/* Volume Box */}
-            <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r">
+            <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r border-t-0">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-gray-400">Vol<sub className="text-[8px]">24h</sub></span>
                 <span className="text-sm text-gray-400">
@@ -346,7 +346,7 @@ const TokenCard = memo(({
             </div>
             
             {/* Liquidity Box */}
-            <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r">
+            <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r border-t-0">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-gray-400">Liquidity</span>
                 <span className="text-sm text-gray-400">
