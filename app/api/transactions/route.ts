@@ -54,7 +54,8 @@ export async function GET(request: NextRequest) {
       maker,
       whereClause,
       params,
-      totalCount
+      totalCount,
+      hasSideFilter: !!side
     })
 
     // Get transactions with pagination
@@ -83,6 +84,17 @@ export async function GET(request: NextRequest) {
     const transactionTypes = transactions.map(tx => tx.side)
     console.log('📊 Transactions found:', transactions.length)
     console.log('📊 Transaction types found:', [...new Set(transactionTypes)])
+    
+    // Debug: get all available transaction types for this token
+    const allTypesQuery = `
+      SELECT DISTINCT side, COUNT(*) as count 
+      FROM token_transfers 
+      WHERE token_id = $1 AND side != 'MINT'
+      GROUP BY side 
+      ORDER BY side
+    `
+    const { rows: allTypes } = await pool.query(allTypesQuery, [tokenId])
+    console.log('📊 All available transaction types for token:', allTypes)
 
     const totalPages = Math.ceil(totalCount / pageSize)
 
@@ -91,7 +103,8 @@ export async function GET(request: NextRequest) {
       totalCount,
       totalPages,
       currentPage: page,
-      pageSize
+      pageSize,
+      transactionTypes: allTypes
     })
 
   } catch (error) {
