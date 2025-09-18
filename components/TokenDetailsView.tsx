@@ -526,7 +526,7 @@ export default function TokenDetailsView({
                             : '0%'}
                         </span>
                       </div>
-                      <div className="relative h-4  overflow-hidden border border-[#2a2d3a]">
+                      <div className="relative h-4 rounded-full overflow-hidden border border-[#2a2d3a]">
                         <div
                           className="absolute inset-0"
                           style={{
@@ -653,7 +653,7 @@ export default function TokenDetailsView({
               <div className="mt-2">
                 <button
                   onClick={() => setIsEditing(!isEditing)}
-                  className="w-full px-5 py-2  font-semibold text-white text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
+                  className="w-full px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
                 >
                   {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
                 </button>
@@ -672,6 +672,28 @@ export default function TokenDetailsView({
                 )}
               </div>
             )}
+
+            {/* ===== Transaction, Holders, and Chart Buttons — always displayed ===== */}
+            <div className="mt-2 flex">
+              <button
+                onClick={() => {/* TODO: Add transaction functionality */}}
+                className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
+              >
+                📄 Transaction
+              </button>
+              <button
+                onClick={() => {/* TODO: Add holders functionality */}}
+                className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
+              >
+                👥 Holders
+              </button>
+              <button
+                onClick={() => {/* TODO: Add chart functionality */}}
+                className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
+              >
+                📈 Chart
+              </button>
+            </div>
           </div>
 
           {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
