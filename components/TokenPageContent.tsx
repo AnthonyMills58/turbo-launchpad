@@ -246,7 +246,7 @@ const TokenCard = memo(({
         </div>
 
         {/* Section 3: Creator Information */}
-        <div className="flex-1 min-w-0 flex flex-col justify-center items-center text-center">
+        <div className="flex-1 min-w-0 flex flex-col justify-center items-center text-center mt-2">
           <UserProfile 
             wallet={token.creator_wallet} 
             showAvatar={false} 

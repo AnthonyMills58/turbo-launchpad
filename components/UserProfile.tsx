@@ -130,7 +130,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                      {/* Line 1: CREATOR label */}
                      <div className="text-xs text-gray-400 font-medium">CREATOR</div>
                      {/* Line 2: Creator name */}
-                     <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-sm">
+                     <div className="text-white hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs">
                        <span 
                          className="text-gray-400 truncate max-w-[80px]"
                          title={displayName}
@@ -140,7 +140,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                      </div>
                      {/* Line 3: Time */}
                      {createdTime && (
-                       <span className="text-sm text-gray-400">
+                       <span className="text-xs text-gray-400">
                          {createdTime}
                        </span>
                      )}
@@ -166,7 +166,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                      </div>
                      {/* Line 3: Time (when no profile exists) */}
                      {createdTime && (
-                       <span className="text-sm text-gray-400">
+                       <span className="text-xs text-gray-400">
                          {createdTime}
                        </span>
                      )}

@@ -380,7 +380,7 @@ export default function TokenDetailsView({
                   {/* Row that can wrap: token + creator + tokeninfo */}
                   <div className="flex items-start gap-0 flex-wrap">
                     {/* Token section */}
-                    <div className="flex flex-col items-start text-left border border-gray-500 p-1 h-28" title={token.name}>
+                    <div className="flex flex-col items-start text-left border border-gray-500 pl-3 pr-1 pt-1 pb-1 h-28" title={token.name}>
                       <h3 className="font-semibold text-white truncate w-full">{token.symbol}</h3>
 
                       {/* Contract + copy */}
@@ -427,7 +427,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Creator section */}
-                    <div className="flex justify-start items-start border border-gray-500 p-1 h-28">
+                    <div className="flex justify-start items-start border border-gray-500 px-2 pt-2 h-28">
                       <UserProfile
                         wallet={token.creator_wallet}
                         showAvatar={false}
