@@ -496,8 +496,16 @@ export default function TokenPageContent() {
     }
 
     try {
+      console.log('[TokenPageContent] Fetching tokens with params:', params.toString())
       const res = await fetch(`/api/all-tokens?${params.toString()}`)
+      console.log('[TokenPageContent] Response status:', res.status)
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      }
+      
       const baseTokens: Token[] = await res.json()
+      console.log('[TokenPageContent] Fetched tokens count:', baseTokens.length)
       setTokens(baseTokens)
 
       const found = baseTokens.find(t => t.id.toString() === selectedId)
@@ -622,19 +630,25 @@ export default function TokenPageContent() {
   )
 
   // Empty state component
-  const EmptyState = () => (
-    <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
-      <div className="text-6xl mb-4">🔍</div>
-      <h3 className="text-xl font-semibold text-white mb-2">No tokens found</h3>
-      <p className="text-gray-400 max-w-md">
-        No tokens match your filters. Try clearing filters or searching a different term.
-      </p>
-    </div>
-  )
+  const EmptyState = () => {
+    console.log('[TokenPageContent] Rendering EmptyState - tokens.length:', tokens.length, 'isLoading:', isLoading)
+    return (
+      <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+        <div className="text-6xl mb-4">🔍</div>
+        <h3 className="text-xl font-semibold text-white mb-2">No tokens found</h3>
+        <p className="text-gray-400 max-w-md">
+          No tokens match your filters. Try clearing filters or searching a different term.
+        </p>
+        <div className="mt-4 text-sm text-gray-500">
+          Debug: isLoading={isLoading.toString()}, tokens.length={tokens.length}
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-transparent p-4 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-9">
+    <div className="min-h-screen bg-transparent p-2 sm:p-4 md:p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4 sm:gap-6 md:gap-9">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (
