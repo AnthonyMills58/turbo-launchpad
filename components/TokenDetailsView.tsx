@@ -673,13 +673,13 @@ export default function TokenDetailsView({
               </div>
             )}
 
-            {/* ===== Transaction, Holders, and Chart Buttons — always displayed ===== */}
-            <div className="mt-2 flex">
+            {/* ===== Transaction, Holders, and Chart Buttons — hidden on mobile ===== */}
+            <div className="mt-2 hidden md:flex">
               <button
                 onClick={() => {/* TODO: Add transaction functionality */}}
                 className="flex-1 px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500 border-r-0"
               >
-                📄 Transaction
+                📄 Transactions
               </button>
               <button
                 onClick={() => {/* TODO: Add holders functionality */}}
