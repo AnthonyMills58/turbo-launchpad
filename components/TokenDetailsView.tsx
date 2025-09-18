@@ -9,7 +9,7 @@ import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
-import { Copy } from 'lucide-react'
+import { Copy, Check } from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 import PublicSellSection from './PublicSellSection'
 import TransactionTable from './TransactionTable'
@@ -402,7 +402,7 @@ export default function TokenDetailsView({
                         >
                           <Copy size={12} />
                         </button>
-                        {copied && <span className="text-green-400 text-xs">Copied!</span>}
+                        {copied && <Check size={12} className="text-green-400" />}
                       </div>
 
                       {/* On DEX + Explorer links */}

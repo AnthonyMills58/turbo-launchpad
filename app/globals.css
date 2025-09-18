@@ -72,5 +72,58 @@ code, pre, .font-mono, [class*="mono"], .contract-address, input, textarea, butt
   font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace !important;
 }
 
+/* RainbowKit wallet connection styling */
+[data-rk] {
+  --rk-colors-accentColor: #166534 !important;
+  --rk-colors-accentColorForeground: white !important;
+  --rk-colors-background: #151827 !important;
+  --rk-colors-foreground: #d1d5db !important;
+  --rk-colors-modalBackground: #151827 !important;
+  --rk-colors-modalText: #d1d5db !important;
+  --rk-colors-modalTextSecondary: #9ca3af !important;
+  --rk-colors-closeButton: #6b7280 !important;
+  --rk-colors-closeButtonBackground: #374151 !important;
+  --rk-colors-connectButtonBackground: #151827 !important;
+  --rk-colors-connectButtonText: #d1d5db !important;
+  --rk-colors-connectButtonTextError: #ef4444 !important;
+  --rk-colors-connectionIndicator: #10b981 !important;
+  --rk-colors-error: #ef4444 !important;
+  --rk-colors-generalBorder: #374151 !important;
+  --rk-colors-menuItemBackground: #1f2937 !important;
+  --rk-colors-menuItemBackgroundHover: #374151 !important;
+  --rk-colors-menuItemText: #d1d5db !important;
+  --rk-colors-modalBackdrop: rgba(0, 0, 0, 0.8) !important;
+  --rk-colors-profileAction: #374151 !important;
+  --rk-colors-profileActionHover: #4b5563 !important;
+  --rk-colors-profileForeground: #d1d5db !important;
+  --rk-colors-selectedOptionBorder: #166534 !important;
+  --rk-colors-standby: #6b7280 !important;
+}
+
+/* Remove bold font weight and apply app fonts to RainbowKit components */
+[data-rk] * {
+  font-weight: normal !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Use JetBrains Mono for addresses and code in RainbowKit */
+[data-rk] [class*="address"], 
+[data-rk] [class*="wallet"], 
+[data-rk] code, 
+[data-rk] .font-mono {
+  font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace !important;
+}
+
+/* Override global font size for Turbo Launch button */
+.turbo-launch-btn {
+  font-size: 1.5rem !important;
+  font-weight: 900 !important;
+}
+
+/* Override global font size for rocket icon */
+.rocket-icon {
+  font-size: 1.8rem !important;
+}
+
 
 

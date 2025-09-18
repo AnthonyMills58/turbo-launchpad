@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, memo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
-import { Copy, Users } from 'lucide-react'
+import { Copy, Users, Check } from 'lucide-react'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
@@ -225,7 +225,7 @@ const TokenCard = memo(({
                 <Copy size={12} />
               </button>
               {copied && (
-                <span className="text-green-400 text-xs">Copied!</span>
+                <Check size={12} className="text-green-400" />
               )}
             </div>
           {/* On DEX Link - Fourth Line */}

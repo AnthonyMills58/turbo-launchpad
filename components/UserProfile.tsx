@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Copy } from 'lucide-react'
+import { Copy, Check } from 'lucide-react'
 
 type Profile = {
   wallet: string
@@ -162,7 +162,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                        >
                          <Copy size={12} />
                        </button>
-                       {copied && <span className="text-green-400 text-xs">Copied!</span>}
+                       {copied && <Check size={12} className="text-green-400" />}
                      </div>
                      {/* Line 3: Time (when no profile exists) */}
                      {createdTime && (
@@ -246,7 +246,7 @@ export default function UserProfile({ wallet, showAvatar = true, showName = true
                  >
                    <Copy size={12} />
                  </button>
-                 {copied && <span className="text-green-400 text-xs">Copied!</span>}
+                 {copied && <Check size={12} className="text-green-400" />}
                </div>
                
                {profile?.bio && (

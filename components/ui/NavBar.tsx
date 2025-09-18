@@ -57,34 +57,37 @@ export default function NavBar() {
   }, [showFilters])
 
   return (
-    <nav className="w-full bg-[#0d0f1a] text-white shadow-md px-4 flex flex-wrap items-center justify-between sticky top-0 z-50">
+    <nav className="w-full bg-[#0d0f1a] text-white shadow-md px-4 py-1 flex flex-wrap items-center justify-between sticky top-0 z-50">
       {/* Left Nav */}
       <div className="flex items-center space-x-1">
-      <button
-        onClick={() => router.push('/')}
-        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
-      >
-        <span className="text-2xl">🚀</span>
-        <span>Turbo Launch</span>
-      </button>
+      <div className="flex items-center space-x-1">
+        <span className="rocket-icon text-3xl">🚀</span>
+        <button
+          onClick={() => router.push('/')}
+          className="turbo-launch-btn text-orange-400 font-black text-2xl leading-none hover:bg-gray-700 px-2 py-2 rounded"
+          style={{fontSize: '1.5rem', fontWeight: '900'}}
+        >
+          Turbo Launch
+        </button>
+      </div>
       <button
         onClick={() => router.push('/leaderboard')}
         className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
-        <span>Leaderboard</span>
+        <span className="text-gray-400">Leaderboard</span>
       </button>
       
       <button
         onClick={() => router.push('/portfolio')}
         className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
-        <span>Portfolio</span>
+        <span className="text-gray-400">Portfolio</span>
       </button>
       <button
         onClick={() => router.push('/profile')}
         className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >
-        <span>Profile</span>
+        <span className="text-gray-400">Profile</span>
       </button>
 
       <button
