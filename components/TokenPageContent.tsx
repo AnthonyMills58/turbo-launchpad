@@ -163,10 +163,10 @@ const TokenCard = memo(({
           onSelect(token.id.toString())
         }
       }}
-      className={`group cursor-pointer rounded-2xl p-2 border transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] ${
+      className={`group cursor-pointer rounded-2xl p-2 border transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] w-[330px] flex-shrink-0 ${
         isSelected
-          ? 'bg-gray-800/40 ring-2 ring-purple-400 border-purple-500'
-          : 'bg-gray-800/40 border-[#2a2d3a] hover:bg-gray-700/40 hover:border-[#3a3d4a]'
+          ? 'bg-gray-800/60 ring-2 ring-purple-400 border-purple-500'
+          : 'bg-gray-800/60 border-[#2a2d3a] hover:bg-gray-700/60 hover:border-[#3a3d4a]'
       }`}
     >
       {/* Three Section Layout */}
@@ -263,9 +263,9 @@ const TokenCard = memo(({
       {/* Stats Grid - Different layout based on token status */}
       <div className="mb-3">
         {/* First row: Price, FDV, and Holders */}
-        <div className="grid grid-cols-3 gap-2 mb-2">
+        <div className="grid grid-cols-3">
           {/* Price */}
-          <div className="bg-transparent border border-gray-600 rounded-xl p-2">
+          <div className="bg-transparent border border-gray-600 p-2 border-r-0 last:border-r">
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Price</span>
               <div className="text-sm text-gray-400 text-right">
@@ -281,7 +281,7 @@ const TokenCard = memo(({
           </div>
           
           {/* FDV/Cap */}
-          <div className="bg-transparent border border-gray-600 rounded-xl p-2">
+          <div className="bg-transparent border border-gray-600 p-2 border-r-0 last:border-r">
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">{getFDVLabel()}</span>
               <div className="text-sm text-gray-400 text-right">
@@ -298,7 +298,7 @@ const TokenCard = memo(({
 
           {/* Holders */}
           <div 
-            className="bg-transparent border border-gray-600 rounded-xl p-2 cursor-pointer hover:bg-transparent transition-colors"
+            className="bg-transparent border border-gray-600 p-2 border-r-0 last:border-r cursor-pointer hover:bg-transparent transition-colors"
             onClick={(e) => {
               e.stopPropagation()
               if (token.contract_address && token.chain_id) {
@@ -330,9 +330,9 @@ const TokenCard = memo(({
         {/* Second row: Status-specific content */}
         {token.on_dex && token.dex_listing_url ? (
           /* On DEX: Volume + Liquidity in single row */
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2">
             {/* Volume Box */}
-            <div className="bg-transparent border border-gray-600 rounded-xl p-3">
+            <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Vol <sub className="text-[10px]">24h</sub></span>
                 <span className="text-sm text-gray-400">
@@ -346,7 +346,7 @@ const TokenCard = memo(({
             </div>
             
             {/* Liquidity Box */}
-            <div className="bg-transparent border border-gray-600 rounded-xl p-3">
+            <div className="bg-transparent border border-gray-600 p-3 border-r-0 last:border-r">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Liquidity</span>
                 <span className="text-sm text-gray-400">
@@ -367,7 +367,7 @@ const TokenCard = memo(({
           </div>
         ) : (
           /* In Progress: Flaunch-style progress bar */
-          <div className="bg-transparent border border-gray-600 rounded-xl p-3">
+          <div className="bg-transparent border border-gray-600 p-3">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 {/* Rocket Icon */}
@@ -648,7 +648,8 @@ export default function TokenPageContent() {
 
   return (
     <div className="min-h-screen bg-transparent p-2 sm:p-4 md:p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4 sm:gap-6 md:gap-9">
+      <div className="flex justify-center w-full">
+        <div className="grid grid-cols-4 gap-8 max-w-[1600px]">
         {isLoading ? (
           // Show skeleton cards while loading
           Array.from({ length: 8 }).map((_, index) => (
@@ -669,9 +670,10 @@ export default function TokenPageContent() {
             />
           ))
         )}
+        </div>
       </div>
     </div>
-)
+  )
 
  
 }
