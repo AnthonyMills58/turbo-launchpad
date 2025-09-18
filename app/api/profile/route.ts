@@ -5,8 +5,60 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const wallet = searchParams.get('wallet')
+    const wallets = searchParams.get('wallets') // For batch requests
     
+    // Handle batch request
+    if (wallets) {
+      const walletList = wallets.split(',').map(w => w.trim()).filter(w => w)
+      
+      if (walletList.length === 0) {
+        return NextResponse.json({ success: false, error: 'At least one wallet address is required' }, { status: 400 })
+      }
+
+      // Create placeholders for the IN clause
+      const placeholders = walletList.map((_, index) => `$${index + 1}`).join(',')
+      
+      const result = await db.query(
+        `SELECT wallet, display_name, bio, avatar_asset_id FROM profiles WHERE LOWER(wallet) IN (${placeholders})`,
+        walletList.map(w => w.toLowerCase())
+      )
+
+      // Create a map of profiles by wallet
+      const profilesMap: Record<string, any> = {}
+      result.rows.forEach(profile => {
+        profilesMap[profile.wallet.toLowerCase()] = profile
+      })
+
+      // Clean up orphaned avatar assets for all profiles
+      for (const profile of result.rows) {
+        if (profile.avatar_asset_id) {
+          const mediaResult = await db.query(
+            'SELECT id, kind, original_mime FROM media_assets WHERE id = $1 AND deleted_at IS NULL',
+            [profile.avatar_asset_id]
+          )
+          
+          if (mediaResult.rows.length > 0) {
+            const variantsResult = await db.query(
+              'SELECT variant, mime, size FROM media_variants WHERE asset_id = $1',
+              [profile.avatar_asset_id]
+            )
+            
+            if (variantsResult.rows.length === 0) {
+              await db.query('UPDATE profiles SET avatar_asset_id = NULL WHERE wallet = $1', [profile.wallet])
+              await db.query('DELETE FROM media_assets WHERE id = $1', [profile.avatar_asset_id])
+              profile.avatar_asset_id = null
+            }
+          } else {
+            await db.query('UPDATE profiles SET avatar_asset_id = NULL WHERE wallet = $1', [profile.wallet])
+            profile.avatar_asset_id = null
+          }
+        }
+      }
+      
+      return NextResponse.json({ success: true, profiles: profilesMap })
+    }
     
+    // Handle single wallet request
     if (!wallet) {
       return NextResponse.json({ success: false, error: 'Wallet address is required' }, { status: 400 })
     }
@@ -15,7 +67,6 @@ export async function GET(request: NextRequest) {
       'SELECT wallet, display_name, bio, avatar_asset_id FROM profiles WHERE LOWER(wallet) = LOWER($1)',
       [wallet]
     )
-
 
     if (result.rows.length === 0) {
       return NextResponse.json({ success: true, profile: null })
