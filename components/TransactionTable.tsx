@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Copy } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { useChainId } from 'wagmi'
 import { formatLargeNumber } from '@/lib/displayFormats'
 import { formatPriceMetaMask } from '@/lib/ui-utils'
-import Image from 'next/image'
 
 interface Transaction {
   block_time: string
@@ -88,6 +87,11 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
       const response = await fetch(`/api/transactions?${params}`)
       if (response.ok) {
         const data = await response.json()
+        console.log('🔍 Frontend received data:', {
+          transactions: data.transactions?.length,
+          transactionTypes: data.transactionTypes,
+          totalCount: data.totalCount
+        })
         setTransactions(data.transactions || [])
         setTotalPages(data.totalPages || 1)
         setTotalCount(data.totalCount || 0)
@@ -104,6 +108,11 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
   useEffect(() => {
     fetchTransactions(1)
   }, [tokenId, filters, fetchTransactions])
+
+  // Debug: log when availableTransactionTypes changes
+  useEffect(() => {
+    console.log('🔍 availableTransactionTypes updated:', availableTransactionTypes)
+  }, [availableTransactionTypes])
 
   // Get trader address based on transaction type
   const getTraderAddress = (transaction: Transaction): string => {
@@ -220,11 +229,15 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
             className="px-3 py-1 bg-transparent border border-gray-600 text-white text-sm rounded"
           >
             <option value="">All</option>
-            {availableTransactionTypes.map((type) => (
-              <option key={type.side} value={type.side}>
-                {type.side} ({type.count})
-              </option>
-            ))}
+            {availableTransactionTypes.length > 0 ? (
+              availableTransactionTypes.map((type) => (
+                <option key={type.side} value={type.side}>
+                  {type.side} ({type.count})
+                </option>
+              ))
+            ) : (
+              <option disabled>Loading types...</option>
+            )}
           </select>
         </div>
         
