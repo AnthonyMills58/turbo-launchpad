@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { useChainId } from 'wagmi'
+import { formatValue, formatLargeNumber } from '@/lib/displayFormats'
 
 interface Transaction {
   block_time: string
@@ -117,18 +118,6 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
     }
   }
 
-  // Format large numbers
-  const formatLargeNumber = (value: string | number): string => {
-    const num = typeof value === 'string' ? parseFloat(value) : value
-    if (num >= 1e9) {
-      return `${(num / 1e9).toFixed(2).replace(/\.?0+$/, '')}B`
-    } else if (num >= 1e6) {
-      return `${(num / 1e6).toFixed(2).replace(/\.?0+$/, '')}M`
-    } else if (num >= 1e3) {
-      return `${(num / 1e3).toFixed(2).replace(/\.?0+$/, '')}K`
-    }
-    return num.toFixed(2)
-  }
 
   // Format time ago
   const formatTimeAgo = (timestamp: string): string => {
@@ -257,7 +246,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                 const traderAddress = getTraderAddress(tx)
                 const tokenAmount = formatLargeNumber(parseFloat(tx.amount_wei) / 1e18)
                 const ethAmount = parseFloat(tx.amount_eth_wei) / 1e18
-                const ethDisplay = ethAmount > 0 ? ethAmount.toFixed(4) : '0.0000'
+                const ethDisplay = formatValue(ethAmount)
                 const usdValue = calculateUSDValue(tx.amount_eth_wei, tx.eth_price_usd)
                 const explorerLink = `${explorerBaseUrl}/tx/${tx.tx_hash}`
 
