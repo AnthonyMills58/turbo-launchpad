@@ -32,6 +32,7 @@ interface TokenRow {
   last_processed_block: number
   is_graduated: boolean
   creator_wallet: string
+  current_price?: number
 }
 
 interface TransferRow {
@@ -378,30 +379,56 @@ async function processTokenStats(
   const circulating_supply_tokens = Number(circulating_supply) / 1e18
   const total_supply_tokens = Number(total_supply) / 1e18
   
-  const market_cap = circulating_supply_tokens * current_price
-  const fdv = total_supply_tokens * current_price
-  
-  // Update tokens table
-  await pool.query(`
-    UPDATE public.tokens 
-    SET 
-      current_price = $1,
-      market_cap = $2,
-      fdv = $3,
-      total_supply = $4,
-      liquidity_eth = $5,
-      liquidity_usd = $6,
-      volume_24h_eth = $7,
-      volume_24h_updated_at = NOW(),
-      updated_at = NOW()
-    WHERE id = $8 AND chain_id = $9
-  `, [
-    current_price, market_cap, fdv, total_supply, // total_supply is already in wei from token_balances
-    liquidity_eth, liquidity_usd, volume_24h_eth,
-    token.id, chainId
-  ])
-  
-  console.log(`✅ Token ${token.id}: Updated statistics - Price: ${current_price}, Market Cap: $${market_cap.toFixed(2)}, FDV: $${fdv.toFixed(2)}`)
+  // Only update price-related fields if we have valid price data from pair_snapshots
+  if (priceData.length > 0) {
+    const market_cap = circulating_supply_tokens * current_price
+    const fdv = total_supply_tokens * current_price
+    
+    // Update tokens table with price data
+    await pool.query(`
+      UPDATE public.tokens 
+      SET 
+        current_price = $1,
+        market_cap = $2,
+        fdv = $3,
+        total_supply = $4,
+        liquidity_eth = $5,
+        liquidity_usd = $6,
+        volume_24h_eth = $7,
+        volume_24h_updated_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $8 AND chain_id = $9
+    `, [
+      current_price, market_cap, fdv, total_supply, // total_supply is already in wei from token_balances
+      liquidity_eth, liquidity_usd, volume_24h_eth,
+      token.id, chainId
+    ])
+    
+    console.log(`✅ Token ${token.id}: Updated statistics - Price: ${current_price}, Market Cap: $${market_cap.toFixed(2)}, FDV: $${fdv.toFixed(2)}`)
+  } else {
+    // No price data available - use existing current_price for calculations
+    const existing_price = token.current_price || 0
+    const market_cap = circulating_supply_tokens * existing_price
+    const fdv = total_supply_tokens * existing_price
+    
+    // Update tokens table without changing current_price
+    await pool.query(`
+      UPDATE public.tokens 
+      SET 
+        market_cap = $1,
+        fdv = $2,
+        total_supply = $3,
+        volume_24h_eth = $4,
+        volume_24h_updated_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $5 AND chain_id = $6
+    `, [
+      market_cap, fdv, total_supply, volume_24h_eth,
+      token.id, chainId
+    ])
+    
+    console.log(`⚠️ Token ${token.id}: No price data available - kept existing price: ${existing_price}, Market Cap: $${market_cap.toFixed(2)}, FDV: $${fdv.toFixed(2)}`)
+  }
 }
 
 /**
@@ -484,7 +511,7 @@ async function processChain(chainId: number): Promise<void> {
   const whereClause = whereConditions.join(' AND ')
   
   const { rows: tokens } = await pool.query<TokenRow>(`
-    SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet
+    SELECT id, chain_id, contract_address, deployment_block, last_processed_block, is_graduated, creator_wallet, current_price
     FROM public.tokens 
     WHERE ${whereClause}
     ORDER BY id DESC

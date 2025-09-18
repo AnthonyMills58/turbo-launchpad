@@ -63,15 +63,15 @@ export function formatLargeNumber(value: number | null | undefined): string {
   
   if (absValue >= 1e9) {
     // Billions
-    const formatted = (value / 1e9).toFixed(3);
+    const formatted = (value / 1e9).toFixed(2);
     return `${formatted.replace(/\.?0+$/, '')}B`;
   } else if (absValue >= 1e6) {
     // Millions
-    const formatted = (value / 1e6).toFixed(3);
+    const formatted = (value / 1e6).toFixed(2);
     return `${formatted.replace(/\.?0+$/, '')}M`;
   } else if (absValue >= 1e3) {
     // Thousands
-    const formatted = (value / 1e3).toFixed(3);
+    const formatted = (value / 1e3).toFixed(2);
     return `${formatted.replace(/\.?0+$/, '')}K`;
   } else {
     // Less than 1000, use original formatting
