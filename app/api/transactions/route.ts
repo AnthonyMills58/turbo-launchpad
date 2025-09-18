@@ -58,7 +58,6 @@ export async function GET(request: NextRequest) {
     // Get transactions with pagination
     const transactionsQuery = `
       SELECT 
-        id,
         block_time,
         tx_hash,
         from_address,

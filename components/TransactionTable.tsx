@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 
 interface Transaction {
-  id: string
   block_time: string
   tx_hash: string
   from_address: string
@@ -225,14 +224,14 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                 </td>
               </tr>
             ) : (
-              transactions.map((tx) => {
+              transactions.map((tx, index) => {
                 const traderAddress = getTraderAddress(tx)
                 const tokenAmount = formatLargeNumber(parseFloat(tx.amount_wei) / 1e18)
                 const ethAmount = formatLargeNumber(parseFloat(tx.amount_eth_wei) / 1e18)
                 const usdValue = calculateUSDValue(tx.amount_eth_wei, tx.eth_price_usd)
 
                 return (
-                  <tr key={tx.id} className="border-b border-gray-700 hover:bg-gray-800/20">
+                  <tr key={`${tx.tx_hash}-${index}`} className="border-b border-gray-700 hover:bg-gray-800/20">
                     <td className="py-3 px-2 text-sm text-gray-300">
                       {formatTimeAgo(tx.block_time)}
                     </td>
