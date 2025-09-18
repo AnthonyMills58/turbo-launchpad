@@ -347,10 +347,10 @@ export default function TokenDetailsView({
             </div>
 
             {/* Header row: Avatar | token + creator | token-info (moves below on narrow) | progress below */}
-            <div className="mb-4">
+            <div>
               <div className="flex items-start gap-3">
                 {/* Avatar */}
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 border border-gray-500">
                   {token.token_logo_asset_id ? (
                     <LogoContainer
                       src={`/api/media/${token.token_logo_asset_id}?v=thumb`}
@@ -378,13 +378,13 @@ export default function TokenDetailsView({
                 {/* Right side: token + creator + tokeninfo layout */}
                 <div className="flex flex-col w-full">
                   {/* Row that can wrap: token + creator + tokeninfo */}
-                  <div className="flex items-start gap-4 flex-wrap">
+                  <div className="flex items-start gap-0 flex-wrap">
                     {/* Token section */}
-                    <div className="flex flex-col items-start text-left border border-gray-500 p-3" title={token.name}>
+                    <div className="flex flex-col items-start text-left border border-gray-500 p-3 h-28" title={token.name}>
                       <h3 className="font-semibold text-white truncate w-full">{token.symbol}</h3>
 
                       {/* Contract + copy */}
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <div className="flex items-center gap-4 text-xs text-gray-400">
                         <span className="font-mono">
                           {token.contract_address.slice(0, 6)}...{token.contract_address.slice(-4)}
                         </span>
@@ -427,7 +427,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Creator section */}
-                    <div className="flex justify-start items-start border border-gray-500 p-3">
+                    <div className="flex justify-start items-start border border-gray-500 p-3 h-28">
                       <UserProfile
                         wallet={token.creator_wallet}
                         showAvatar={false}
@@ -441,7 +441,7 @@ export default function TokenDetailsView({
                     </div>
 
                     {/* Token info (name + moved links) — full width below on small */}
-                    <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto border border-gray-500 p-3">
+                    <div className="flex flex-col items-start text-left max-w-xl min-w-0 w-full basis-full lg:w-auto lg:basis-auto p-3">
                       <div className="text-sm flex items-start gap-2 min-w-0">
                         <span className="text-gray-400">Token name:</span>
                         <span className="text-white font-medium truncate">{token.name || '—'}</span>
