@@ -217,17 +217,17 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
           <select
             value={filters.side}
             onChange={(e) => handleSideFilter(e.target.value)}
-            className="px-3 py-1 bg-gray-800 border border-gray-600 text-white text-sm rounded"
+            className="px-3 py-1 bg-[#04140A] border border-gray-600 text-white text-sm rounded"
           >
-            <option value="" className="bg-gray-800 text-white">All</option>
+            <option value="" className="bg-[#04140A] text-white">All</option>
             {availableTransactionTypes.length > 0 ? (
               availableTransactionTypes.map((type) => (
-                <option key={type.side} value={type.side} className="bg-gray-800 text-white">
+                <option key={type.side} value={type.side} className="bg-[#04140A] text-white">
                   {type.side} ({type.count})
                 </option>
               ))
             ) : (
-              <option disabled className="bg-gray-800 text-white">Loading types...</option>
+              <option disabled className="bg-[#04140A] text-white">Loading types...</option>
             )}
           </select>
         </div>
@@ -281,7 +281,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                 const explorerLink = `${explorerBaseUrl}/tx/${tx.tx_hash}`
 
                 return (
-                  <tr key={`${tx.tx_hash}-${index}`} className="border-b border-gray-700 hover:bg-gray-800/20">
+                  <tr key={`${tx.tx_hash}-${index}`} className="border-b border-gray-700 hover:bg-[#04140A]/20">
                     <td className="py-3 px-2 text-sm text-gray-300">
                       {formatTimeAgo(tx.block_time)}
                     </td>
