@@ -9,7 +9,7 @@ import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
-import { Copy, Check, ExternalLink } from 'lucide-react'
+import { Copy, Check, ExternalLink, Globe, UserCheck, Network, Twitter , MessageCircle} from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 import PublicSellSection from './PublicSellSection'
 import TransactionTable from './TransactionTable'
@@ -311,17 +311,17 @@ export default function TokenDetailsView({
           {/* ================= LEFT: STATS CARD ================= */}
           <div className="group  p-3 border bg-transparent border-gray-600 flex-1 relative">
             {/* Social media icons - responsive positioning */}
-            <div className="absolute top-3 right-3 hidden lg:flex items-center gap-1 text-blue-400">
+            <div className="absolute top-3 right-3 hidden lg:flex items-center gap-2">
                 {token.website && (
                   <a
                   href={/^https?:\/\//i.test(token.website) ? token.website : `https://${token.website}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                  className="inline-flex items-center hover:text-blue-300 text-lg"
+                  className="inline-flex items-center text-gray-400 hover:text-gray-300 text-lg"
                   title="Website"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <ExternalLink size={16} />
+                  <Globe size={20} />
                 </a>
                 )}
                 {token.twitter && (
@@ -329,11 +329,11 @@ export default function TokenDetailsView({
                   href={/^https?:\/\//i.test(token.twitter) ? token.twitter : `https://${token.twitter}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                  className="inline-flex items-center hover:text-blue-300 text-lg"
+                  className="inline-flex items-center text-gray-400 hover:text-gray-300 text-lg"
                   title="Social"
                   onClick={(e) => e.stopPropagation()}
                   >
-                  <ExternalLink size={16} />
+                  <Twitter size={20} />
                   </a>
                 )}
                 {token.telegram && (
@@ -341,11 +341,11 @@ export default function TokenDetailsView({
                   href={/^https?:\/\//i.test(token.telegram) ? token.telegram : `https://${token.telegram}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                  className="inline-flex items-center hover:text-blue-300 text-lg"
+                  className="inline-flex items-center text-gray-400 hover:text-gray-300 text-lg"
                   title="Community"
                   onClick={(e) => e.stopPropagation()}
                   >
-                  <ExternalLink size={16} />
+                  <MessageCircle size={20} />
                   </a>
                 )}
             </div>
@@ -461,7 +461,7 @@ export default function TokenDetailsView({
                               title="Website"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              🌐
+                              <Globe size={16} />
                             </a>
                           )}
                           {token.twitter && (
@@ -473,7 +473,7 @@ export default function TokenDetailsView({
                               title="Social"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <ExternalLink size={16} />
+                              <UserCheck size={16} />
                             </a>
                           )}
                           {token.telegram && (
@@ -485,7 +485,7 @@ export default function TokenDetailsView({
                               title="Community"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <ExternalLink size={16} />
+                              <Network size={16} />
                             </a>
                           )}
                         </span>
