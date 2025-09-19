@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, memo } from 'react'
+import React, { useState, useEffect, useCallback, memo } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { useChainId } from 'wagmi'
