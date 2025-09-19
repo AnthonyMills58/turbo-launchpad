@@ -285,8 +285,17 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                     <td className="py-3 px-2 text-sm text-gray-300">
                       {formatTimeAgo(tx.block_time)}
                     </td>
-                    <td className={`py-3 px-2 text-sm font-medium ${getTransactionColor(tx.side)}`}>
-                      {tx.side}
+                    <td className="py-3 px-2 text-sm font-medium">
+                      <div className="flex items-center gap-1">
+                        <span className={getTransactionColor(tx.side)}>
+                          {tx.side}
+                        </span>
+                        {tx.src && tx.src !== 'BC' && (
+                          <span className="text-gray-500 text-xs">
+                            {tx.src}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-2 text-sm text-gray-300">
                       {usdValue}
