@@ -22,7 +22,8 @@ import {
   Twitter,
   MessageCircle,
 } from 'lucide-react';
-import EditTokenForm from './EditTokenForm';
+import EditTokenForm from './EditTokenForm'
+import ChartForm from './ChartForm';
 import PublicSellSection from './PublicSellSection';
 import TransactionTable from './TransactionTable';
 import HoldersTable from './HoldersTable';
@@ -58,7 +59,7 @@ export default function TokenDetailsView({
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [showTransactions, setShowTransactions] = useState(true);
   const [showHolders, setShowHolders] = useState(false);
-  const [showChart, setShowChart] = useState(false);
+  const [showChart, setShowChart] = useState(true);
 
   // Track if we've already synced this token to prevent infinite loops
   const syncedTokens = useRef(new Set<number>());
@@ -727,7 +728,23 @@ export default function TokenDetailsView({
               </div>
             )}
 
-            {/* ===== Transaction, Holders, and Chart Buttons — hidden on mobile ===== */}
+              {/* ===== Chart Button — separate line ===== */}
+              <div className="mt-2 hidden md:block">
+                <button
+                  onClick={() => setShowChart(!showChart)}
+                  className="w-full border border-gray-600 bg-transparent px-5 py-2 text-sm text-gray-400 transition hover:border-gray-500"
+                >
+                  {showChart ? 'Hide Chart' : '📈 Chart'}
+                </button>
+
+                {showChart && (
+                  <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
+                    <ChartForm onCancel={() => setShowChart(false)} />
+                  </div>
+                )}
+              </div>
+
+            {/* ===== Transaction and Holders Buttons — hidden on mobile ===== */}
             <div className="mt-2 hidden md:block">
               <div className="flex">
                 <button
@@ -750,27 +767,13 @@ export default function TokenDetailsView({
                     setShowTransactions(false);
                     setShowChart(false);
                   }}
-                  className={`flex-1 border border-r-0 px-5 py-2 text-sm transition ${
+                  className={`flex-1 border px-5 py-2 text-sm transition ${
                     showHolders
                       ? 'border-gray-500 text-white'
                       : 'border-gray-600 bg-transparent text-gray-400 hover:border-gray-500'
                   }`}
                 >
                   👥 Holders
-                </button>
-                <button
-                  onClick={() => {
-                    setShowChart(true);
-                    setShowTransactions(false);
-                    setShowHolders(false);
-                  }}
-                  className={`flex-1 border px-5 py-2 text-sm transition ${
-                    showChart
-                      ? 'border-gray-500 text-white'
-                      : 'border-gray-600 bg-transparent text-gray-400 hover:border-gray-500'
-                  }`}
-                >
-                  📈 Chart
                 </button>
               </div>
 
@@ -792,18 +795,6 @@ export default function TokenDetailsView({
                 </div>
               )}
 
-              {/* Chart Mock - appears below buttons */}
-              {showChart && (
-                <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
-                  <div className="py-8 text-center text-gray-400">
-                    <div className="mb-2 text-2xl">📈</div>
-                    <div className="mb-1 text-lg font-medium">Price Chart</div>
-                    <div className="text-sm">
-                      Chart functionality coming soon...
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
