@@ -324,7 +324,7 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                         rel="noopener noreferrer"
                         className="text-gray-400 hover:text-white transition-colors inline-flex items-center gap-1"
                       >
-                        🔗 <ExternalLink size={12} />
+                        <ExternalLink size={14} />
                       </a>
                     </td>
                   </tr>

@@ -321,7 +321,7 @@ export default function TokenDetailsView({
                   title="Website"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  🌐 <ExternalLink size={12} className="ml-1" />
+                  <ExternalLink size={16} />
                 </a>
                 )}
                 {token.twitter && (
@@ -333,7 +333,7 @@ export default function TokenDetailsView({
                   title="Social"
                   onClick={(e) => e.stopPropagation()}
                   >
-                  🐦 <ExternalLink size={12} className="ml-1" />
+                  <ExternalLink size={16} />
                   </a>
                 )}
                 {token.telegram && (
@@ -345,7 +345,7 @@ export default function TokenDetailsView({
                   title="Community"
                   onClick={(e) => e.stopPropagation()}
                   >
-                  💬 <ExternalLink size={12} className="ml-1" />
+                  <ExternalLink size={16} />
                   </a>
                 )}
             </div>
@@ -415,7 +415,7 @@ export default function TokenDetailsView({
                           title="View on DEX"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          On DEX <ExternalLink size={10} />
+                          <ExternalLink size={12} />
                         </a>
             )}
             <a
@@ -426,7 +426,7 @@ export default function TokenDetailsView({
                         title="View on Explorer"
                         onClick={(e) => e.stopPropagation()}
             >
-                        On Explorer <ExternalLink size={10} />
+                        <ExternalLink size={12} />
             </a>
           </div>
 
@@ -473,7 +473,7 @@ export default function TokenDetailsView({
                               title="Social"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              🐦 <ExternalLink size={12} className="ml-1" />
+                              <ExternalLink size={16} />
                             </a>
                           )}
                           {token.telegram && (
@@ -485,7 +485,7 @@ export default function TokenDetailsView({
                               title="Community"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              💬 <ExternalLink size={12} className="ml-1" />
+                              <ExternalLink size={16} />
                             </a>
                           )}
                         </span>
