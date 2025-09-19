@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   
   // Pagination parameters
   const page = parseInt(searchParams.get('page') || '1')
-  const pageSize = parseInt(searchParams.get('pageSize') || '12')
+  const pageSize = parseInt(searchParams.get('pageSize') || '40')
   const offset = (page - 1) * pageSize
 
   const values: (string | number | boolean | null)[] = []

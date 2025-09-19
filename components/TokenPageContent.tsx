@@ -448,7 +448,7 @@ export default function TokenPageContent() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const pageSize = 12 // 3 rows × 4 cards per row
+  const pageSize = 40 // 5 rows × 8 cards per row
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount()
