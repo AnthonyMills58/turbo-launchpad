@@ -443,6 +443,12 @@ export default function TokenPageContent() {
   const [activeToken, setActiveToken] = useState<Token | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [updatingHolders, setUpdatingHolders] = useState<Set<number>>(new Set())
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const pageSize = 12 // 3 rows × 4 cards per row
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount()
@@ -478,13 +484,15 @@ export default function TokenPageContent() {
     }
   }, [updatingHolders])
 
-  const fetchTokens = useCallback(async () => {
+  const fetchTokens = useCallback(async (page: number = 1) => {
     setIsLoading(true)
     const params = new URLSearchParams({
       search,
       creator: creatorFilter,
       status: statusFilter,
       sort: sortFilter,
+      page: page.toString(),
+      pageSize: pageSize.toString(),
     })
 
     if (chain?.id) {
@@ -504,9 +512,17 @@ export default function TokenPageContent() {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`)
       }
       
-      const baseTokens: Token[] = await res.json()
+      const data = await res.json()
+      const baseTokens: Token[] = data.tokens || data // Handle both paginated and non-paginated responses
       console.log('[TokenPageContent] Fetched tokens count:', baseTokens.length)
       setTokens(baseTokens)
+
+      // Update pagination info if available
+      if (data.totalPages) {
+        setTotalPages(data.totalPages)
+        setTotalCount(data.totalCount || 0)
+        setCurrentPage(page)
+      }
 
       const found = baseTokens.find(t => t.id.toString() === selectedId)
       console.log('[TokenPageContent] Found token for selectedId:', selectedId, '->', found?.id)
@@ -527,14 +543,15 @@ export default function TokenPageContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [search, creatorFilter, statusFilter, sortFilter, address, chain, selectedId])
+  }, [search, creatorFilter, statusFilter, sortFilter, address, chain, selectedId, pageSize])
 
   useEffect(() => {
     getUsdPrice().then(setUsdPrice)
   }, [])
 
   useEffect(() => {
-    fetchTokens()
+    setCurrentPage(1) // Reset to first page when filters change
+    fetchTokens(1)
   }, [fetchTokens, refreshKey])
 
   const selectToken = async (id: string) => {
@@ -672,6 +689,45 @@ export default function TokenPageContent() {
         )}
         </div>
       </div>
+      
+      {/* Pagination Controls */}
+      {!isLoading && tokens.length > 0 && totalPages > 1 && (
+        <div className="flex justify-center items-center gap-4 mt-8">
+          <button
+            onClick={() => fetchTokens(1)}
+            disabled={currentPage === 1}
+            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+          >
+            First
+          </button>
+          <button
+            onClick={() => fetchTokens(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+          >
+            Previous
+          </button>
+          
+          <span className="text-sm text-gray-400">
+            Page {currentPage} of {totalPages} ({totalCount} tokens)
+          </span>
+          
+          <button
+            onClick={() => fetchTokens(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+          >
+            Next
+          </button>
+          <button
+            onClick={() => fetchTokens(totalPages)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+          >
+            Last
+          </button>
+        </div>
+      )}
     </div>
   )
 

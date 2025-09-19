@@ -9,6 +9,11 @@ export async function GET(req: NextRequest) {
   const statusFilter = searchParams.get('status') || 'all'
   const sortFilter = searchParams.get('sort') || 'created_desc'
   const chainId = searchParams.get('chainId')
+  
+  // Pagination parameters
+  const page = parseInt(searchParams.get('page') || '1')
+  const pageSize = parseInt(searchParams.get('pageSize') || '12')
+  const offset = (page - 1) * pageSize
 
   const values: (string | number | boolean | null)[] = []
   const conditions: string[] = ['contract_address IS NOT NULL']
@@ -57,15 +62,37 @@ export async function GET(req: NextRequest) {
   if (sortFilter === 'name') orderClause = 'ORDER BY name ASC'
   if (sortFilter === 'symbol') orderClause = 'ORDER BY symbol ASC'
 
-  const query = `
+  // First, get total count
+  const countQuery = `
+    SELECT COUNT(*) as total FROM tokens
+    WHERE ${conditions.join(' AND ')}
+  `
+
+  // Then get paginated results
+  const dataQuery = `
     SELECT * FROM tokens
     WHERE ${conditions.join(' AND ')}
     ${orderClause}
+    LIMIT $${values.length + 1} OFFSET $${values.length + 2}
   `
 
   try {
-    const result = await pool.query(query, values)
-    return NextResponse.json(result.rows)
+    // Get total count
+    const countResult = await pool.query(countQuery, values)
+    const totalCount = parseInt(countResult.rows[0].total)
+    const totalPages = Math.ceil(totalCount / pageSize)
+
+    // Get paginated data
+    const dataValues = [...values, pageSize, offset]
+    const dataResult = await pool.query(dataQuery, dataValues)
+
+    return NextResponse.json({
+      tokens: dataResult.rows,
+      totalCount,
+      totalPages,
+      currentPage: page,
+      pageSize
+    })
   } catch (err) {
     console.error('Error fetching filtered tokens:', err)
     return new NextResponse('Failed to fetch tokens', { status: 500 })
