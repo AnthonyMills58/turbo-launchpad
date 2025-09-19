@@ -739,7 +739,11 @@ export default function TokenDetailsView({
 
                 {showChart && (
                   <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
-                    <ChartForm onCancel={() => setShowChart(false)} />
+                    <ChartForm 
+                      onCancel={() => setShowChart(false)} 
+                      tokenId={token.id} 
+                      symbol={token.symbol} 
+                    />
                   </div>
                 )}
               </div>
@@ -791,7 +795,7 @@ export default function TokenDetailsView({
               {/* Holders Table - appears below buttons */}
               {showHolders && (
                 <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
-                  <HoldersTable tokenId={token.id} tokenSymbol={token.symbol} />
+                  <HoldersTable tokenId={token.id} />
                 </div>
               )}
 

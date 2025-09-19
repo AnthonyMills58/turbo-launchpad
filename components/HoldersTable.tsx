@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, memo } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink } from 'lucide-react'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { useChainId } from 'wagmi'
@@ -18,10 +18,9 @@ interface Holder {
 
 interface HoldersTableProps {
   tokenId: number
-  tokenSymbol: string
 }
 
-export default function HoldersTable({ tokenId, tokenSymbol }: HoldersTableProps) {
+export default function HoldersTable({ tokenId }: HoldersTableProps) {
   const chainId = useChainId()
   const [holders, setHolders] = useState<Holder[]>([])
   const [isLoading, setIsLoading] = useState(false)

@@ -1,17 +1,16 @@
 import React from 'react'
+import CryptoChart from './CryptoChart'
 
 interface ChartFormProps {
   onCancel: () => void
+  tokenId: number
+  symbol: string
 }
 
-const ChartForm: React.FC<ChartFormProps> = ({ onCancel }) => {
+const ChartForm: React.FC<ChartFormProps> = ({ tokenId, symbol }) => {
   return (
-    <div className="py-8 text-center text-gray-400">
-      <div className="mb-2 text-2xl">📈</div>
-      <div className="mb-1 text-lg font-medium">Price Chart</div>
-      <div className="text-sm">
-        Chart functionality coming soon...
-      </div>
+    <div className="w-full">
+      <CryptoChart tokenId={tokenId} symbol={symbol} />
     </div>
   )
 }
