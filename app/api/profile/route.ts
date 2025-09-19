@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       )
 
       // Create a map of profiles by wallet
-      const profilesMap: Record<string, any> = {}
+      const profilesMap: Record<string, { wallet: string; display_name: string; bio: string; avatar_asset_id: string | null }> = {}
       result.rows.forEach(profile => {
         profilesMap[profile.wallet.toLowerCase()] = profile
       })
