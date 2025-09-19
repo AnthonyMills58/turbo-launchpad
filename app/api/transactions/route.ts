@@ -62,6 +62,8 @@ export async function GET(request: NextRequest) {
     const transactionsQuery = `
       SELECT 
         block_time,
+        block_number,
+        log_index,
         tx_hash,
         from_address,
         to_address,
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
         eth_price_usd
       FROM token_transfers
       WHERE ${whereClause}
-      ORDER BY block_time DESC
+      ORDER BY block_number DESC, log_index DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `
 
