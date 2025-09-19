@@ -530,7 +530,7 @@ export default function TokenDetailsView({
                             : '0%'}
                         </span>
                       </div>
-                      <div className="relative h-4 rounded-full overflow-hidden border border-[#2a2d3a]">
+                      <div className="relative rounded-full overflow-hidden border border-[#2a2d3a]" style={{ height: '17.6px' }}>
                         <div
                           className="absolute inset-0"
                           style={{
