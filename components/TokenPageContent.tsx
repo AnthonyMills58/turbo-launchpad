@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, memo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
-import { Copy, Users, Check } from 'lucide-react'
+import { Copy, Users, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
@@ -692,39 +692,45 @@ export default function TokenPageContent() {
       
       {/* Pagination Controls */}
       {!isLoading && tokens.length > 0 && totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 mt-8">
+        <div className="flex justify-center items-center gap-2 mt-8">
           <button
             onClick={() => fetchTokens(1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="First page"
           >
-            First
+            <ChevronsLeft size={16} />
           </button>
+          
           <button
             onClick={() => fetchTokens(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Previous page"
           >
-            Previous
+            <ChevronLeft size={16} />
           </button>
           
-          <span className="text-sm text-gray-400">
+          <span className="px-3 py-1 text-sm text-gray-300">
             Page {currentPage} of {totalPages} ({totalCount} tokens)
           </span>
           
           <button
             onClick={() => fetchTokens(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Next page"
           >
-            Next
+            <ChevronRight size={16} />
           </button>
+          
           <button
             onClick={() => fetchTokens(totalPages)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 text-sm bg-gray-800 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700"
+            className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Last page"
           >
-            Last
+            <ChevronsRight size={16} />
           </button>
         </div>
       )}
