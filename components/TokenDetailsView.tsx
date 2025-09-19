@@ -422,7 +422,7 @@ export default function TokenDetailsView({
               href={explorerLink}
               target="_blank"
               rel="noopener noreferrer"
-                        className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors mt-1 inline-flex items-center gap-1"
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1 inline-flex items-center gap-1"
                         title="View on Explorer"
                         onClick={(e) => e.stopPropagation()}
             >

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, memo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
-import { Copy, Users, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Copy, Users, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink } from 'lucide-react'
 import TokenDetailsView from '@/components/TokenDetailsView'
 import { Token } from '@/types/token'
 import { useFilters } from '@/lib/FiltersContext'
@@ -234,13 +234,13 @@ const TokenCard = memo(({
               href={token.dex_listing_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center gap-1"
               title="View on DEX"
               onClick={(e) => {
                 e.stopPropagation()
               }}
             >
-              On DEX ↗
+              On DEX <ExternalLink size={12} />
             </a>
           )}
         </div>
