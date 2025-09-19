@@ -415,7 +415,7 @@ export default function TokenDetailsView({
                           title="View on DEX"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <ExternalLink size={12} />
+                          On DEX <ExternalLink size={12} />
                         </a>
             )}
             <a
@@ -426,7 +426,7 @@ export default function TokenDetailsView({
                         title="View on Explorer"
                         onClick={(e) => e.stopPropagation()}
             >
-                        <ExternalLink size={12} />
+                        On Explorer <ExternalLink size={12} />
             </a>
           </div>
 
