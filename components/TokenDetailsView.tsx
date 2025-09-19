@@ -46,7 +46,7 @@ export default function TokenDetailsView({
   const [showTransactions, setShowTransactions] = useState(true)
   const [showHolders, setShowHolders] = useState(false)
   const [showChart, setShowChart] = useState(false)
-
+  
   // Track if we've already synced this token to prevent infinite loops
   const syncedTokens = useRef(new Set<number>())
   // Track ongoing sync operations to prevent race conditions
@@ -177,7 +177,7 @@ export default function TokenDetailsView({
 
   useEffect(() => {
     if (!contract_address || !chainId) return
-
+    
     const nowTs = Date.now()
     if (nowTs - lastSyncTime.current < 2000) {
       return
@@ -189,16 +189,16 @@ export default function TokenDetailsView({
       try {
         syncingTokens.current.add(token.id)
         lastSyncTime.current = Date.now()
-
+        
         const isOnDex = await checkIfTokenOnDex(contract_address, chainId)
-
+        
         if (isOnDex) {
           const response = await fetch('/api/sync-dex-state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token, chainId }),
           })
-
+          
           if (response.ok) {
             syncedTokens.current.add(token.id)
             if (isMounted.current) onRefresh()
@@ -214,7 +214,7 @@ export default function TokenDetailsView({
         syncingTokens.current.delete(token.id)
       }
     }
-
+    
     checkAndSyncDex()
   }, [contract_address, chainId, onRefresh, token])
 
@@ -252,7 +252,7 @@ export default function TokenDetailsView({
     if (usdValue < 0.001) {
       const usdInfo = formatPriceMetaMask(usdValue)
       if (usdInfo.type === 'metamask') {
-        return (
+    return (
           <span>
             ${usdInfo.value}
             <sub className="text-xs font-normal" style={{ fontSize: '0.72em' }}>
@@ -312,42 +312,42 @@ export default function TokenDetailsView({
           <div className="group  p-3 border bg-transparent border-gray-600 flex-1 relative">
             {/* Social media icons - responsive positioning */}
             <div className="absolute top-3 right-3 hidden lg:flex items-center gap-1 text-blue-400">
-              {token.website && (
-                <a
+                {token.website && (
+                  <a
                   href={/^https?:\/\//i.test(token.website) ? token.website : `https://${token.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   className="inline-flex items-center hover:text-blue-300 text-lg"
                   title="Website"
                   onClick={(e) => e.stopPropagation()}
-                >
+                  >
                   🌐
-                </a>
-              )}
-              {token.twitter && (
-                <a
+                  </a>
+                )}
+                {token.twitter && (
+                  <a
                   href={/^https?:\/\//i.test(token.twitter) ? token.twitter : `https://${token.twitter}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   className="inline-flex items-center hover:text-blue-300 text-lg"
                   title="Social"
                   onClick={(e) => e.stopPropagation()}
-                >
+                  >
                   🐦
-                </a>
-              )}
-              {token.telegram && (
-                <a
+                  </a>
+                )}
+                {token.telegram && (
+                  <a
                   href={/^https?:\/\//i.test(token.telegram) ? token.telegram : `https://${token.telegram}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   className="inline-flex items-center hover:text-blue-300 text-lg"
                   title="Community"
                   onClick={(e) => e.stopPropagation()}
-                >
+                  >
                   💬
-                </a>
-              )}
+                  </a>
+                )}
             </div>
 
             {/* Header row: Avatar | token + creator | token-info (moves below on narrow) | progress below */}
@@ -375,8 +375,8 @@ export default function TokenDetailsView({
                   ) : (
                     <div className="w-[202px] h-[202px] bg-gradient-to-br from-purple-500 to-indigo-500  flex items-center justify-center text-white font-bold text-sm">
                       {token.symbol[0]}
-                    </div>
-                  )}
+            </div>
+          )}
                 </div>
 
                 {/* Right side: token + creator + tokeninfo layout */}
@@ -391,17 +391,17 @@ export default function TokenDetailsView({
                       <div className="flex items-center gap-2 text-xs text-gray-400">
                         <span className="font-mono">
                           {token.contract_address.slice(0, 4)}...{token.contract_address.slice(-4)}
-                        </span>
-                        <button
+            </span>
+            <button
                           onClick={(e) => {
                             e.stopPropagation()
                             handleCopy()
                           }}
-                          className="text-gray-400 hover:text-white transition"
+              className="text-gray-400 hover:text-white transition"
                           title="Copy contract address"
-                        >
+            >
                           <Copy size={12} />
-                        </button>
+            </button>
                         {copied && <Check size={12} className="text-green-400" />}
                       </div>
 
@@ -417,18 +417,18 @@ export default function TokenDetailsView({
                         >
                           On DEX ↗
                         </a>
-                      )}
-                      <a
-                        href={explorerLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
+            )}
+            <a
+              href={explorerLink}
+              target="_blank"
+              rel="noopener noreferrer"
                         className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors mt-1"
                         title="View on Explorer"
                         onClick={(e) => e.stopPropagation()}
-                      >
+            >
                         On Explorer ↗
-                      </a>
-                    </div>
+            </a>
+          </div>
 
                     {/* Creator section */}
                     <div className="flex justify-start items-start border border-gray-500 px-2 pt-2 h-28">
@@ -512,7 +512,7 @@ export default function TokenDetailsView({
                         </p>
                       )}
                     </div>
-                  </div>
+            </div>
 
                   {/* Progress bar spanning below token + creator + tokeninfo */}
                   {!token.on_dex && (
@@ -546,7 +546,7 @@ export default function TokenDetailsView({
                           }}
                         />
                         <div
-                          className="relative h-full  transition-all duration-500 ease-out overflow-hidden"
+                          className="relative h-full transition-all duration-500 ease-out overflow-hidden rounded-full"
                           style={{
                             width:
                               token.raise_target && token.eth_raised
@@ -557,14 +557,14 @@ export default function TokenDetailsView({
                                 : '0%',
                           }}
                         >
-                          <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 opacity-90 rounded-full" />
                         </div>
-                      </div>
-                    </div>
-                  )}
+                </div>
+              </div>
+            )}
 
                   
-                </div>
+              </div>
               </div>
             </div>
 
@@ -581,7 +581,7 @@ export default function TokenDetailsView({
                       : '—'}
                   </span>
                 </div>
-              </div>
+            </div>
 
               {/* FDV / Cap */}
               <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
@@ -591,7 +591,7 @@ export default function TokenDetailsView({
                     {usdPrice && getFDV() !== null ? formatUSDValue(getFDV()!, usdPrice) : '—'}
                   </span>
                 </div>
-              </div>
+            </div>
 
               {/* Holders */}
               <div className=" border border-[#2a2d3a] px-3 py-2 min-w-[140px] flex-1 sm:flex-none">
@@ -602,8 +602,8 @@ export default function TokenDetailsView({
                       ? formatLargeNumber(token.holder_count)
                       : '—'}
                   </span>
-                </div>
-              </div>
+            </div>
+            </div>
 
               {/* Volume 24h (only if on DEX) */}
               {token.on_dex && (
@@ -618,7 +618,7 @@ export default function TokenDetailsView({
                         ? formatUSDValue(token.volume_24h_eth, usdPrice)
                         : '—'}
                     </span>
-                  </div>
+            </div>
                 </div>
               )}
 
@@ -655,27 +655,27 @@ export default function TokenDetailsView({
             {/* ===== Edit Token Info — inline inside stats (creator only) ===== */}
             {isCreator && (
               <div className="mt-2">
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
+              <button
+                onClick={() => setIsEditing(!isEditing)}
                   className="w-full px-5 py-2 text-gray-400 text-sm transition bg-transparent border border-gray-600 hover:border-gray-500"
-                >
-                  {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
-                </button>
+              >
+                {isEditing ? 'Cancel Edit' : '✏️ Edit Token Info'}
+              </button>
 
-                {isEditing && (
+              {isEditing && (
                   <div className="mt-3 border border-[#2a2d3a]  p-3 bg-transparent">
-                    <EditTokenForm
-                      token={token}
-                      onSuccess={() => {
-                        setIsEditing(false)
-                        onRefresh()
-                      }}
-                      onCancel={() => setIsEditing(false)}
-                    />
+                <EditTokenForm
+                  token={token}
+                  onSuccess={() => {
+                    setIsEditing(false)
+                    onRefresh()
+                  }}
+                  onCancel={() => setIsEditing(false)}
+                />
                   </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
             {/* ===== Transaction, Holders, and Chart Buttons — hidden on mobile ===== */}
             <div className="mt-2 hidden md:block">
@@ -722,7 +722,7 @@ export default function TokenDetailsView({
                 >
                   📈 Chart
                 </button>
-              </div>
+                  </div>
 
               {/* Transaction Table - appears below buttons */}
               {showTransactions && (
@@ -732,8 +732,8 @@ export default function TokenDetailsView({
                     tokenSymbol={token.symbol}
                     creatorWallet={token.creator_wallet}
                   />
-                </div>
-              )}
+                    </div>
+                  )}
 
               {/* Holders Mock - appears below buttons */}
               {showHolders && (
@@ -809,8 +809,8 @@ export default function TokenDetailsView({
           {/* ================= /RIGHT: ACTIONS ================= */}
         </div>
 
-      </div>
-    )
+    </div>
+  )
 
 
 
