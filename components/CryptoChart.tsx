@@ -25,16 +25,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedInterval, setSelectedInterval] = useState('1d') // Default to daily for better sparse data visualization
+  const [selectedInterval, setSelectedInterval] = useState('1d')
 
   const intervals = [
-    { value: '1d', label: '1d' }, // Put daily first since it's better for sparse data
+    { value: '1d', label: '1d' },
     { value: '1m', label: '1m' },
-    // Only show intervals that exist in your database
-    // { value: '5m', label: '5m' },
-    // { value: '15m', label: '15m' },
-    // { value: '1h', label: '1h' },
-    // { value: '4h', label: '4h' },
   ]
 
   // Fetch chart data from your API
@@ -74,20 +69,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         }
       }
       
-      // Log volume data for debugging
-      if (finalData.length > 0) {
-        console.log('Sample volume data:', finalData.slice(0, 2).map(d => ({
-          time: d.time,
-          volumeEth: d.volumeEth,
-          volumeUsd: d.volumeUsd,
-          tradesCount: d.tradesCount
-        })))
-      }
-      
       setData(finalData)
     } catch (error) {
       console.error('Error fetching chart data:', error)
-      setData([]) // Set empty array on error
+      setData([])
     } finally {
       setLoading(false)
     }
@@ -118,10 +103,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       rightPriceScale: {
         borderColor: '#2a2d3a',
       },
-      leftPriceScale: {
-        borderColor: '#2a2d3a',
-        visible: false, // Hide left scale for price
-      },
       timeScale: {
         borderColor: '#2a2d3a',
         timeVisible: true,
@@ -129,83 +110,46 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
     })
 
-    // Create candlestick series with more visible colors
+    // Create candlestick series
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#10b981', // Brighter green
-      downColor: '#ef4444', // Brighter red
-      borderDownColor: '#ef4444',
-      borderUpColor: '#10b981',
-      wickDownColor: '#ef4444',
-      wickUpColor: '#10b981',
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderDownColor: '#ef5350',
+      borderUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+      wickUpColor: '#26a69a',
     })
 
-    // Create volume series with better visibility
+    // Create volume series
     const volumeSeries = chart.addSeries(HistogramSeries, {
-      color: '#10b981', // Green color for volume to match legend
+      color: '#26a69a',
       priceFormat: {
         type: 'volume',
       },
-      priceScaleId: 'volume', // Use separate price scale for volume
-      scaleMargins: {
-        top: 0.9, // Leave 90% of space for price data
-        bottom: 0.0,
-      },
+      priceScaleId: '',
     })
 
-    // Set data - scale up small prices for better visibility
-    const formattedData = data.map(candle => {
-      // Prices are already in ETH (0.0003, 0.001), scale up moderately for visibility
-      const scaledOpen = candle.open * 1000 // Scale up by 1000 for better visibility
-      const scaledHigh = candle.high * 1000
-      const scaledLow = candle.low * 1000
-      const scaledClose = candle.close * 1000
-      
-      console.log(`Price data: open=${candle.open}, high=${candle.high}, low=${candle.low}, close=${candle.close}`)
-      console.log(`Scaled prices: open=${scaledOpen}, high=${scaledHigh}, low=${scaledLow}, close=${scaledClose}`)
-      
-      return {
-        time: candle.time as Time,
-        open: scaledOpen,
-        high: scaledHigh,
-        low: scaledLow,
-        close: scaledClose,
-      }
-    })
+    // Set data - simple scaling
+    const formattedData = data.map(candle => ({
+      time: candle.time as Time,
+      open: candle.open * 1e9, // Scale up prices for visibility
+      high: candle.high * 1e9,
+      low: candle.low * 1e9,
+      close: candle.close * 1e9,
+    }))
 
     const volumeData = data.map(candle => {
-      // volumeEth is in wei, convert to ETH
-      const volumeInEth = candle.volumeEth / 1e18
-      console.log(`Volume: ${candle.volumeEth} wei -> ${volumeInEth} ETH`)
-      
-      // Make volume bars much smaller so they don't dominate the chart
-      let scaledVolume = Math.abs(volumeInEth) // Ensure positive volume
-      if (scaledVolume > 0) {
-        // Scale down volume significantly to make room for price data
-        scaledVolume = scaledVolume / 1000 // Much smaller volume bars
-        // Ensure minimum visibility but keep it very small
-        scaledVolume = Math.max(scaledVolume, 0.0001)
-        scaledVolume = Math.min(scaledVolume, 0.01) // Cap at very small value
-      } else {
-        // Handle zero volume - show very small bar
-        scaledVolume = 0.0001 // Very small positive value for visibility
-      }
-      
-      console.log(`Final volume: ${scaledVolume}`)
-      
+      const volumeInEth = candle.volumeEth / 1e18 // Convert wei to ETH
+      const scaledVolume = Math.min(volumeInEth / 1000, 1000) // Scale down volume
       return {
         time: candle.time as Time,
         value: scaledVolume,
-        color: '#10b981', // Green color for all volume bars to match legend
+        color: candle.close >= candle.open ? '#26a69a' : '#ef5350',
       }
     })
-    
-    console.log('Volume data sample:', volumeData.slice(0, 3))
-    console.log('Price data sample:', formattedData.slice(0, 3))
 
     candlestickSeries.setData(formattedData)
     volumeSeries.setData(volumeData)
-    
-    console.log('Chart series created and data set')
 
     // Auto-fit the chart to show the full time range
     if (formattedData.length > 0) {
@@ -263,20 +207,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">
-            {symbol} Price & Volume Chart (×10³ ETH)
+            {symbol} Price Chart (×10⁻⁹ ETH)
           </h3>
           <div className="text-sm text-gray-400">
             {data.length} candles • {selectedInterval} interval
-          </div>
-          <div className="mt-2 flex gap-4 text-xs text-gray-500">
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-sm bg-green-500"></div>
-              <span>Price (Candlesticks)</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="h-2 w-4 bg-green-500"></div>
-              <span>Volume (Bars)</span>
-            </div>
           </div>
         </div>
         
