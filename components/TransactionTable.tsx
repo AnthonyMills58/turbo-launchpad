@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, memo } from 'react'
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink } from 'lucide-react'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
 import { useChainId } from 'wagmi'
 import { formatLargeNumber } from '@/lib/displayFormats'
@@ -322,9 +322,9 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                         href={explorerLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-gray-400 hover:text-white transition-colors"
+                        className="text-gray-400 hover:text-white transition-colors inline-flex items-center gap-1"
                       >
-                        🔗
+                        🔗 <ExternalLink size={12} />
                       </a>
                     </td>
                   </tr>

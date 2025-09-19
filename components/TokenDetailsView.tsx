@@ -9,7 +9,7 @@ import PublicBuySection from './PublicBuySection'
 import AirdropForm from './AirdropForm'
 import AirdropClaimForm from './AirdropClaimForm'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from '@/lib/chains'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, ExternalLink } from 'lucide-react'
 import EditTokenForm from './EditTokenForm'
 import PublicSellSection from './PublicSellSection'
 import TransactionTable from './TransactionTable'
@@ -320,9 +320,9 @@ export default function TokenDetailsView({
                   className="inline-flex items-center hover:text-blue-300 text-lg"
                   title="Website"
                   onClick={(e) => e.stopPropagation()}
-                  >
-                  🌐
-                  </a>
+                >
+                  🌐 <ExternalLink size={12} className="ml-1" />
+                </a>
                 )}
                 {token.twitter && (
                   <a
@@ -333,7 +333,7 @@ export default function TokenDetailsView({
                   title="Social"
                   onClick={(e) => e.stopPropagation()}
                   >
-                  🐦
+                  🐦 <ExternalLink size={12} className="ml-1" />
                   </a>
                 )}
                 {token.telegram && (
@@ -345,7 +345,7 @@ export default function TokenDetailsView({
                   title="Community"
                   onClick={(e) => e.stopPropagation()}
                   >
-                  💬
+                  💬 <ExternalLink size={12} className="ml-1" />
                   </a>
                 )}
             </div>
@@ -411,22 +411,22 @@ export default function TokenDetailsView({
                           href={token.dex_listing_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1"
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1 inline-flex items-center gap-1"
                           title="View on DEX"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          On DEX ↗
+                          On DEX <ExternalLink size={10} />
                         </a>
             )}
             <a
               href={explorerLink}
               target="_blank"
               rel="noopener noreferrer"
-                        className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors mt-1"
+                        className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors mt-1 inline-flex items-center gap-1"
                         title="View on Explorer"
                         onClick={(e) => e.stopPropagation()}
             >
-                        On Explorer ↗
+                        On Explorer <ExternalLink size={10} />
             </a>
           </div>
 
@@ -473,7 +473,7 @@ export default function TokenDetailsView({
                               title="Social"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              🐦
+                              🐦 <ExternalLink size={12} className="ml-1" />
                             </a>
                           )}
                           {token.telegram && (
@@ -485,7 +485,7 @@ export default function TokenDetailsView({
                               title="Community"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              💬
+                              💬 <ExternalLink size={12} className="ml-1" />
                             </a>
                           )}
                         </span>
