@@ -118,7 +118,6 @@ code, pre, .font-mono, [class*="mono"], .contract-address, input, textarea, butt
 .turbo-launch-btn {
   font-size: 1.5rem !important;
   font-weight: 900 !important;
-  font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace !important;
 }
 
 /* Override global font size for rocket icon */
