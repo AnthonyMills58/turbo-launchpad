@@ -170,12 +170,20 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
     return `$${usdValue.toFixed(2)}`
   }
 
-  // Format ETH value using same logic as USD
+  // Format ETH value using same logic as USD Price in TokenDetailsView
   const formatETHValue = (ethAmount: number): string => {
     if (ethAmount < 0.001) {
       const ethInfo = formatPriceMetaMask(ethAmount)
       if (ethInfo.type === 'metamask') {
-        return `${ethInfo.value}${ethInfo.zeros}${ethInfo.digits}`
+        return (
+          <span>
+            {ethInfo.value}
+            <sub className="text-xs font-normal" style={{ fontSize: '0.72em' }}>
+              {ethInfo.zeros}
+            </sub>
+            {ethInfo.digits}
+          </span>
+        )
       }
       return ethInfo.value
     }
