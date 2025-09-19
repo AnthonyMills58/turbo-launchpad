@@ -25,6 +25,7 @@ import {
 import EditTokenForm from './EditTokenForm';
 import PublicSellSection from './PublicSellSection';
 import TransactionTable from './TransactionTable';
+import HoldersTable from './HoldersTable';
 import { useSync } from '@/lib/SyncContext';
 import { formatLargeNumber } from '@/lib/displayFormats';
 import { checkIfTokenOnDex } from '@/lib/checkDexListing';
@@ -784,16 +785,10 @@ export default function TokenDetailsView({
                 </div>
               )}
 
-              {/* Holders Mock - appears below buttons */}
+              {/* Holders Table - appears below buttons */}
               {showHolders && (
                 <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
-                  <div className="py-8 text-center text-gray-400">
-                    <div className="mb-2 text-2xl">👥</div>
-                    <div className="mb-1 text-lg font-medium">Holders</div>
-                    <div className="text-sm">
-                      Holders functionality coming soon...
-                    </div>
-                  </div>
+                  <HoldersTable tokenId={token.id} tokenSymbol={token.symbol} />
                 </div>
               )}
 
