@@ -411,9 +411,9 @@ export default function TokenDetailsView({
 
             {/* A-B-C Layout: (Avatar + Token+Creator) | TokenInfo+Progress */}
             <div>
-              <div className="flex flex-col items-start gap-2 lg:flex-row lg:gap-4">
+              <div className="flex flex-col items-start gap-8 lg:flex-row lg:gap-8">
                 {/* A+B: Avatar and Token+Creator side by side */}
-                <div className="flex items-start gap-2 lg:gap-4 w-full lg:w-auto">
+                <div className="flex items-start gap-8 lg:gap-8 w-full lg:w-auto">
                   {/* Avatar */}
                   <div className="flex-shrink-0">
                   {token.token_logo_asset_id ? (
