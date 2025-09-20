@@ -75,9 +75,11 @@ export async function GET(
       high: parseFloat(row.high || 0),
       low: parseFloat(row.low || 0),
       close: parseFloat(row.close || 0),
-      volume: parseFloat(row.volume_token_wei || 0),
-      volumeEth: Math.abs(parseFloat(row.volume_eth_wei || 0)), // Use absolute value for volume
-      volumeUsd: Math.abs(parseFloat(row.volume_usd || 0)), // Use absolute value for volume
+      volume: parseFloat(row.volume_token_wei || 0) / 1e18, // Convert wei to tokens
+      volumeEth: Math.abs(parseFloat(row.volume_eth_wei || 0)) / 1e18, // Convert wei to ETH, use absolute value for volume
+      volumeUsd: interval === '1d' 
+        ? Math.abs(parseFloat(row.volume_usd || 0)) // Daily: already in USD
+        : Math.abs(parseFloat(row.volume_usd || 0)) / 1e18, // 1m: convert wei to USD
       tradesCount: parseInt(row.trades_count || 0),
     }))
     

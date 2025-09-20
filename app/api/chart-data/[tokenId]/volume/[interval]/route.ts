@@ -19,16 +19,16 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid interval' }, { status: 400 })
     }
 
-    // Calculate time bucket size in seconds
-    const intervalSeconds = {
-      '1m': 60,
-      '5m': 300,
-      '15m': 900,
-      '1h': 3600,
-      '4h': 14400,
-      '1d': 86400,
-      '1w': 604800
-    }[interval] || 3600
+    // Note: intervalSeconds could be used for time bucketing if needed in the future
+    // const intervalSeconds = {
+    //   '1m': 60,
+    //   '5m': 300,
+    //   '15m': 900,
+    //   '1h': 3600,
+    //   '4h': 14400,
+    //   '1d': 86400,
+    //   '1w': 604800
+    // }[interval] || 3600
 
     // Query token_transfers and aggregate by time buckets
     const query = `

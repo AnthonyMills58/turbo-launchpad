@@ -43,8 +43,8 @@ export async function GET(
       high: parseFloat(row.high || 0),
       low: parseFloat(row.low || 0),
       close: parseFloat(row.close || 0),
-      volume: parseFloat(row.volume_token_wei || 0),
-      volumeEth: parseFloat(row.volume_eth_wei || 0),
+      volume: parseFloat(row.volume_token_wei || 0) / 1e18, // Convert wei to tokens
+      volumeEth: parseFloat(row.volume_eth_wei || 0) / 1e18, // Convert wei to ETH
       volumeUsd: parseFloat(row.volume_usd || 0),
       tradesCount: parseInt(row.trades_count || 0),
     }))

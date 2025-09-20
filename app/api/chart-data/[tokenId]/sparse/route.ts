@@ -52,7 +52,7 @@ export async function GET(
     // Create daily candles from transaction data
     const dailyCandles = new Map()
     
-    transactionsResult.rows.forEach((tx, index) => {
+    transactionsResult.rows.forEach((tx) => {
       const day = tx.block_time.toISOString().split('T')[0] // YYYY-MM-DD
       
       if (!dailyCandles.has(day)) {
@@ -90,7 +90,7 @@ export async function GET(
       low: parseFloat(candle.low || 0),
       close: parseFloat(candle.close || 0),
       volume: 0, // Not used for volume display
-      volumeEth: candle.volumeEth * 1e18, // Convert back to wei for consistency with other endpoints
+      volumeEth: candle.volumeEth, // Keep as ETH (already converted from wei)
       volumeUsd: candle.volumeUsd,
       tradesCount: candle.tradesCount,
     }))
