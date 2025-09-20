@@ -156,7 +156,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     
     // No state updates needed
     
-    // Send original values to chart engine - try to make it display scientific notation
+    // Send original values to chart engine - we'll format Y-axis as scientific notation
     const originalData = data.map(candle => ({
       time: candle.time as Time,
       open: candle.open,
@@ -174,7 +174,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     console.log('Sample original price data:', data.slice(0, 3).map(d => ({ open: d.open, close: d.close })))
     console.log('Sample volume data:', volumeData.slice(0, 3))
 
-    candlestickSeries.setData(originalData)
+    candlestickSeries.setData(scaledData)
     // volumeSeries.setData(volumeData) // TEMPORARILY DISABLED FOR TESTING
 
     // Log data ranges for debugging
@@ -212,12 +212,13 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           },
         })
         
-        // Add axis labels
+        // Add axis labels and scientific notation formatter
         chart.priceScale('left').applyOptions({
           scaleMargins: {
             top: 0.1,
             bottom: 0.1,
           },
+          tickMarkFormatter: (value: number) => value.toExponential(2), // Force scientific notation
         })
         
         chart.priceScale('right').applyOptions({
@@ -225,6 +226,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             top: 0.1,
             bottom: 0.1,
           },
+          tickMarkFormatter: (value: number) => value.toExponential(2), // Force scientific notation
         })
       }, 100)
     }
