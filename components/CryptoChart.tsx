@@ -213,12 +213,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         },
       })
       
-      // Set the price range manually
-      setTimeout(() => {
-        candlestickSeries.priceScale().applyOptions({
-          autoScale: false,
-        })
-      }, 50)
+      // Manual scaling applied via autoScale: false
+      // The chart should now use fixed scaling instead of automatic
     }
 
     // Auto-fit the chart to show the full time range
@@ -242,8 +238,9 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           },
         })
         
-        // Add axis labels and scientific notation formatter
+        // Add axis labels and apply manual scaling
         chart.priceScale('left').applyOptions({
+          autoScale: false,
           scaleMargins: {
             top: 0.1,
             bottom: 0.1,
