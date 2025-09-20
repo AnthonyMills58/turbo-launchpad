@@ -28,6 +28,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const [selectedInterval, setSelectedInterval] = useState('1d')
   const [priceScale, setPriceScale] = useState(1)
   const [volumeScale, setVolumeScale] = useState(1)
+  const [priceMultiplier, setPriceMultiplier] = useState(1)
+  const [calculatedPriceScale, setCalculatedPriceScale] = useState(1)
 
   const intervals = [
     { value: '1m', label: '1m' },
@@ -133,16 +135,18 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     // Calculate X multiplier so that scaled prices are 5-10x higher than scaled volumes
     const scaledMaxPrice = maxPrice * calculatedPriceScale
     const scaledMaxVolume = maxVolume * calculatedVolumeScale
-    const priceMultiplier = scaledMaxVolume > 0 ? Math.max(1, Math.ceil((scaledMaxVolume * 7.5) / scaledMaxPrice)) : 1
+    const priceMultiplier = scaledMaxPrice > 0 ? Math.max(1, Math.ceil((scaledMaxVolume * 7.5) / scaledMaxPrice)) : 1
     
     console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
     console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
     console.log(`Scaled maxPrice: ${scaledMaxPrice}, Scaled maxVolume: ${scaledMaxVolume}`)
     console.log(`Price multiplier (X): ${priceMultiplier}`)
     
-    // Update state for use in JSX (adjust price scale to account for multiplier)
-    setPriceScale(calculatedPriceScale * priceMultiplier)
+    // Update state for use in JSX
+    setPriceScale(calculatedPriceScale)
     setVolumeScale(calculatedVolumeScale)
+    setPriceMultiplier(priceMultiplier)
+    setCalculatedPriceScale(calculatedPriceScale)
     
     // Apply scaling to data with price multiplier
     const formattedData = data.map(candle => ({
@@ -221,7 +225,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             {symbol} Price Chart
             {data.length > 0 && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                (×10⁻{Math.log10(priceScale)}) ETH
+                (×{priceMultiplier} × 10⁻{Math.log10(calculatedPriceScale)}) ETH
               </span>
             )}
           </h3>
