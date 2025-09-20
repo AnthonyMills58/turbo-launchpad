@@ -239,8 +239,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 border border-green-400 bg-green-400/20"></div>
               <span>Price (Candlesticks)</span>
-              {priceScale !== 1 && (
-                <span className="text-gray-500">×10⁻{Math.log10(priceScale)}</span>
+              {calculatedPriceScale * priceMultiplier !== 1 && (
+                <span className="text-gray-500">×10⁻{Math.log10(calculatedPriceScale * priceMultiplier)}</span>
               )}
             </div>
             <div className="flex items-center gap-1">
