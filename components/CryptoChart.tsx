@@ -114,6 +114,14 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         timeVisible: true,
         secondsVisible: false,
       },
+      localization: {
+        priceFormatter: (value: number) => {
+          // Alternative scientific notation formatter
+          const exponent = Math.floor(Math.log10(Math.abs(value)));
+          const mantissa = value / Math.pow(10, exponent);
+          return `${mantissa.toFixed(2)}e${exponent}`;
+        },
+      },
     })
 
     // Create candlestick series - use left Y-axis
@@ -219,9 +227,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             bottom: 0.1,
           },
           tickMarkFormatter: (value: number) => {
-            // Custom formatter to avoid "0." prefix
-            const exp = value.toExponential(2);
-            return exp.replace(/^0\./, ''); // Remove leading "0." if present
+            // More robust scientific notation formatter
+            const exponent = Math.floor(Math.log10(Math.abs(value)));
+            const mantissa = value / Math.pow(10, exponent);
+            return `${mantissa.toFixed(2)}e${exponent}`;
           },
         })
         
@@ -231,9 +240,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             bottom: 0.1,
           },
           tickMarkFormatter: (value: number) => {
-            // Custom formatter to avoid "0." prefix
-            const exp = value.toExponential(2);
-            return exp.replace(/^0\./, ''); // Remove leading "0." if present
+            // More robust scientific notation formatter
+            const exponent = Math.floor(Math.log10(Math.abs(value)));
+            const mantissa = value / Math.pow(10, exponent);
+            return `${mantissa.toFixed(2)}e${exponent}`;
           },
         })
       }, 100)
