@@ -164,7 +164,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     
     // No state updates needed
     
-    // Send original values to chart engine - we'll format Y-axis as scientific notation
+    // Send original values to chart engine - no multiplication
     const originalData = data.map(candle => ({
       time: candle.time as Time,
       open: candle.open,
@@ -199,9 +199,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       console.log(`Volume range: ${volumeMin} to ${volumeMax} (range: ${volumeRange})`)
       
       // Set manual Y-axis scaling: max = 2x highest price, min = 0
+      // Use original tiny values for manual range
       const manualPriceMax = priceMax * 2
       const manualPriceMin = 0
       
+      console.log(`Original price max: ${priceMax}`)
       console.log(`Manual price scale: ${manualPriceMin} to ${manualPriceMax}`)
       
       // Apply manual scaling to left price scale (candlesticks)
@@ -215,10 +217,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       
       // Set manual price range using setPriceRange method
       setTimeout(() => {
-        candlestickSeries.priceScale().setPriceRange({
-          minValue: manualPriceMin,
-          maxValue: manualPriceMax,
-        })
+        console.log(`Setting manual price range: ${manualPriceMin} to ${manualPriceMax}`)
+        try {
+          candlestickSeries.priceScale().setPriceRange({
+            minValue: manualPriceMin,
+            maxValue: manualPriceMax,
+          })
+          console.log('setPriceRange called successfully')
+        } catch (error) {
+          console.error('Error calling setPriceRange:', error)
+        }
       }, 100)
     }
 
@@ -259,10 +267,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           
           // Set manual price range
           setTimeout(() => {
-            chart.priceScale('left').setPriceRange({
-              minValue: manualPriceMin,
-              maxValue: manualPriceMax,
-            })
+            console.log(`Delayed setting manual price range: ${manualPriceMin} to ${manualPriceMax}`)
+            try {
+              chart.priceScale('left').setPriceRange({
+                minValue: manualPriceMin,
+                maxValue: manualPriceMax,
+              })
+              console.log('Delayed setPriceRange called successfully')
+            } catch (error) {
+              console.error('Error in delayed setPriceRange:', error)
+            }
           }, 50)
         }
         
