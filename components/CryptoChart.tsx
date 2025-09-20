@@ -103,7 +103,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
     })
 
-    // Create candlestick series
+    // Create candlestick series - use left Y-axis
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
@@ -111,15 +111,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       borderUpColor: '#26a69a',
       wickDownColor: '#ef5350',
       wickUpColor: '#26a69a',
+      priceScaleId: 'left', // Use left Y-axis for prices
     })
 
-    // Create volume series with its own price scale
+    // Create volume series - use right Y-axis
     const volumeSeries = chart.addSeries(HistogramSeries, {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
       },
-      priceScaleId: 'volume', // Use separate price scale for volume
+      priceScaleId: 'right', // Use right Y-axis for volumes
     })
 
     // Calculate scaling for small ETH values
