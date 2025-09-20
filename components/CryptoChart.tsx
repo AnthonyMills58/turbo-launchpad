@@ -332,10 +332,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       <div className="relative w-full">
         <div ref={chartContainerRef} className="w-full" />
         {/* Y-axis labels */}
-        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-8 -rotate-90 text-xs text-gray-400 font-medium">
+        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-16 -rotate-90 text-xs text-gray-400 font-medium whitespace-nowrap">
           Price (ETH)
         </div>
-        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-8 -rotate-90 text-xs text-gray-400 font-medium">
+        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-16 -rotate-90 text-xs text-gray-400 font-medium whitespace-nowrap">
           Volume (ETH)
         </div>
       </div>
