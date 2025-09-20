@@ -92,14 +92,22 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       rightPriceScale: {
         borderColor: '#2a2d3a',
         visible: true,
-        autoScale: true,
+        autoScale: false,
         borderVisible: true,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
       leftPriceScale: {
         borderColor: '#2a2d3a',
         visible: true,
-        autoScale: true,
+        autoScale: false,
         borderVisible: true,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
       timeScale: {
         borderColor: '#2a2d3a',
@@ -163,6 +171,37 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     candlestickSeries.setData(formattedData)
     volumeSeries.setData(volumeData)
+
+    // Manually set price scale ranges to force Y-axis numbers
+    if (formattedData.length > 0) {
+      const priceMin = Math.min(...formattedData.map(d => Math.min(d.open, d.high, d.low, d.close)))
+      const priceMax = Math.max(...formattedData.map(d => Math.max(d.open, d.high, d.low, d.close)))
+      const priceRange = priceMax - priceMin
+      
+      const volumeMin = Math.min(...volumeData.map(d => d.value))
+      const volumeMax = Math.max(...volumeData.map(d => d.value))
+      const volumeRange = volumeMax - volumeMin
+      
+      console.log(`Price range: ${priceMin} to ${priceMax} (range: ${priceRange})`)
+      console.log(`Volume range: ${volumeMin} to ${volumeMax} (range: ${volumeRange})`)
+      
+      // Apply manual scaling to force Y-axis display
+      candlestickSeries.priceScale().applyOptions({
+        autoScale: false,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
+      })
+      
+      volumeSeries.priceScale().applyOptions({
+        autoScale: false,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
+      })
+    }
 
     // Auto-fit the chart to show the full time range
     if (formattedData.length > 0) {
