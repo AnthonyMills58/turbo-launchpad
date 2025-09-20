@@ -130,20 +130,27 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     const calculatedPriceScale = maxPrice > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxPrice))) : 1
     const calculatedVolumeScale = maxVolume > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxVolume))) : 1
     
+    // Calculate X multiplier so that scaled prices are 5-10x higher than scaled volumes
+    const scaledMaxPrice = maxPrice * calculatedPriceScale
+    const scaledMaxVolume = maxVolume * calculatedVolumeScale
+    const priceMultiplier = scaledMaxVolume > 0 ? Math.max(1, Math.ceil((scaledMaxVolume * 7.5) / scaledMaxPrice)) : 1
+    
     console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
     console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
+    console.log(`Scaled maxPrice: ${scaledMaxPrice}, Scaled maxVolume: ${scaledMaxVolume}`)
+    console.log(`Price multiplier (X): ${priceMultiplier}`)
     
-    // Update state for use in JSX
-    setPriceScale(calculatedPriceScale)
+    // Update state for use in JSX (adjust price scale to account for multiplier)
+    setPriceScale(calculatedPriceScale * priceMultiplier)
     setVolumeScale(calculatedVolumeScale)
     
-    // Apply scaling to data
+    // Apply scaling to data with price multiplier
     const formattedData = data.map(candle => ({
       time: candle.time as Time,
-      open: candle.open * calculatedPriceScale,
-      high: candle.high * calculatedPriceScale,
-      low: candle.low * calculatedPriceScale,
-      close: candle.close * calculatedPriceScale,
+      open: candle.open * calculatedPriceScale * priceMultiplier,
+      high: candle.high * calculatedPriceScale * priceMultiplier,
+      low: candle.low * calculatedPriceScale * priceMultiplier,
+      close: candle.close * calculatedPriceScale * priceMultiplier,
     }))
 
     const volumeData = data.map(candle => ({
