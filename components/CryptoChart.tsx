@@ -114,10 +114,14 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
       localization: {
         priceFormatter: (value: number) => {
-          // Alternative scientific notation formatter
-          const exponent = Math.floor(Math.log10(Math.abs(value)));
-          const mantissa = value / Math.pow(10, exponent);
-          return `${mantissa.toFixed(2)}e${exponent}`;
+          // Conditional formatting: scientific notation for values < 0.001, 2 decimals for higher
+          if (Math.abs(value) < 0.001) {
+            const exponent = Math.floor(Math.log10(Math.abs(value)));
+            const mantissa = value / Math.pow(10, exponent);
+            return `${mantissa.toFixed(2)}e${exponent}`;
+          } else {
+            return value.toFixed(2);
+          }
         },
       },
     })
@@ -212,6 +216,15 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       
       // Apply custom tick formatting for tiny prices
       candlestickSeries.priceScale().applyOptions({
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      })
+      
+      // Apply same formatting logic for volumes
+      const useScientificNotationVolume = volumeMax < 0.001
+      console.log(`Use scientific notation for volume: ${useScientificNotationVolume} (volumeMax: ${volumeMax})`)
+      
+      // Apply custom tick formatting for volumes (same as prices)
+      volumeSeries.priceScale().applyOptions({
         scaleMargins: { top: 0.1, bottom: 0.1 },
       })
     }
