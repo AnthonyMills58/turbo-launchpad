@@ -116,12 +116,12 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create candlestick series - use left Y-axis
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderDownColor: '#ef5350',
-      borderUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
-      wickUpColor: '#26a69a',
+      upColor: '#00ff88', // Bright green for up candles
+      downColor: '#ff4444', // Bright red for down candles
+      borderDownColor: '#ff4444',
+      borderUpColor: '#00ff88',
+      wickDownColor: '#ff4444',
+      wickUpColor: '#00ff88',
       priceScaleId: 'left', // Use left Y-axis for prices
       priceFormat: {
         type: 'price',
