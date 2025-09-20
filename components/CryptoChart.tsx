@@ -26,7 +26,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedInterval, setSelectedInterval] = useState('1d')
-  const [priceScale, setPriceScale] = useState(1)
   const [volumeScale, setVolumeScale] = useState(1)
   const [priceMultiplier, setPriceMultiplier] = useState(1)
   const [calculatedPriceScale, setCalculatedPriceScale] = useState(1)
@@ -132,19 +131,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     const calculatedPriceScale = maxPrice > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxPrice))) : 1
     const calculatedVolumeScale = maxVolume > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxVolume))) : 1
     
-    // Calculate X multiplier so that final scaled prices are at same order as volumes
-    // Target: make scaled prices reach the same order of magnitude as scaled volumes
-    const targetPriceScaling = calculatedVolumeScale // Same scaling as volume
-    const priceMultiplier = calculatedPriceScale > 0 ? targetPriceScaling / calculatedPriceScale : 1
+    // Calculate X multiplier to make prices bigger on chart
+    // For display: show 10^-9 + 10^6 = 10^-15
+    const priceMultiplier = 1000000 // 10^6 - fixed multiplier to make prices bigger
     
     console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
     console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
-    console.log(`Target price scaling: ${targetPriceScaling}`)
     console.log(`Price multiplier (X): ${priceMultiplier}`)
     console.log(`Final price scaling: ${calculatedPriceScale * priceMultiplier}`)
     
     // Update state for use in JSX
-    setPriceScale(calculatedPriceScale)
     setVolumeScale(calculatedVolumeScale)
     setPriceMultiplier(priceMultiplier)
     setCalculatedPriceScale(calculatedPriceScale)
@@ -226,7 +222,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             {symbol} Price Chart
             {data.length > 0 && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                (×10⁻{Math.log10(calculatedPriceScale * priceMultiplier)}) ETH
+                (×10⁻{Math.log10(calculatedPriceScale) + Math.log10(priceMultiplier)}) ETH
               </span>
             )}
           </h3>
@@ -240,7 +236,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
               <div className="h-3 w-3 border border-green-400 bg-green-400/20"></div>
               <span>Price (Candlesticks)</span>
               {calculatedPriceScale * priceMultiplier !== 1 && (
-                <span className="text-gray-500">×10⁻{Math.log10(calculatedPriceScale * priceMultiplier)}</span>
+                <span className="text-gray-500">×10⁻{Math.log10(calculatedPriceScale) + Math.log10(priceMultiplier)}</span>
               )}
             </div>
             <div className="flex items-center gap-1">
