@@ -126,23 +126,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
     })
 
-    // Create candlestick series - use left Y-axis
-    const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#00ff88', // Bright green for up candles
-      downColor: '#ff4444', // Bright red for down candles
-      borderDownColor: '#ff4444',
-      borderUpColor: '#00ff88',
-      wickDownColor: '#ff4444',
-      wickUpColor: '#00ff88',
-      priceScaleId: 'left', // Use left Y-axis for prices
-      priceFormat: {
-        type: 'price',
-        precision: 6, // Reasonable precision for small values
-        minMove: 1e-12, // Very small minimum movement
-      },
-    })
-
-    // Create volume series - use right Y-axis
+    // Create volume series - use left Y-axis (first series)
     const volumeSeries = chart.addSeries(HistogramSeries, {
       color: '#26a69a99', // 60% transparent green (99 = 60% opacity in hex)
       priceFormat: {
@@ -150,7 +134,23 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         precision: 6, // Same precision as price series for small values
         minMove: 1e-12, // Very small minimum movement for tiny volumes
       },
-      priceScaleId: 'right', // Use right Y-axis for volumes
+      priceScaleId: 'left', // Use left Y-axis for volumes (first series)
+    })
+
+    // Create candlestick series - use right Y-axis (second series)
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#00ff88', // Bright green for up candles
+      downColor: '#ff4444', // Bright red for down candles
+      borderDownColor: '#ff4444',
+      borderUpColor: '#00ff88',
+      wickDownColor: '#ff4444',
+      wickUpColor: '#00ff88',
+      priceScaleId: 'right', // Use right Y-axis for prices (second series)
+      priceFormat: {
+        type: 'price',
+        precision: 6, // Reasonable precision for small values
+        minMove: 1e-12, // Very small minimum movement
+      },
     })
 
     // Calculate scaling for small ETH values
@@ -211,19 +211,19 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       const useScientificNotation = priceMax < 0.001
       console.log(`Use scientific notation: ${useScientificNotation} (priceMax: ${priceMax})`)
       
-      // Prices use automatic scaling (autoscaleInfoProvider removed)
+      // Prices (right axis) use automatic scaling (autoscaleInfoProvider removed)
       // For manual scaling, use: candlestickSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue, maxValue } }) })
       
-      // Apply custom tick formatting for tiny prices
+      // Apply custom tick formatting for prices (right axis)
       candlestickSeries.priceScale().applyOptions({
         scaleMargins: { top: 0.1, bottom: 0.1 },
       })
       
-      // Apply same formatting logic for volumes
+      // Apply same formatting logic for volumes (left axis)
       const useScientificNotationVolume = volumeMax < 0.001
       console.log(`Use scientific notation for volume: ${useScientificNotationVolume} (volumeMax: ${volumeMax})`)
       
-      // Apply custom tick formatting for volumes (same as prices)
+      // Apply custom tick formatting for volumes (left axis)
       volumeSeries.priceScale().applyOptions({
         scaleMargins: { top: 0.1, bottom: 0.1 },
       })
