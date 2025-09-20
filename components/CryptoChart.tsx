@@ -207,12 +207,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       const useScientificNotation = priceMax < 0.001
       console.log(`Use scientific notation: ${useScientificNotation} (priceMax: ${priceMax})`)
       
-      // Provide manual range via autoscaleInfoProvider
-      candlestickSeries.applyOptions({
-        autoscaleInfoProvider: () => ({
-          priceRange: { minValue: manualPriceMin, maxValue: manualPriceMax },
-        }),
-      })
+      // Prices use automatic scaling (autoscaleInfoProvider removed)
+      // For manual scaling, use: candlestickSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue, maxValue } }) })
       
       // Apply custom tick formatting for tiny prices
       candlestickSeries.priceScale().applyOptions({
