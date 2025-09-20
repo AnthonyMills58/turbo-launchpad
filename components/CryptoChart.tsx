@@ -218,7 +218,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             top: 0.1,
             bottom: 0.1,
           },
-          tickMarkFormatter: (value: number) => value.toExponential(2), // Force scientific notation
+          tickMarkFormatter: (value: number) => {
+            // Custom formatter to avoid "0." prefix
+            const exp = value.toExponential(2);
+            return exp.replace(/^0\./, ''); // Remove leading "0." if present
+          },
         })
         
         chart.priceScale('right').applyOptions({
@@ -226,7 +230,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             top: 0.1,
             bottom: 0.1,
           },
-          tickMarkFormatter: (value: number) => value.toExponential(2), // Force scientific notation
+          tickMarkFormatter: (value: number) => {
+            // Custom formatter to avoid "0." prefix
+            const exp = value.toExponential(2);
+            return exp.replace(/^0\./, ''); // Remove leading "0." if present
+          },
         })
       }, 100)
     }
