@@ -26,8 +26,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedInterval, setSelectedInterval] = useState('1d')
-  const [volumeScale, setVolumeScale] = useState(1)
-  const [calculatedPriceScale, setCalculatedPriceScale] = useState(1)
 
   const intervals = [
     { value: '1m', label: '1m' },
@@ -154,9 +152,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
     console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
     
-    // Update state for use in JSX
-    setVolumeScale(calculatedVolumeScale)
-    setCalculatedPriceScale(calculatedPriceScale)
+    // No state updates needed for testing
     
     // Send original values to chart engine - let it handle scaling
     const formattedData = data.map(candle => ({
@@ -177,7 +173,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     console.log('Sample volume data:', volumeData.slice(0, 3))
 
     candlestickSeries.setData(formattedData)
-    volumeSeries.setData(volumeData)
+    // volumeSeries.setData(volumeData) // TEMPORARILY DISABLED FOR TESTING
 
     // Log data ranges for debugging
     if (formattedData.length > 0) {
@@ -268,7 +264,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             {symbol} Price Chart
             {data.length > 0 && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                (×10⁻{Math.log10(calculatedPriceScale)}) ETH
+                ETH
               </span>
             )}
           </h3>
@@ -281,16 +277,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 border border-green-400 bg-green-400/20"></div>
               <span>Price (Candlesticks)</span>
-              {calculatedPriceScale !== 1 && (
-                <span className="text-gray-500">×10⁻{Math.log10(calculatedPriceScale)}</span>
-              )}
             </div>
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 bg-teal-400"></div>
               <span>Volume (Bars)</span>
-              {volumeScale !== 1 && (
-                <span className="text-gray-500">×10⁻{Math.log10(volumeScale)}</span>
-              )}
             </div>
           </div>
         </div>
