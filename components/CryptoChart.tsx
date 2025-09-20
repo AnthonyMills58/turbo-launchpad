@@ -181,7 +181,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     console.log('Sample volume data:', volumeData.slice(0, 3))
 
     candlestickSeries.setData(originalData)
-    // volumeSeries.setData(volumeData) // TEMPORARILY DISABLED FOR TESTING
+    volumeSeries.setData(volumeData) // Volume series enabled on right Y-axis
 
     // Log data ranges and set manual scaling
     if (originalData.length > 0) {
