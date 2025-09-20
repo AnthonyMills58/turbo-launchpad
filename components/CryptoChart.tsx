@@ -144,7 +144,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create volume series - use right Y-axis
     const volumeSeries = chart.addSeries(HistogramSeries, {
-      color: '#26a69a',
+      color: '#26a69a99', // 60% transparent green (99 = 60% opacity in hex)
       priceFormat: {
         type: 'volume',
         precision: 6, // Same precision as price series for small values
@@ -178,7 +178,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     const volumeData = data.map(candle => ({
       time: candle.time as Time,
       value: Math.abs(candle.volumeEth),
-      color: candle.close >= candle.open ? '#26a69a' : '#ef5350',
+      color: candle.close >= candle.open ? '#26a69a99' : '#ef535099', // 60% transparent colors
     }))
 
     console.log('Sample original price data:', data.slice(0, 3).map(d => ({ open: d.open, close: d.close })))
