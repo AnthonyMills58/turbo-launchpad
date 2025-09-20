@@ -90,22 +90,22 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       rightPriceScale: {
         borderColor: '#2a2d3a',
         visible: true,
-        autoScale: true,
+        autoScale: false,
         borderVisible: true,
         scaleMargins: {
-          top: 0.2,
-          bottom: 0.2,
+          top: 0.1,
+          bottom: 0.1,
         },
         entireTextOnly: false,
       },
       leftPriceScale: {
         borderColor: '#2a2d3a',
         visible: true,
-        autoScale: true,
+        autoScale: false,
         borderVisible: true,
         scaleMargins: {
-          top: 0.2,
-          bottom: 0.2,
+          top: 0.1,
+          bottom: 0.1,
         },
         entireTextOnly: false,
       },
@@ -185,7 +185,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     candlestickSeries.setData(originalData)
     // volumeSeries.setData(volumeData) // TEMPORARILY DISABLED FOR TESTING
 
-    // Log data ranges for debugging
+    // Log data ranges and set manual scaling
     if (originalData.length > 0) {
       const priceMin = Math.min(...originalData.map(d => Math.min(d.open, d.high, d.low, d.close)))
       const priceMax = Math.max(...originalData.map(d => Math.max(d.open, d.high, d.low, d.close)))
@@ -197,6 +197,28 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       
       console.log(`Original price range: ${priceMin} to ${priceMax} (range: ${priceRange})`)
       console.log(`Volume range: ${volumeMin} to ${volumeMax} (range: ${volumeRange})`)
+      
+      // Set manual Y-axis scaling: max = 2x highest price, min = 0
+      const manualPriceMax = priceMax * 2
+      const manualPriceMin = 0
+      
+      console.log(`Manual price scale: ${manualPriceMin} to ${manualPriceMax}`)
+      
+      // Apply manual scaling to left price scale (candlesticks)
+      candlestickSeries.priceScale().applyOptions({
+        autoScale: false,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
+      })
+      
+      // Set the price range manually
+      setTimeout(() => {
+        candlestickSeries.priceScale().applyOptions({
+          autoScale: false,
+        })
+      }, 50)
     }
 
     // Auto-fit the chart to show the full time range
@@ -208,13 +230,13 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         chart.applyOptions({
           rightPriceScale: {
             visible: true,
-            autoScale: true,
+            autoScale: false,
             borderVisible: true,
             entireTextOnly: false,
           },
           leftPriceScale: {
             visible: true,
-            autoScale: true,
+            autoScale: false,
             borderVisible: true,
             entireTextOnly: false,
           },
@@ -226,12 +248,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             top: 0.1,
             bottom: 0.1,
           },
-          tickMarkFormatter: (value: number) => {
-            // More robust scientific notation formatter
-            const exponent = Math.floor(Math.log10(Math.abs(value)));
-            const mantissa = value / Math.pow(10, exponent);
-            return `${mantissa.toFixed(2)}e${exponent}`;
-          },
         })
         
         chart.priceScale('right').applyOptions({
@@ -239,13 +255,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             top: 0.1,
             bottom: 0.1,
           },
-          tickMarkFormatter: (value: number) => {
-            // More robust scientific notation formatter
-            const exponent = Math.floor(Math.log10(Math.abs(value)));
-            const mantissa = value / Math.pow(10, exponent);
-            return `${mantissa.toFixed(2)}e${exponent}`;
-          },
         })
+        
+        // Manual scaling is now applied via autoScale: false
+        // Scientific notation formatter is handled by localization.priceFormatter
       }, 100)
     }
 
