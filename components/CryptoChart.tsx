@@ -156,7 +156,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create line series to connect closing prices - use right Y-axis (same as candlesticks)
     const lineSeries = chart.addSeries(LineSeries, {
-      color: '#ffffff', // White line
+      color: '#ffd700', // Gold color that complements both green and red candles
       lineWidth: 2,
       priceScaleId: 'right', // Use right Y-axis for prices (same as candlesticks)
       priceFormat: {
