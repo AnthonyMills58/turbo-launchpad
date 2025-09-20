@@ -262,6 +262,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           },
         })
         
+        chart.priceScale('left').applyOptions({
+          visible: true,
+          borderVisible: true,
+          entireTextOnly: false,
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+          },
+        })
+        
         chart.priceScale('right').applyOptions({
           visible: true,
           borderVisible: true,
@@ -370,10 +380,10 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         <div ref={chartContainerRef} className="w-full px-16" />
         {/* Y-axis labels */}
         <div className="absolute left-2 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs text-gray-400 font-medium whitespace-nowrap">
-          Price (ETH)
+          Volume (ETH)
         </div>
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs text-gray-400 font-medium whitespace-nowrap">
-          Volume (ETH)
+          Price (ETH)
         </div>
       </div>
     </div>
