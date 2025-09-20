@@ -26,7 +26,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const lineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedInterval, setSelectedInterval] = useState('1d')
+  const [selectedInterval, setSelectedInterval] = useState('1m')
 
   const intervals = [
     { value: '1m', label: '1m' },
