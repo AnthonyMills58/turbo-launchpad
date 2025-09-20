@@ -213,8 +213,13 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         },
       })
       
-      // Manual scaling applied via autoScale: false
-      // The chart should now use fixed scaling instead of automatic
+      // Set manual price range using setPriceRange method
+      setTimeout(() => {
+        candlestickSeries.priceScale().setPriceRange({
+          minValue: manualPriceMin,
+          maxValue: manualPriceMax,
+        })
+      }, 100)
     }
 
     // Auto-fit the chart to show the full time range
@@ -239,13 +244,27 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         })
         
         // Add axis labels and apply manual scaling
-        chart.priceScale('left').applyOptions({
-          autoScale: false,
-          scaleMargins: {
-            top: 0.1,
-            bottom: 0.1,
-          },
-        })
+        if (originalData.length > 0) {
+          const priceMax = Math.max(...originalData.map(d => Math.max(d.open, d.high, d.low, d.close)))
+          const manualPriceMax = priceMax * 2
+          const manualPriceMin = 0
+          
+          chart.priceScale('left').applyOptions({
+            autoScale: false,
+            scaleMargins: {
+              top: 0.1,
+              bottom: 0.1,
+            },
+          })
+          
+          // Set manual price range
+          setTimeout(() => {
+            chart.priceScale('left').setPriceRange({
+              minValue: manualPriceMin,
+              maxValue: manualPriceMax,
+            })
+          }, 50)
+        }
         
         chart.priceScale('right').applyOptions({
           scaleMargins: {
