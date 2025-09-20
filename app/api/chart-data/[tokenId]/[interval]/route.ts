@@ -13,83 +13,75 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid token ID' }, { status: 400 })
     }
 
-    // Validate interval
-    const validIntervals = ['1m', '5m', '15m', '1h', '4h', '1d', '1w']
+    // Validate interval - only support intervals we have in token_chart_agg
+    const validIntervals = ['1m', '1d', '1w', '1M']
     if (!validIntervals.includes(interval)) {
-      return NextResponse.json({ error: 'Invalid interval' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid interval. Supported: 1m, 1d, 1w, 1M' }, { status: 400 })
     }
 
-    // Choose the appropriate table and query based on interval
-    let query: string
-    let queryParams: (string | number)[]
-    
-    if (interval === '1d') {
-      // Use token_daily_agg for daily data - get full history
-      query = `
-        SELECT 
-          "day" as time,
-          NULL as "open",
-          NULL as high,
-          NULL as low,
-          NULL as "close",
-          volume_token_wei,
-          volume_eth_wei,
-          volume_usd,
-          transfers as trades_count
-        FROM token_daily_agg 
-        WHERE token_id = $1
-        ORDER BY "day" ASC 
-        LIMIT 500
-      `
-      queryParams = [tokenId]
-    } else {
-      // Use token_candles for intraday data - get full history
-      query = `
-        SELECT 
-          ts as time,
-          "open",
-          high,
-          low,
-          "close",
-          volume_token_wei,
-          volume_eth_wei,
-          volume_usd,
-          trades_count
-        FROM token_candles 
-        WHERE token_id = $1 
-          AND "interval" = $2
-        ORDER BY ts ASC 
-        LIMIT 500
-      `
-      queryParams = [tokenId, interval]
-    }
+    // Query token_chart_agg table for the specific interval
+    const query = `
+      SELECT 
+        ts as time,
+        price_open_eth,
+        price_high_eth,
+        price_low_eth,
+        price_close_eth,
+        price_open_usd,
+        price_high_usd,
+        price_low_usd,
+        price_close_usd,
+        volume_eth,
+        volume_usd,
+        trades_count
+      FROM token_chart_agg 
+      WHERE token_id = $1 
+        AND interval_type = $2
+      ORDER BY ts ASC 
+      LIMIT 500
+    `
 
-    const result = await pool.query(query, queryParams)
+    const result = await pool.query(query, [tokenId, interval])
     
     // Format data for TradingView Lightweight Charts
     const chartData = result.rows.map(row => ({
-      time: interval === '1d' 
-        ? Math.floor(new Date(row.time).getTime() / 1000) // Convert date to Unix timestamp
-        : Math.floor(row.time.getTime() / 1000), // Unix timestamp in seconds
-      open: parseFloat(row.open || 0),
-      high: parseFloat(row.high || 0),
-      low: parseFloat(row.low || 0),
-      close: parseFloat(row.close || 0),
-      volume: parseFloat(row.volume_token_wei || 0) / 1e18, // Convert wei to tokens
-      volumeEth: Math.abs(parseFloat(row.volume_eth_wei || 0)) / 1e18, // Convert wei to ETH, use absolute value for volume
-      volumeUsd: interval === '1d' 
-        ? Math.abs(parseFloat(row.volume_usd || 0)) // Daily: already in USD
-        : Math.abs(parseFloat(row.volume_usd || 0)) / 1e18, // 1m: convert wei to USD
+      time: Math.floor(row.time.getTime() / 1000), // Unix timestamp in seconds
+      open: parseFloat(row.price_open_eth || 0),
+      high: parseFloat(row.price_high_eth || 0),
+      low: parseFloat(row.price_low_eth || 0),
+      close: parseFloat(row.price_close_eth || 0),
+      volume: parseFloat(row.volume_eth || 0), // Already in ETH, no conversion needed
+      volumeEth: parseFloat(row.volume_eth || 0),
+      volumeUsd: parseFloat(row.volume_usd || 0),
       tradesCount: parseInt(row.trades_count || 0),
+      // Add USD price data for potential future use
+      priceUsd: {
+        open: parseFloat(row.price_open_usd || 0),
+        high: parseFloat(row.price_high_usd || 0),
+        low: parseFloat(row.price_low_usd || 0),
+        close: parseFloat(row.price_close_usd || 0)
+      }
     }))
     
-    console.log('Volume data from database:', chartData.map(d => ({ time: d.time, volumeEth: d.volumeEth, volumeUsd: d.volumeUsd })))
+    console.log(`Chart data for token ${tokenId}, interval ${interval}: ${chartData.length} candles`)
+    if (chartData.length > 0) {
+      console.log('Sample candle:', {
+        time: chartData[0].time,
+        open: chartData[0].open,
+        high: chartData[0].high,
+        low: chartData[0].low,
+        close: chartData[0].close,
+        volumeEth: chartData[0].volumeEth,
+        volumeUsd: chartData[0].volumeUsd
+      })
+    }
 
     return NextResponse.json({
       data: chartData,
       interval,
       tokenId,
-      count: chartData.length
+      count: chartData.length,
+      source: 'token_chart_agg'
     })
   } catch (error) {
     console.error('Error fetching chart data:', error)
