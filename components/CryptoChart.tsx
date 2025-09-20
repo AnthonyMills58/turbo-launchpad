@@ -91,10 +91,15 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
       rightPriceScale: {
         borderColor: '#2a2d3a',
+        visible: true,
+        autoScale: true,
+        borderVisible: true,
       },
       leftPriceScale: {
         borderColor: '#2a2d3a',
         visible: true,
+        autoScale: true,
+        borderVisible: true,
       },
       timeScale: {
         borderColor: '#2a2d3a',
@@ -152,6 +157,9 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       value: Math.abs(candle.volumeEth),
       color: candle.close >= candle.open ? '#26a69a' : '#ef5350',
     }))
+
+    console.log('Sample price data:', formattedData.slice(0, 3))
+    console.log('Sample volume data:', volumeData.slice(0, 3))
 
     candlestickSeries.setData(formattedData)
     volumeSeries.setData(volumeData)
