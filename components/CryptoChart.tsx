@@ -26,6 +26,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedInterval, setSelectedInterval] = useState('1d')
+  const [calculatedPriceScale, setCalculatedPriceScale] = useState(1)
 
   const intervals = [
     { value: '1m', label: '1m' },
@@ -152,15 +153,17 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
     console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
     
-    // No state updates needed for testing
+    // Update state for use in JSX
+    setCalculatedPriceScale(calculatedPriceScale)
     
-    // Send original values to chart engine - let it handle scaling
-    const formattedData = data.map(candle => ({
+    // Apply custom scaling to make Y-axis numbers more readable
+    const priceScale = calculatedPriceScale // e.g., 10^9 for prices around 2e-9
+    const scaledData = data.map(candle => ({
       time: candle.time as Time,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
+      open: candle.open * priceScale,
+      high: candle.high * priceScale,
+      low: candle.low * priceScale,
+      close: candle.close * priceScale,
     }))
 
     const volumeData = data.map(candle => ({
@@ -169,28 +172,30 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       color: candle.close >= candle.open ? '#26a69a' : '#ef5350',
     }))
 
-    console.log('Sample price data:', formattedData.slice(0, 3))
+    console.log('Sample original price data:', data.slice(0, 3).map(d => ({ open: d.open, close: d.close })))
+    console.log('Sample scaled price data:', scaledData.slice(0, 3))
     console.log('Sample volume data:', volumeData.slice(0, 3))
+    console.log('Price scale factor:', calculatedPriceScale)
 
-    candlestickSeries.setData(formattedData)
+    candlestickSeries.setData(scaledData)
     // volumeSeries.setData(volumeData) // TEMPORARILY DISABLED FOR TESTING
 
     // Log data ranges for debugging
-    if (formattedData.length > 0) {
-      const priceMin = Math.min(...formattedData.map(d => Math.min(d.open, d.high, d.low, d.close)))
-      const priceMax = Math.max(...formattedData.map(d => Math.max(d.open, d.high, d.low, d.close)))
+    if (scaledData.length > 0) {
+      const priceMin = Math.min(...scaledData.map(d => Math.min(d.open, d.high, d.low, d.close)))
+      const priceMax = Math.max(...scaledData.map(d => Math.max(d.open, d.high, d.low, d.close)))
       const priceRange = priceMax - priceMin
       
       const volumeMin = Math.min(...volumeData.map(d => d.value))
       const volumeMax = Math.max(...volumeData.map(d => d.value))
       const volumeRange = volumeMax - volumeMin
       
-      console.log(`Price range: ${priceMin} to ${priceMax} (range: ${priceRange})`)
+      console.log(`Scaled price range: ${priceMin} to ${priceMax} (range: ${priceRange})`)
       console.log(`Volume range: ${volumeMin} to ${volumeMax} (range: ${volumeRange})`)
     }
 
     // Auto-fit the chart to show the full time range
-    if (formattedData.length > 0) {
+    if (scaledData.length > 0) {
       chart.timeScale().fitContent()
       
       // Force chart to redraw and show Y-axis
@@ -264,7 +269,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             {symbol} Price Chart
             {data.length > 0 && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                ETH
+                (×10⁻{Math.log10(calculatedPriceScale)}) ETH
               </span>
             )}
           </h3>
@@ -277,6 +282,9 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 border border-green-400 bg-green-400/20"></div>
               <span>Price (Candlesticks)</span>
+              {calculatedPriceScale !== 1 && (
+                <span className="text-gray-500">×10⁻{Math.log10(calculatedPriceScale)}</span>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 bg-teal-400"></div>
