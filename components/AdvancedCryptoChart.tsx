@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { createChart, IChartApi, ISeriesApi, Time } from 'lightweight-charts'
+import { createChart, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries } from 'lightweight-charts'
 
 interface AdvancedCryptoChartProps {
   tokenId: number
@@ -108,7 +108,7 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
     })
 
     // Create candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderDownColor: '#ef5350',
@@ -118,16 +118,12 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
     })
 
     // Create volume series
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = chart.addSeries(HistogramSeries, {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
       },
       priceScaleId: '',
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
     })
 
     // Set data
