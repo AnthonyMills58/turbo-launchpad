@@ -228,19 +228,19 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         scaleMargins: { top: 0.1, bottom: 0.1 },
       })
       
-      // Manual scaling for volumes: max = 5x highest volume, min = 0
-      const manualVolumeMax = volumeMax * 5
-      const manualVolumeMin = 0
+      // Temporarily disable manual scaling for volumes to test axis numbers
+      // const manualVolumeMax = volumeMax * 5
+      // const manualVolumeMin = 0
       
       console.log(`Original volume max: ${volumeMax}`)
-      console.log(`Manual volume scale: ${manualVolumeMin} to ${manualVolumeMax}`)
+      // console.log(`Manual volume scale: ${manualVolumeMin} to ${manualVolumeMax}`)
       
       // Apply manual scaling to volume series using autoscaleInfoProvider
-      volumeSeries.applyOptions({
-        autoscaleInfoProvider: () => ({
-          priceRange: { minValue: manualVolumeMin, maxValue: manualVolumeMax },
-        }),
-      })
+      // volumeSeries.applyOptions({
+      //   autoscaleInfoProvider: () => ({
+      //     priceRange: { minValue: manualVolumeMin, maxValue: manualVolumeMax },
+      //   }),
+      // })
     }
 
     // Auto-fit the chart to show the full time range
