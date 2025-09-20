@@ -174,7 +174,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     console.log('Sample original price data:', data.slice(0, 3).map(d => ({ open: d.open, close: d.close })))
     console.log('Sample volume data:', volumeData.slice(0, 3))
 
-    candlestickSeries.setData(scaledData)
+    candlestickSeries.setData(originalData)
     // volumeSeries.setData(volumeData) // TEMPORARILY DISABLED FOR TESTING
 
     // Log data ranges for debugging
