@@ -92,21 +92,21 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       rightPriceScale: {
         borderColor: '#2a2d3a',
         visible: true,
-        autoScale: false,
+        autoScale: true,
         borderVisible: true,
         scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
+          top: 0.2,
+          bottom: 0.2,
         },
       },
       leftPriceScale: {
         borderColor: '#2a2d3a',
         visible: true,
-        autoScale: false,
+        autoScale: true,
         borderVisible: true,
         scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
+          top: 0.2,
+          bottom: 0.2,
         },
       },
       timeScale: {
@@ -125,6 +125,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       wickDownColor: '#ef5350',
       wickUpColor: '#26a69a',
       priceScaleId: 'left', // Use left Y-axis for prices
+      priceFormat: {
+        type: 'price',
+        precision: 12, // Show 12 decimal places for tiny prices
+        minMove: 0.000000000001, // Minimum price movement
+      },
     })
 
     // Create volume series - use right Y-axis
@@ -132,6 +137,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
+        precision: 8, // Show 8 decimal places for volumes
+        minMove: 0.00000001, // Minimum volume movement
       },
       priceScaleId: 'right', // Use right Y-axis for volumes
     })
@@ -172,7 +179,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     candlestickSeries.setData(formattedData)
     volumeSeries.setData(volumeData)
 
-    // Manually set price scale ranges to force Y-axis numbers
+    // Log data ranges for debugging
     if (formattedData.length > 0) {
       const priceMin = Math.min(...formattedData.map(d => Math.min(d.open, d.high, d.low, d.close)))
       const priceMax = Math.max(...formattedData.map(d => Math.max(d.open, d.high, d.low, d.close)))
@@ -184,28 +191,27 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       
       console.log(`Price range: ${priceMin} to ${priceMax} (range: ${priceRange})`)
       console.log(`Volume range: ${volumeMin} to ${volumeMax} (range: ${volumeRange})`)
-      
-      // Apply manual scaling to force Y-axis display
-      candlestickSeries.priceScale().applyOptions({
-        autoScale: false,
-        scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
-        },
-      })
-      
-      volumeSeries.priceScale().applyOptions({
-        autoScale: false,
-        scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
-        },
-      })
     }
 
     // Auto-fit the chart to show the full time range
     if (formattedData.length > 0) {
       chart.timeScale().fitContent()
+      
+      // Force chart to redraw and show Y-axis
+      setTimeout(() => {
+        chart.applyOptions({
+          rightPriceScale: {
+            visible: true,
+            autoScale: true,
+            borderVisible: true,
+          },
+          leftPriceScale: {
+            visible: true,
+            autoScale: true,
+            borderVisible: true,
+          },
+        })
+      }, 100)
     }
 
     // Store references
