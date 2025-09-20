@@ -37,8 +37,7 @@ export async function GET(
       FROM token_chart_agg 
       WHERE token_id = $1 
         AND interval_type = $2
-      ORDER BY ts ASC 
-      LIMIT 500
+      ORDER BY ts ASC
     `
 
     const result = await pool.query(query, [tokenId, interval])
