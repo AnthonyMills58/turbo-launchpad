@@ -11,17 +11,15 @@ import {
 } from './core/config'
 
 // Aggregation configuration
-const DAILY_AGG_UPDATE_DAYS = Number(process.env.DAILY_AGG_UPDATE_DAYS ?? 12)  // Update last 12 days by default (covers oldest token)
-const CANDLES_UPDATE_HOURS = Number(process.env.CANDLES_UPDATE_HOURS ?? 24)   // Update last 24 hours by default
+const CHART_AGG_UPDATE_DAYS = Number(process.env.CHART_AGG_UPDATE_DAYS ?? 15)  // Update last 15 days by default (covers oldest token)
 
 /**
  * Aggregation Worker
  * 
  * Processes token_transfers to update:
  * 1. token_balances table
- * 2. token_candles (1-minute intervals)
- * 3. token_daily_agg (daily aggregations)
- * 4. tokens table (holder_count, current stats)
+ * 2. token_chart_agg (1m, 1d, 1w, 1M intervals with dual currency OHLC)
+ * 3. tokens table (holder_count, current stats)
  */
 
 interface TokenRow {
@@ -52,150 +50,111 @@ interface TransferRow {
 
 
 /**
- * Process token daily aggregations
+ * Process token chart aggregations (1m, 1d, 1w, 1M intervals with dual currency OHLC)
  */
-async function processTokenDailyAgg(
+async function processTokenChartAgg(
   token: TokenRow,
   chainId: number
 ): Promise<void> {
-  console.log(`\n📊 Processing token ${token.id} (${token.contract_address}) for daily aggregations (last ${DAILY_AGG_UPDATE_DAYS} days)...`)
+  console.log(`\n📊 Processing token ${token.id} (${token.contract_address}) for chart aggregations (last ${CHART_AGG_UPDATE_DAYS} days)...`)
   
   // Calculate the cutoff date for incremental updates
   const cutoffDate = new Date()
-  cutoffDate.setDate(cutoffDate.getDate() - DAILY_AGG_UPDATE_DAYS)
+  cutoffDate.setDate(cutoffDate.getDate() - CHART_AGG_UPDATE_DAYS)
   
-  // Get transfers for this token, grouped by day (only recent days)
-  const { rows: dailyData } = await pool.query(`
+  // Get trading data for this token (only transactions with ETH volume)
+  const { rows: tradingData } = await pool.query(`
     SELECT 
-      DATE(block_time) as day,
-      COUNT(*) as transfers,
-      COUNT(DISTINCT from_address) as unique_senders,
-      COUNT(DISTINCT to_address) as unique_receivers,
-      COUNT(DISTINCT CASE 
-        WHEN from_address != '0x0000000000000000000000000000000000000000' 
-        THEN from_address 
-      END) + COUNT(DISTINCT CASE 
-        WHEN to_address != '0x0000000000000000000000000000000000000000' 
-        THEN to_address 
-      END) as unique_traders,
-      SUM(amount_wei::numeric) as volume_token_wei,
-      SUM(COALESCE(amount_eth_wei::numeric, 0)) as volume_eth_wei,
-      SUM((COALESCE(amount_eth_wei::numeric, 0) / 1e18) * COALESCE(eth_price_usd, 0)) as volume_usd
-    FROM public.token_transfers 
-    WHERE token_id = $1 AND chain_id = $2
+      token_id,
+      side,
+      src,
+      amount_eth_wei/1e18 as volume_eth,
+      price_eth_per_token as price_eth,
+      eth_price_usd,
+      block_time
+    FROM token_transfers 
+    WHERE token_id = $1 
+      AND chain_id = $2
       AND block_time >= $3
-    GROUP BY DATE(block_time)
-    ORDER BY day ASC
-  `, [token.id, chainId, cutoffDate])
-  
-  console.log(`Token ${token.id}: Found ${dailyData.length} days to process (last ${DAILY_AGG_UPDATE_DAYS} days)`)
-  
-  if (dailyData.length === 0) {
-    console.log(`Token ${token.id}: No recent daily data found. Skipping.`)
-    return
-  }
-  
-  // Clear existing daily aggregations for this token (only recent days)
-  await pool.query(`
-    DELETE FROM public.token_daily_agg 
-    WHERE token_id = $1 AND chain_id = $2 AND day >= $3
-  `, [token.id, chainId, cutoffDate])
-  
-  // Insert daily aggregations
-  for (const dayData of dailyData) {
-    // Get holder count for this day (end of day)
-    const { rows: [{ holders_count }] } = await pool.query(`
-      SELECT COUNT(DISTINCT holder)::int as holders_count
-      FROM public.token_balances
-      WHERE token_id = $1 AND chain_id = $2
-        AND balance_wei::numeric > 0
-        AND holder != '0x0000000000000000000000000000000000000000'
-        AND LOWER(holder) NOT IN (
-          SELECT LOWER(pair_address) FROM public.dex_pools WHERE chain_id = $2
-        )
-    `, [token.id, chainId])
-    
-    await pool.query(`
-      INSERT INTO public.token_daily_agg 
-      (token_id, chain_id, day, transfers, unique_senders, unique_receivers, 
-       unique_traders, volume_token_wei, volume_eth_wei, volume_usd, holders_count)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      -- ON CONFLICT removed - table may not have unique constraint
-    `, [
-      token.id, chainId, dayData.day, dayData.transfers, 
-      dayData.unique_senders, dayData.unique_receivers, dayData.unique_traders,
-      dayData.volume_token_wei, dayData.volume_eth_wei, dayData.volume_usd,
-      holders_count
-    ])
-  }
-  
-  console.log(`✅ Token ${token.id}: Processed ${dailyData.length} daily aggregations`)
-}
-
-/**
- * Process token candles (1-minute intervals)
- */
-async function processTokenCandles(
-  token: TokenRow,
-  chainId: number
-): Promise<void> {
-  console.log(`\n🕯️ Processing token ${token.id} (${token.contract_address}) for 1-minute candles (last ${CANDLES_UPDATE_HOURS} hours)...`)
-  
-  // Calculate the cutoff time for incremental updates
-  const cutoffTime = new Date()
-  cutoffTime.setHours(cutoffTime.getHours() - CANDLES_UPDATE_HOURS)
-  
-  // Get transfers for this token, grouped by 1-minute intervals (only recent hours)
-  const { rows: candleData } = await pool.query(`
-    SELECT 
-      DATE_TRUNC('minute', block_time) as ts,
-      COUNT(*) as trades_count,
-      SUM(amount_wei::numeric) as volume_token_wei,
-      SUM(COALESCE(amount_eth_wei::numeric, 0)) as volume_eth_wei,
-      SUM(COALESCE(amount_eth_wei::numeric, 0) * COALESCE(eth_price_usd, 0)) as volume_usd,
-      MIN(COALESCE(price_eth_per_token, 0)) as low_price,
-      MAX(COALESCE(price_eth_per_token, 0)) as high_price,
-      (ARRAY_AGG(COALESCE(price_eth_per_token, 0) ORDER BY block_time ASC))[1] as open_price,
-      (ARRAY_AGG(COALESCE(price_eth_per_token, 0) ORDER BY block_time DESC))[1] as close_price
-    FROM public.token_transfers 
-    WHERE token_id = $1 AND chain_id = $2
-      AND block_time >= $3
+      AND amount_eth_wei IS NOT NULL 
+      AND amount_eth_wei <> 0
       AND price_eth_per_token IS NOT NULL
       AND price_eth_per_token > 0
-    GROUP BY DATE_TRUNC('minute', block_time)
-    ORDER BY ts ASC
-  `, [token.id, chainId, cutoffTime])
+    ORDER BY block_time ASC
+  `, [token.id, chainId, cutoffDate])
   
-  console.log(`Token ${token.id}: Found ${candleData.length} 1-minute candles to process (last ${CANDLES_UPDATE_HOURS} hours)`)
+  console.log(`Token ${token.id}: Found ${tradingData.length} trading transactions to process (last ${CHART_AGG_UPDATE_DAYS} days)`)
   
-  if (candleData.length === 0) {
-    console.log(`Token ${token.id}: No recent candle data found. Skipping.`)
+  if (tradingData.length === 0) {
+    console.log(`Token ${token.id}: No recent trading data found. Skipping.`)
     return
   }
   
-  // Clear existing candles for this token (only recent hours)
+  // Clear existing chart aggregations for this token (only recent days)
   await pool.query(`
-    DELETE FROM public.token_candles 
-    WHERE token_id = $1 AND chain_id = $2 AND interval = '1m' AND ts >= $3
-  `, [token.id, chainId, cutoffTime])
+    DELETE FROM public.token_chart_agg 
+    WHERE token_id = $1 AND chain_id = $2 AND ts >= $3
+  `, [token.id, chainId, cutoffDate])
   
-  // Insert candles
-  for (const candle of candleData) {
-    await pool.query(`
-      INSERT INTO public.token_candles 
-      (token_id, chain_id, interval, ts, open, high, low, close, 
-       volume_token_wei, volume_eth_wei, volume_usd, trades_count)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      -- ON CONFLICT removed - table may not have unique constraint
-    `, [
-      token.id, chainId, '1m', candle.ts, 
-      candle.open_price, candle.high_price, candle.low_price, candle.close_price,
-      candle.volume_token_wei, candle.volume_eth_wei, candle.volume_usd, candle.trades_count
-    ])
+  // Process each interval type
+  const intervals = [
+    { type: '1m', trunc: 'minute' },
+    { type: '1d', trunc: 'day' },
+    { type: '1w', trunc: 'week' },
+    { type: '1M', trunc: 'month' }
+  ]
+  
+  for (const interval of intervals) {
+    // Group trading data by time interval
+    const { rows: intervalData } = await pool.query(`
+      SELECT 
+        DATE_TRUNC('${interval.trunc}', block_time) as ts,
+        COUNT(*) as trades_count,
+        SUM(amount_eth_wei/1e18) as volume_eth,
+        SUM((amount_eth_wei/1e18) * COALESCE(eth_price_usd, 0)) as volume_usd,
+        MIN(price_eth_per_token) as price_low_eth,
+        MAX(price_eth_per_token) as price_high_eth,
+        (ARRAY_AGG(price_eth_per_token ORDER BY block_time ASC))[1] as price_open_eth,
+        (ARRAY_AGG(price_eth_per_token ORDER BY block_time DESC))[1] as price_close_eth,
+        (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time ASC))[1] as price_open_usd,
+        (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time DESC))[1] as price_close_usd,
+        MIN(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_low_usd,
+        MAX(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_high_usd
+      FROM token_transfers 
+      WHERE token_id = $1 
+        AND chain_id = $2
+        AND block_time >= $3
+        AND amount_eth_wei IS NOT NULL 
+        AND amount_eth_wei <> 0
+        AND price_eth_per_token IS NOT NULL
+        AND price_eth_per_token > 0
+      GROUP BY DATE_TRUNC('${interval.trunc}', block_time)
+      ORDER BY ts ASC
+    `, [token.id, chainId, cutoffDate])
+    
+    console.log(`Token ${token.id}: Found ${intervalData.length} ${interval.type} candles to process`)
+    
+    // Insert candles for this interval
+    for (const candle of intervalData) {
+      await pool.query(`
+        INSERT INTO public.token_chart_agg 
+        (token_id, chain_id, interval_type, ts, 
+         price_open_eth, price_high_eth, price_low_eth, price_close_eth,
+         price_open_usd, price_high_usd, price_low_usd, price_close_usd,
+         volume_eth, volume_usd, trades_count)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `, [
+        token.id, chainId, interval.type, candle.ts,
+        candle.price_open_eth, candle.price_high_eth, candle.price_low_eth, candle.price_close_eth,
+        candle.price_open_usd, candle.price_high_usd, candle.price_low_usd, candle.price_close_usd,
+        candle.volume_eth, candle.volume_usd, candle.trades_count
+      ])
+    }
+    
+    console.log(`✅ Token ${token.id}: Processed ${intervalData.length} ${interval.type} candles`)
   }
-  
-  console.log(`✅ Token ${token.id}: Processed ${candleData.length} 1-minute candles`)
 }
+
 
 /**
  * Process token balances from transfers
@@ -441,11 +400,8 @@ async function processToken(token: TokenRow, chainId: number): Promise<void> {
     // Process token balances (processes ALL transfers from the beginning)
     await processTokenBalances(token, chainId)
     
-    // Process daily aggregations
-    await processTokenDailyAgg(token, chainId)
-    
-    // Process 1-minute candles
-    await processTokenCandles(token, chainId)
+    // Process chart aggregations (1m, 1d, 1w, 1M intervals with dual currency OHLC)
+    await processTokenChartAgg(token, chainId)
     
     // Process token statistics
     await processTokenStats(token, chainId)
@@ -535,7 +491,7 @@ async function processChain(chainId: number): Promise<void> {
  */
 export async function main(): Promise<boolean> {
   console.log('🚀 Starting Aggregation Worker...')
-  console.log('📋 Version: [400] - Token balances processing')
+  console.log('📋 Version: [500] - Chart aggregations with dual currency OHLC')
   
   try {
     // Get all supported chains
