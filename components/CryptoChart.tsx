@@ -26,6 +26,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedInterval, setSelectedInterval] = useState('1d')
+  const [priceScale, setPriceScale] = useState(1)
+  const [volumeScale, setVolumeScale] = useState(1)
 
   const intervals = [
     { value: '1m', label: '1m' },
@@ -120,19 +122,34 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       priceScaleId: 'volume', // Use separate price scale for volume
     })
 
-    // Data is now properly formatted from token_chart_agg - no scaling needed
+    // Calculate scaling for small ETH values
+    const maxPrice = Math.max(...data.map(c => Math.max(c.open, c.high, c.low, c.close)))
+    const maxVolume = Math.max(...data.map(c => Math.abs(c.volumeEth)))
+    
+    // Calculate appropriate scaling factors for visibility
+    const calculatedPriceScale = maxPrice > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxPrice))) : 1
+    const calculatedVolumeScale = maxVolume > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxVolume))) : 1
+    
+    console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
+    console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
+    
+    // Update state for use in JSX
+    setPriceScale(calculatedPriceScale)
+    setVolumeScale(calculatedVolumeScale)
+    
+    // Apply scaling to data
     const formattedData = data.map(candle => ({
       time: candle.time as Time,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
+      open: candle.open * calculatedPriceScale,
+      high: candle.high * calculatedPriceScale,
+      low: candle.low * calculatedPriceScale,
+      close: candle.close * calculatedPriceScale,
     }))
 
     const volumeData = data.map(candle => ({
       time: candle.time as Time,
-      value: Math.abs(candle.volumeEth), // Ensure positive volume
-      color: candle.close >= candle.open ? '#26a69a' : '#ef5350', // Price-based color
+      value: Math.abs(candle.volumeEth) * calculatedVolumeScale,
+      color: candle.close >= candle.open ? '#26a69a' : '#ef5350',
     }))
 
     candlestickSeries.setData(formattedData)
@@ -194,7 +211,12 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">
-            {symbol} Price Chart (ETH)
+            {symbol} Price Chart
+            {data.length > 0 && (
+              <span className="text-sm font-normal text-gray-400 ml-2">
+                (×10⁻{Math.log10(priceScale)}) ETH
+              </span>
+            )}
           </h3>
           <div className="text-sm text-gray-400">
             {data.length} candles • {selectedInterval} interval
@@ -205,10 +227,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 border border-green-400 bg-green-400/20"></div>
               <span>Price (Candlesticks)</span>
+              {priceScale !== 1 && (
+                <span className="text-gray-500">×10⁻{Math.log10(priceScale)}</span>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 bg-teal-400"></div>
               <span>Volume (Bars)</span>
+              {volumeScale !== 1 && (
+                <span className="text-gray-500">×10⁻{Math.log10(volumeScale)}</span>
+              )}
             </div>
           </div>
         </div>
