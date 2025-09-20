@@ -132,15 +132,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     const calculatedPriceScale = maxPrice > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxPrice))) : 1
     const calculatedVolumeScale = maxVolume > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxVolume))) : 1
     
-    // Calculate X multiplier so that scaled prices are 5-10x higher than scaled volumes
-    const scaledMaxPrice = maxPrice * calculatedPriceScale
-    const scaledMaxVolume = maxVolume * calculatedVolumeScale
-    const priceMultiplier = scaledMaxPrice > 0 ? Math.max(1, Math.ceil((scaledMaxVolume * 7.5) / scaledMaxPrice)) : 1
+    // Calculate X multiplier so that final scaled prices are at same order as volumes
+    // Target: make scaled prices reach the same order of magnitude as scaled volumes
+    const targetPriceScaling = calculatedVolumeScale // Same scaling as volume
+    const priceMultiplier = calculatedPriceScale > 0 ? targetPriceScaling / calculatedPriceScale : 1
     
     console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
     console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
-    console.log(`Scaled maxPrice: ${scaledMaxPrice}, Scaled maxVolume: ${scaledMaxVolume}`)
+    console.log(`Target price scaling: ${targetPriceScaling}`)
     console.log(`Price multiplier (X): ${priceMultiplier}`)
+    console.log(`Final price scaling: ${calculatedPriceScale * priceMultiplier}`)
     
     // Update state for use in JSX
     setPriceScale(calculatedPriceScale)
@@ -225,7 +226,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             {symbol} Price Chart
             {data.length > 0 && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                (×{priceMultiplier} × 10⁻{Math.log10(calculatedPriceScale)}) ETH
+                (×10⁻{Math.log10(calculatedPriceScale * priceMultiplier)}) ETH
               </span>
             )}
           </h3>
