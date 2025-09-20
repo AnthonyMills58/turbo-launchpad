@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { createChart, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries } from 'lightweight-charts'
+import { createChart, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts'
 
 interface CryptoChartProps {
   tokenId: number
@@ -23,6 +23,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const lineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedInterval, setSelectedInterval] = useState('1d')
@@ -153,6 +154,18 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
     })
 
+    // Create line series to connect closing prices - use right Y-axis (same as candlesticks)
+    const lineSeries = chart.addSeries(LineSeries, {
+      color: '#ffffff', // White line
+      lineWidth: 2,
+      priceScaleId: 'right', // Use right Y-axis for prices (same as candlesticks)
+      priceFormat: {
+        type: 'price',
+        precision: 6, // Same precision as candlesticks
+        minMove: 1e-12, // Same minimum movement as candlesticks
+      },
+    })
+
     // Calculate scaling for small ETH values
     const maxPrice = Math.max(...data.map(c => Math.max(c.open, c.high, c.low, c.close)))
     const maxVolume = Math.max(...data.map(c => Math.abs(c.volumeEth)))
@@ -181,11 +194,19 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       color: candle.close >= candle.open ? '#26a69a99' : '#ef535099', // 60% transparent colors
     }))
 
+    // Create line data from closing prices
+    const lineData = data.map(candle => ({
+      time: candle.time as Time,
+      value: candle.close, // Use closing price for the line
+    }))
+
     console.log('Sample original price data:', data.slice(0, 3).map(d => ({ open: d.open, close: d.close })))
     console.log('Sample volume data:', volumeData.slice(0, 3))
+    console.log('Sample line data:', lineData.slice(0, 3))
 
     candlestickSeries.setData(originalData)
     volumeSeries.setData(volumeData) // Volume series enabled on right Y-axis
+    lineSeries.setData(lineData) // Line series connecting closing prices
 
     // Log data ranges and set manual scaling
     if (originalData.length > 0) {
@@ -288,6 +309,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     chartRef.current = chart
     candlestickSeriesRef.current = candlestickSeries
     volumeSeriesRef.current = volumeSeries
+    lineSeriesRef.current = lineSeries
 
     // Handle resize
     const handleResize = () => {
