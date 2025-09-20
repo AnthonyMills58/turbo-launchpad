@@ -147,8 +147,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
-        precision: 2, // Show 2 decimal places for volumes
-        minMove: 0.01, // Minimum volume movement
+        precision: 6, // Same precision as price series for small values
+        minMove: 1e-12, // Very small minimum movement for tiny volumes
       },
       priceScaleId: 'right', // Use right Y-axis for volumes
     })
@@ -249,6 +249,9 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         })
         
         chart.priceScale('right').applyOptions({
+          visible: true,
+          borderVisible: true,
+          entireTextOnly: false,
           scaleMargins: {
             top: 0.1,
             bottom: 0.1,
