@@ -26,7 +26,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedInterval, setSelectedInterval] = useState('1d')
-  const [calculatedPriceScale, setCalculatedPriceScale] = useState(1)
 
   const intervals = [
     { value: '1m', label: '1m' },
@@ -128,8 +127,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       priceScaleId: 'left', // Use left Y-axis for prices
       priceFormat: {
         type: 'price',
-        precision: 2, // Show only 2 decimal places
-        minMove: 0.01, // Minimum price movement
+        precision: 0, // No decimal places for scientific notation
+        minMove: 1e-12, // Very small minimum movement
       },
     })
 
@@ -155,17 +154,15 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     console.log(`Chart scaling - maxPrice: ${maxPrice}, maxVolume: ${maxVolume}`)
     console.log(`Price scale: ${calculatedPriceScale}, Volume scale: ${calculatedVolumeScale}`)
     
-    // Update state for use in JSX
-    setCalculatedPriceScale(calculatedPriceScale)
+    // No state updates needed
     
-    // Apply custom scaling to make Y-axis numbers more readable
-    const priceScale = calculatedPriceScale // e.g., 10^9 for prices around 2e-9
-    const scaledData = data.map(candle => ({
+    // Send original values to chart engine - try to make it display scientific notation
+    const originalData = data.map(candle => ({
       time: candle.time as Time,
-      open: candle.open * priceScale,
-      high: candle.high * priceScale,
-      low: candle.low * priceScale,
-      close: candle.close * priceScale,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
     }))
 
     const volumeData = data.map(candle => ({
@@ -175,29 +172,27 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     }))
 
     console.log('Sample original price data:', data.slice(0, 3).map(d => ({ open: d.open, close: d.close })))
-    console.log('Sample scaled price data:', scaledData.slice(0, 3))
     console.log('Sample volume data:', volumeData.slice(0, 3))
-    console.log('Price scale factor:', calculatedPriceScale)
 
-    candlestickSeries.setData(scaledData)
+    candlestickSeries.setData(originalData)
     // volumeSeries.setData(volumeData) // TEMPORARILY DISABLED FOR TESTING
 
     // Log data ranges for debugging
-    if (scaledData.length > 0) {
-      const priceMin = Math.min(...scaledData.map(d => Math.min(d.open, d.high, d.low, d.close)))
-      const priceMax = Math.max(...scaledData.map(d => Math.max(d.open, d.high, d.low, d.close)))
+    if (originalData.length > 0) {
+      const priceMin = Math.min(...originalData.map(d => Math.min(d.open, d.high, d.low, d.close)))
+      const priceMax = Math.max(...originalData.map(d => Math.max(d.open, d.high, d.low, d.close)))
       const priceRange = priceMax - priceMin
       
       const volumeMin = Math.min(...volumeData.map(d => d.value))
       const volumeMax = Math.max(...volumeData.map(d => d.value))
       const volumeRange = volumeMax - volumeMin
       
-      console.log(`Scaled price range: ${priceMin} to ${priceMax} (range: ${priceRange})`)
+      console.log(`Original price range: ${priceMin} to ${priceMax} (range: ${priceRange})`)
       console.log(`Volume range: ${volumeMin} to ${volumeMax} (range: ${volumeRange})`)
     }
 
     // Auto-fit the chart to show the full time range
-    if (scaledData.length > 0) {
+    if (originalData.length > 0) {
       chart.timeScale().fitContent()
       
       // Force chart to redraw and show Y-axis with labels
@@ -288,7 +283,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             {symbol} Price Chart
             {data.length > 0 && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                (×10⁻{Math.log10(calculatedPriceScale)}) ETH
+                ETH
               </span>
             )}
           </h3>
@@ -301,9 +296,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 border border-green-400 bg-green-400/20"></div>
               <span>Price (Candlesticks)</span>
-              {calculatedPriceScale !== 1 && (
-                <span className="text-gray-500">×10⁻{Math.log10(calculatedPriceScale)}</span>
-              )}
             </div>
             <div className="flex items-center gap-1">
               <div className="h-3 w-3 bg-teal-400"></div>
