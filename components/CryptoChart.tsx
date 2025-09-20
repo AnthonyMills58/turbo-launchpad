@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { createChart, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries, PriceScaleMode } from 'lightweight-charts'
+import { createChart, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries } from 'lightweight-charts'
 
 interface CryptoChartProps {
   tokenId: number
@@ -123,7 +123,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     })
 
     // Create candlestick series - use left Y-axis
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#00ff88', // Bright green for up candles
       downColor: '#ff4444', // Bright red for down candles
       borderDownColor: '#ff4444',
@@ -139,7 +139,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     })
 
     // Create volume series - use right Y-axis
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = chart.addSeries(HistogramSeries, {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
@@ -207,22 +207,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       const useScientificNotation = priceMax < 0.001
       console.log(`Use scientific notation: ${useScientificNotation} (priceMax: ${priceMax})`)
       
-      // Enable autoscale mode on the left price scale (so autoscaleInfoProvider is used)
-      chart.priceScale('left').setMode({
-        mode: PriceScaleMode.Normal,
-        autoScale: true,
-      })
-      
-      // Provide manual range via autoscaleInfoProvider
-      candlestickSeries.applyOptions({
-        autoscaleInfoProvider: () => ({
-          priceRange: { minValue: manualPriceMin, maxValue: manualPriceMax },
-        }),
-      })
-      
-      // Custom tick formatting for tiny prices
+      // Apply custom tick formatting for tiny prices
       candlestickSeries.priceScale().applyOptions({
-        tickMarkFormatter: (v: number) => (priceMax < 0.001 ? v.toExponential(2).replace(/^0\./, '') : v.toFixed(2)),
         scaleMargins: { top: 0.1, bottom: 0.1 },
       })
     }
