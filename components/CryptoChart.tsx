@@ -97,6 +97,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           top: 0.2,
           bottom: 0.2,
         },
+        entireTextOnly: false,
       },
       leftPriceScale: {
         borderColor: '#2a2d3a',
@@ -107,6 +108,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           top: 0.2,
           bottom: 0.2,
         },
+        entireTextOnly: false,
       },
       timeScale: {
         borderColor: '#2a2d3a',
@@ -198,18 +200,35 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     if (scaledData.length > 0) {
       chart.timeScale().fitContent()
       
-      // Force chart to redraw and show Y-axis
+      // Force chart to redraw and show Y-axis with labels
       setTimeout(() => {
         chart.applyOptions({
           rightPriceScale: {
             visible: true,
             autoScale: true,
             borderVisible: true,
+            entireTextOnly: false,
           },
           leftPriceScale: {
             visible: true,
             autoScale: true,
             borderVisible: true,
+            entireTextOnly: false,
+          },
+        })
+        
+        // Add axis labels
+        chart.priceScale('left').applyOptions({
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+          },
+        })
+        
+        chart.priceScale('right').applyOptions({
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
           },
         })
       }, 100)
@@ -310,7 +329,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           ))}
         </div>
       </div>
-      <div ref={chartContainerRef} className="w-full" />
+      <div className="relative w-full">
+        <div ref={chartContainerRef} className="w-full" />
+        {/* Y-axis labels */}
+        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-8 -rotate-90 text-xs text-gray-400 font-medium">
+          Price (ETH)
+        </div>
+        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-8 -rotate-90 text-xs text-gray-400 font-medium">
+          Volume (ETH)
+        </div>
+      </div>
     </div>
   )
 }
