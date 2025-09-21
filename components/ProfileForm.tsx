@@ -266,7 +266,7 @@ export default function ProfileForm() {
 
   if (!address) {
     return (
-      <div className="bg-transparent p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
+      <div className="bg-transparent p-6 rounded-lg w-full max-w-xl">
         <p className="text-center text-lg text-white">
           🔒 Please connect your wallet to edit your profile.
         </p>
@@ -275,7 +275,7 @@ export default function ProfileForm() {
   }
 
   return (
-    <div className="bg-transparent p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
+    <div className="bg-transparent p-6 rounded-lg w-full max-w-xl">
       <h2 className="text-lg font-bold text-white mb-4">Your Profile</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">

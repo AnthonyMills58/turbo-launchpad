@@ -20,7 +20,7 @@ export function Input({ label, ...props }: InputProps) {
       <label htmlFor={props.name} className="block text-gray-400 mb-1">{label}</label>
       <input
         {...props}
-        className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full p-2 text-sm bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
   )
@@ -44,7 +44,7 @@ export function TextArea({ label, rows = 3, ...props }: TextAreaProps) {
       <textarea
         rows={rows}
         {...props}
-        className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full p-2 text-sm bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
   )
@@ -73,7 +73,7 @@ export function Select({ label, name, value, onChange, options, suffix = '' }: S
         name={name}
         value={value}
         onChange={onChange}
-        className="w-full p-2 text-sm bg-[#1e2132] border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500"
+        className="w-full p-2 text-sm bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>

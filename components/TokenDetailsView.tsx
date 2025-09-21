@@ -735,7 +735,7 @@ export default function TokenDetailsView({
                 </button>
 
                 {isEditing && (
-                  <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
+                  <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3 flex justify-center">
                     <EditTokenForm
                       token={token}
                       onSuccess={() => {

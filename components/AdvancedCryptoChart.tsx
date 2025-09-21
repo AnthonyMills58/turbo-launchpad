@@ -215,8 +215,9 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
       <div ref={chartContainerRef} className="w-full" />
       
       {/* Data info */}
-      <div className="mt-2 text-xs text-gray-500">
-        Showing {data.length} candles for {selectedInterval} interval
+      <div className="flex items-center justify-center gap-1 text-xs text-gray-400 mt-1">
+        <span className="text-yellow-400">⚠️</span>
+        <span>Chart data and Dashboards updates may take a few minutes to appear</span>
       </div>
     </div>
   )
