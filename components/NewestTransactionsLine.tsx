@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useChainId } from 'wagmi'
 import { useSync } from '@/lib/SyncContext'
 import TransactionCard from './TransactionCard'
@@ -29,7 +29,7 @@ export default function NewestTransactionsLine() {
   const previousTransactionsRef = useRef<Transaction[]>([])
   const sparkleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     try {
       const response = await fetch(`/api/newest-transactions?chainId=${chainId}`)
       const data = await response.json()
@@ -42,7 +42,7 @@ export default function NewestTransactionsLine() {
           const previousIds = new Set(previousTransactionsRef.current.map(t => `${t.id}-${t.block_time}-${t.log_index}`))
           const newIds = new Set<string>()
           
-          newTransactions.forEach(transaction => {
+          newTransactions.forEach((transaction: Transaction) => {
             const transactionKey = `${transaction.id}-${transaction.block_time}-${transaction.log_index}`
             if (!previousIds.has(transactionKey)) {
               newIds.add(transactionKey)
@@ -77,7 +77,7 @@ export default function NewestTransactionsLine() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [chainId, triggerSync])
 
   useEffect(() => {
     if (chainId) {
@@ -94,7 +94,7 @@ export default function NewestTransactionsLine() {
         }
       }
     }
-  }, [chainId])
+  }, [chainId, fetchTransactions])
 
   // Don't render if loading, no transactions, or no chain ID
   if (isLoading || transactions.length === 0 || !chainId) {
