@@ -755,7 +755,6 @@ export default function TokenDetailsView({
                   onClick={() => {
                     setShowTransactions(true);
                     setShowHolders(false);
-                    setShowChart(false);
                   }}
                   className={`flex-1 border border-r-0 px-5 py-2 text-sm transition ${
                     showTransactions
@@ -769,7 +768,6 @@ export default function TokenDetailsView({
                   onClick={() => {
                     setShowHolders(true);
                     setShowTransactions(false);
-                    setShowChart(false);
                   }}
                   className={`flex-1 border px-5 py-2 text-sm transition ${
                     showHolders
@@ -803,7 +801,7 @@ export default function TokenDetailsView({
           </div>
 
           {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
-          <div className="w-full max-w-sm space-y-4 border border-gray-600 bg-transparent p-3">
+          <div className="w-96 flex-shrink-0 space-y-4 border border-gray-600 bg-transparent p-3">
             {/* CREATOR / PUBLIC ACTIONS */}
             {isCreator ? (
               <>

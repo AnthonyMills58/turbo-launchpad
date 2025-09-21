@@ -13,53 +13,105 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid token ID' }, { status: 400 })
     }
 
-    // Validate interval - only support intervals we have in token_chart_agg
-    const validIntervals = ['1m', '1d', '1w', '1M']
+    // Validate interval - only support 4h interval
+    const validIntervals = ['4h']
     if (!validIntervals.includes(interval)) {
-      return NextResponse.json({ error: 'Invalid interval. Supported: 1m, 1d, 1w, 1M' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid interval. Supported: 4h' }, { status: 400 })
     }
 
-    // Query token_chart_agg table for the specific interval
+    // Get time range parameter
+    const { searchParams } = new URL(request.url)
+    const timeRange = searchParams.get('timeRange') || 'Max'
+
+    // Query sparse data from token_chart_agg and generate continuous time series with gap-filling
     const query = `
+      WITH token_lifespan AS (
+        -- Get token's actual lifespan from first transfer to now
+        SELECT 
+          MIN(block_time) as start_time,
+          NOW() as end_time
+        FROM token_transfers 
+        WHERE token_id = $1
+      ),
+      time_range AS (
+        -- Calculate time range based on parameter
+        SELECT 
+          tl.start_time as max_start_time,
+          tl.end_time as max_end_time,
+          CASE 
+            WHEN $3 = 'Max' THEN tl.start_time
+            WHEN $3 = '1Y' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 year')
+            WHEN $3 = '3M' THEN GREATEST(tl.start_time, NOW() - INTERVAL '3 months')
+            WHEN $3 = '1M' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 month')
+            WHEN $3 = '1W' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 week')
+            ELSE tl.start_time
+          END as range_start_time,
+          tl.end_time as range_end_time
+        FROM token_lifespan tl
+      ),
+      time_series AS (
+        -- Generate continuous standard 4-hour intervals (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+        SELECT generate_series(
+          DATE_TRUNC('day', tr.range_start_time) + 
+            (FLOOR(EXTRACT(hour FROM tr.range_start_time) / 4) * 4) * interval '1 hour',
+          DATE_TRUNC('day', tr.range_end_time) + interval '1 day' - interval '1 second',
+          '4 hours'::interval
+        ) as ts
+        FROM time_range tr
+      ),
+      sparse_data AS (
+        -- Get sparse data from token_chart_agg
+        SELECT 
+          ts as time,
+          price_open_usd,
+          price_high_usd,
+          price_low_usd,
+          price_close_usd,
+          volume_usd,
+          trades_count
+        FROM token_chart_agg 
+        WHERE token_id = $1 
+          AND interval_type = $2
+      ),
+      price_timeline AS (
+        -- Create price timeline for forward-filling gaps
+        SELECT 
+          ts.ts,
+          -- Get the last known price before or at this timestamp
+          (SELECT price_close_usd FROM sparse_data 
+           WHERE time <= ts.ts 
+           ORDER BY time DESC 
+           LIMIT 1) as last_price
+        FROM time_series ts
+      )
+      -- Combine time series with sparse data, filling gaps with last known price
       SELECT 
-        ts as time,
-        price_open_eth,
-        price_high_eth,
-        price_low_eth,
-        price_close_eth,
-        price_open_usd,
-        price_high_usd,
-        price_low_usd,
-        price_close_usd,
-        volume_eth,
-        volume_usd,
-        trades_count
-      FROM token_chart_agg 
-      WHERE token_id = $1 
-        AND interval_type = $2
-      ORDER BY ts ASC
+        ts.ts as time,
+        COALESCE(sd.price_open_usd, pt.last_price, 0) as price_open_usd,
+        COALESCE(sd.price_high_usd, pt.last_price, 0) as price_high_usd,
+        COALESCE(sd.price_low_usd, pt.last_price, 0) as price_low_usd,
+        COALESCE(sd.price_close_usd, pt.last_price, 0) as price_close_usd,
+        COALESCE(sd.volume_usd, 0) as volume_usd,
+        COALESCE(sd.trades_count, 0) as trades_count
+      FROM time_series ts
+      LEFT JOIN sparse_data sd ON ts.ts = sd.time
+      LEFT JOIN price_timeline pt ON ts.ts = pt.ts
+      ORDER BY ts.ts ASC
     `
 
-    const result = await pool.query(query, [tokenId, interval])
+    const result = await pool.query(query, [tokenId, interval, timeRange])
     
     // Format data for TradingView Lightweight Charts
     const chartData = result.rows.map(row => ({
       time: Math.floor(row.time.getTime() / 1000), // Unix timestamp in seconds
-      open: parseFloat(row.price_open_eth || 0),
-      high: parseFloat(row.price_high_eth || 0),
-      low: parseFloat(row.price_low_eth || 0),
-      close: parseFloat(row.price_close_eth || 0),
-      volume: parseFloat(row.volume_eth || 0), // Already in ETH, no conversion needed
-      volumeEth: parseFloat(row.volume_eth || 0),
+      open: parseFloat(row.price_open_usd || 0),
+      high: parseFloat(row.price_high_usd || 0),
+      low: parseFloat(row.price_low_usd || 0),
+      close: parseFloat(row.price_close_usd || 0),
+      volume: parseFloat(row.volume_usd || 0), // Now in USD
+      volumeEth: parseFloat(row.volume_usd || 0),
       volumeUsd: parseFloat(row.volume_usd || 0),
-      tradesCount: parseInt(row.trades_count || 0),
-      // Add USD price data for potential future use
-      priceUsd: {
-        open: parseFloat(row.price_open_usd || 0),
-        high: parseFloat(row.price_high_usd || 0),
-        low: parseFloat(row.price_low_usd || 0),
-        close: parseFloat(row.price_close_usd || 0)
-      }
+      tradesCount: parseInt(row.trades_count || 0)
     }))
     
     console.log(`Chart data for token ${tokenId}, interval ${interval}: ${chartData.length} candles`)

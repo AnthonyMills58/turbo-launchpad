@@ -26,23 +26,16 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const lineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedInterval, setSelectedInterval] = useState('1m')
-
-  const intervals = [
-    { value: '1m', label: '1m' },
-    { value: '1d', label: '1d' },
-    { value: '1w', label: '1w' },
-    { value: '1M', label: '1M' },
-  ]
+  const [selectedTimeRange, setSelectedTimeRange] = useState('Max')
 
   // Fetch chart data from your API
   const fetchChartData = useCallback(async () => {
     try {
       setLoading(true)
-      console.log(`Fetching chart data for tokenId: ${tokenId}, interval: ${selectedInterval}`)
+      console.log(`Fetching chart data for tokenId: ${tokenId}, interval: 4h`)
       
-      // Try the regular endpoint first
-      const response = await fetch(`/api/chart-data/${tokenId}/${selectedInterval}`)
+      // Try the regular endpoint first with time range parameter
+      const response = await fetch(`/api/chart-data/${tokenId}/4h?timeRange=${selectedTimeRange}`)
       console.log('Response status:', response.status)
       
       if (!response.ok) {
@@ -64,19 +57,19 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     } finally {
       setLoading(false)
     }
-  }, [tokenId, selectedInterval])
+  }, [tokenId, selectedTimeRange])
 
   useEffect(() => {
     fetchChartData()
-  }, [tokenId, selectedInterval, fetchChartData])
+  }, [tokenId, fetchChartData])
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return
 
     // Create chart
     const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
+      width: chartContainerRef.current.clientWidth - 120, // Subtract padding from width
+      height: 400, // Reduced height to leave more space for other components
       layout: {
         background: { color: '#151827' },
         textColor: '#d1d5db',
@@ -115,8 +108,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
       localization: {
         priceFormatter: (value: number) => {
-          // Conditional formatting: scientific notation for values < 0.001, 2 decimals for higher
-          if (Math.abs(value) < 0.001) {
+          // Conditional formatting: scientific notation for values < 0.01, 2 decimals for higher
+          if (Math.abs(value) < 0.01) {
             const exponent = Math.floor(Math.log10(Math.abs(value)));
             const mantissa = value / Math.pow(10, exponent);
             return `${mantissa.toFixed(2)}e${exponent}`;
@@ -129,7 +122,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create volume series - use left Y-axis (first series)
     const volumeSeries = chart.addSeries(HistogramSeries, {
-      color: '#26a69a99', // 60% transparent green (99 = 60% opacity in hex)
+      color: '#26a69a', // 0% transparent green (solid)
       priceFormat: {
         type: 'volume',
         precision: 6, // Same precision as price series for small values
@@ -140,12 +133,12 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create candlestick series - use right Y-axis (second series)
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#00ff88', // Bright green for up candles
-      downColor: '#ff4444', // Bright red for down candles
-      borderDownColor: '#ff4444',
-      borderUpColor: '#00ff88',
-      wickDownColor: '#ff4444',
-      wickUpColor: '#00ff88',
+      upColor: '#00ff8880', // 50% transparent green for up candles
+      downColor: '#ff444480', // 50% transparent red for down candles
+      borderDownColor: '#ff444480',
+      borderUpColor: '#00ff8880',
+      wickDownColor: '#ff444480',
+      wickUpColor: '#00ff8880',
       priceScaleId: 'right', // Use right Y-axis for prices (second series)
       priceFormat: {
         type: 'price',
@@ -156,8 +149,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create line series to connect closing prices - use right Y-axis (same as candlesticks)
     const lineSeries = chart.addSeries(LineSeries, {
-      color: '#cccccc', // Light gray color
-      lineWidth: 2,
+      color: '#00ff8880', // 50% transparent green (80 = 50% opacity in hex)
+      lineWidth: 1, // Thinner line
       lineStyle: 1, // Dashed line (0 = solid, 1 = dashed, 2 = dotted)
       priceScaleId: 'right', // Use right Y-axis for prices (same as candlesticks)
       priceFormat: {
@@ -230,7 +223,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       console.log(`Manual price scale: ${manualPriceMin} to ${manualPriceMax}`)
       
       // Determine formatting based on price range
-      const useScientificNotation = priceMax < 0.001
+      const useScientificNotation = priceMax < 0.01
       console.log(`Use scientific notation: ${useScientificNotation} (priceMax: ${priceMax})`)
       
       // Prices (right axis) use automatic scaling (autoscaleInfoProvider removed)
@@ -242,7 +235,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       })
       
       // Apply same formatting logic for volumes (left axis)
-      const useScientificNotationVolume = volumeMax < 0.001
+      const useScientificNotationVolume = volumeMax < 0.01
       console.log(`Use scientific notation for volume: ${useScientificNotationVolume} (volumeMax: ${volumeMax})`)
       
       // Apply custom tick formatting for volumes (left axis)
@@ -250,8 +243,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         scaleMargins: { top: 0.1, bottom: 0.1 },
       })
       
-      // Manual scaling for volumes: max = 2x highest volume, min = 0 (reduced from 5x)
-      const manualVolumeMax = volumeMax * 2
+      // Manual scaling for volumes: max = 3x highest volume, min = 0 (increased from 2x)
+      const manualVolumeMax = volumeMax * 3
       const manualVolumeMin = 0
       
       console.log(`Original volume max: ${volumeMax}`)
@@ -312,16 +305,18 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     volumeSeriesRef.current = volumeSeries
     lineSeriesRef.current = lineSeries
 
-    // Handle resize
+    // Resize handling with proper padding calculation
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
+        // Update width accounting for padding (60px left + 60px right = 120px total)
         chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
+          width: chartContainerRef.current.clientWidth - 120,
         })
       }
     }
 
-    window.addEventListener('resize', handleResize)
+    // Use passive event listener to not interfere with other components
+    window.addEventListener('resize', handleResize, { passive: true })
 
     return () => {
       window.removeEventListener('resize', handleResize)
@@ -361,12 +356,12 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             {symbol} Price Chart
             {data.length > 0 && (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                ETH
+                USD
               </span>
             )}
           </h3>
           <div className="text-sm text-gray-400">
-            {data.length} candles • {selectedInterval} interval
+            {data.length} candles • 4h interval
           </div>
           
           {/* Chart Legend */}
@@ -382,31 +377,37 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           </div>
         </div>
         
-        {/* Interval selector buttons */}
-        <div className="flex gap-1">
-          {intervals.map(interval => (
-            <button
-              key={interval.value}
-              onClick={() => setSelectedInterval(interval.value)}
-              className={`px-3 py-1 text-sm transition ${
-                selectedInterval === interval.value
-                  ? 'bg-gray-600 text-white'
-                  : 'bg-transparent text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
-            >
-              {interval.label}
-            </button>
-          ))}
+        {/* Time Range Buttons */}
+        <div className="flex flex-col gap-2">
+          <div className="text-sm text-gray-400 mb-1">Time Range</div>
+          <div className="flex gap-1">
+            {['Max', '1Y', '3M', '1M', '1W'].map((range) => (
+              <button
+                key={range}
+                onClick={() => setSelectedTimeRange(range)}
+                className={`px-3 py-1 text-xs rounded transition-colors ${
+                  selectedTimeRange === range
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs text-gray-500">
+            4-hour candles
+          </div>
         </div>
       </div>
-      <div className="relative w-full">
-        <div ref={chartContainerRef} className="w-full px-16" />
+      <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-xl lg:max-w-xl xl:max-w-4xl 2xl:max-w-7xl mx-auto">
+        <div ref={chartContainerRef} className="w-full px-4 sm:px-8 lg:px-16" />
         {/* Y-axis labels */}
         <div className="absolute left-2 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs text-gray-400 font-medium whitespace-nowrap">
-          Volume (ETH)
+          Volume (USD)
         </div>
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs text-gray-400 font-medium whitespace-nowrap">
-          Price (ETH)
+          Price (USD)
         </div>
       </div>
     </div>
