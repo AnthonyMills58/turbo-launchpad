@@ -105,19 +105,19 @@ async function processTokenChartAgg(
     // Generate continuous time series with filled gaps
     const { rows: intervalData } = await pool.query(`
       WITH time_series AS (
-        -- Generate continuous 4-hour intervals (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+        -- Generate continuous standard 4-hour intervals (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
         SELECT generate_series(
           DATE_TRUNC('day', $3::timestamp) + 
-            (EXTRACT(hour FROM $3::timestamp)::int / 4) * interval '4 hours',
+            (FLOOR(EXTRACT(hour FROM $3::timestamp) / 4) * 4) * interval '1 hour',
           DATE_TRUNC('day', NOW()) + interval '1 day' - interval '1 second',
           '4 hours'::interval
         ) as ts
       ),
       trading_data AS (
-        -- Get actual trading data grouped by 4-hour intervals (matching time_series pattern)
+        -- Get actual trading data grouped by standard 4-hour intervals (0-4, 4-8, 8-12, 12-16, 16-20, 20-24)
         SELECT 
           DATE_TRUNC('day', block_time) + 
-            (EXTRACT(hour FROM block_time)::int / 4) * interval '4 hours' as ts,
+            (FLOOR(EXTRACT(hour FROM block_time) / 4) * 4) * interval '1 hour' as ts,
           COUNT(*) as trades_count,
           SUM(amount_eth_wei/1e18) as volume_eth,
           SUM((amount_eth_wei/1e18) * COALESCE(eth_price_usd, 0)) as volume_usd,
@@ -138,7 +138,7 @@ async function processTokenChartAgg(
           AND price_eth_per_token IS NOT NULL
           AND price_eth_per_token > 0
         GROUP BY DATE_TRUNC('day', block_time) + 
-          (EXTRACT(hour FROM block_time)::int / 4) * interval '4 hours'
+          (FLOOR(EXTRACT(hour FROM block_time) / 4) * 4) * interval '1 hour'
       ),
       -- Get all trading data with prices for progressive forward-filling
       all_trades AS (
@@ -222,6 +222,14 @@ async function processTokenChartAgg(
     )
     
     console.log(`Token ${token.id}: Filtering to ${activeCandles.length} active candles (from ${intervalData.length} total)`)
+    
+    // Delete existing records for this token and time range, then insert fresh data
+    await pool.query(`
+      DELETE FROM public.token_chart_agg 
+      WHERE token_id = $1 AND chain_id = $2 AND interval_type = $3 AND ts >= $4
+    `, [token.id, chainId, interval.type, cutoffDate])
+    
+    console.log(`Token ${token.id}: Deleted existing records from ${cutoffDate.toISOString()}`)
     
     // Insert only active candles
     for (const candle of activeCandles) {

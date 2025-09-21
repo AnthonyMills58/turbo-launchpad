@@ -50,10 +50,10 @@ export async function GET(
         FROM token_lifespan tl
       ),
       time_series AS (
-        -- Generate continuous 4-hour intervals for selected time range
+        -- Generate continuous standard 4-hour intervals (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
         SELECT generate_series(
           DATE_TRUNC('day', tr.range_start_time) + 
-            (EXTRACT(hour FROM tr.range_start_time)::int / 4) * interval '4 hours',
+            (FLOOR(EXTRACT(hour FROM tr.range_start_time) / 4) * 4) * interval '1 hour',
           DATE_TRUNC('day', tr.range_end_time) + interval '1 day' - interval '1 second',
           '4 hours'::interval
         ) as ts
