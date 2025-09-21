@@ -107,8 +107,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
       localization: {
         priceFormatter: (value: number) => {
-          // Conditional formatting: scientific notation for values < 0.001, 2 decimals for higher
-          if (Math.abs(value) < 0.001) {
+          // Conditional formatting: scientific notation for values < 0.01, 2 decimals for higher
+          if (Math.abs(value) < 0.01) {
             const exponent = Math.floor(Math.log10(Math.abs(value)));
             const mantissa = value / Math.pow(10, exponent);
             return `${mantissa.toFixed(2)}e${exponent}`;
@@ -121,7 +121,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create volume series - use left Y-axis (first series)
     const volumeSeries = chart.addSeries(HistogramSeries, {
-      color: '#26a69a99', // 60% transparent green (99 = 60% opacity in hex)
+      color: '#26a69a', // 0% transparent green (solid)
       priceFormat: {
         type: 'volume',
         precision: 6, // Same precision as price series for small values
@@ -132,12 +132,12 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create candlestick series - use right Y-axis (second series)
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#00ff88', // Bright green for up candles
-      downColor: '#ff4444', // Bright red for down candles
-      borderDownColor: '#ff4444',
-      borderUpColor: '#00ff88',
-      wickDownColor: '#ff4444',
-      wickUpColor: '#00ff88',
+      upColor: '#00ff8880', // 50% transparent green for up candles
+      downColor: '#ff444480', // 50% transparent red for down candles
+      borderDownColor: '#ff444480',
+      borderUpColor: '#00ff8880',
+      wickDownColor: '#ff444480',
+      wickUpColor: '#00ff8880',
       priceScaleId: 'right', // Use right Y-axis for prices (second series)
       priceFormat: {
         type: 'price',
@@ -148,7 +148,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create line series to connect closing prices - use right Y-axis (same as candlesticks)
     const lineSeries = chart.addSeries(LineSeries, {
-      color: '#00ff88', // Same green color as up candles
+      color: '#00ff8880', // 50% transparent green (80 = 50% opacity in hex)
       lineWidth: 1, // Thinner line
       lineStyle: 1, // Dashed line (0 = solid, 1 = dashed, 2 = dotted)
       priceScaleId: 'right', // Use right Y-axis for prices (same as candlesticks)
@@ -222,7 +222,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       console.log(`Manual price scale: ${manualPriceMin} to ${manualPriceMax}`)
       
       // Determine formatting based on price range
-      const useScientificNotation = priceMax < 0.001
+      const useScientificNotation = priceMax < 0.01
       console.log(`Use scientific notation: ${useScientificNotation} (priceMax: ${priceMax})`)
       
       // Prices (right axis) use automatic scaling (autoscaleInfoProvider removed)
@@ -234,7 +234,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       })
       
       // Apply same formatting logic for volumes (left axis)
-      const useScientificNotationVolume = volumeMax < 0.001
+      const useScientificNotationVolume = volumeMax < 0.01
       console.log(`Use scientific notation for volume: ${useScientificNotationVolume} (volumeMax: ${volumeMax})`)
       
       // Apply custom tick formatting for volumes (left axis)
@@ -242,8 +242,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         scaleMargins: { top: 0.1, bottom: 0.1 },
       })
       
-      // Manual scaling for volumes: max = 2x highest volume, min = 0 (reduced from 5x)
-      const manualVolumeMax = volumeMax * 2
+      // Manual scaling for volumes: max = 3x highest volume, min = 0 (increased from 2x)
+      const manualVolumeMax = volumeMax * 3
       const manualVolumeMin = 0
       
       console.log(`Original volume max: ${volumeMax}`)
