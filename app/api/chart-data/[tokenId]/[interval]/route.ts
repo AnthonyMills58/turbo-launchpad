@@ -23,15 +23,15 @@ export async function GET(
     const query = `
       SELECT 
         ts as time,
-        price_open_eth,
-        price_high_eth,
-        price_low_eth,
-        price_close_eth,
         price_open_usd,
         price_high_usd,
         price_low_usd,
         price_close_usd,
-        volume_eth,
+        price_open_usd,
+        price_high_usd,
+        price_low_usd,
+        price_close_usd,
+        volume_usd,
         volume_usd,
         trades_count
       FROM token_chart_agg 
@@ -45,21 +45,14 @@ export async function GET(
     // Format data for TradingView Lightweight Charts
     const chartData = result.rows.map(row => ({
       time: Math.floor(row.time.getTime() / 1000), // Unix timestamp in seconds
-      open: parseFloat(row.price_open_eth || 0),
-      high: parseFloat(row.price_high_eth || 0),
-      low: parseFloat(row.price_low_eth || 0),
-      close: parseFloat(row.price_close_eth || 0),
-      volume: parseFloat(row.volume_eth || 0), // Already in ETH, no conversion needed
-      volumeEth: parseFloat(row.volume_eth || 0),
+      open: parseFloat(row.price_open_usd || 0),
+      high: parseFloat(row.price_high_usd || 0),
+      low: parseFloat(row.price_low_usd || 0),
+      close: parseFloat(row.price_close_usd || 0),
+      volume: parseFloat(row.volume_usd || 0), // Now in USD
+      volumeEth: parseFloat(row.volume_usd || 0),
       volumeUsd: parseFloat(row.volume_usd || 0),
-      tradesCount: parseInt(row.trades_count || 0),
-      // Add USD price data for potential future use
-      priceUsd: {
-        open: parseFloat(row.price_open_usd || 0),
-        high: parseFloat(row.price_high_usd || 0),
-        low: parseFloat(row.price_low_usd || 0),
-        close: parseFloat(row.price_close_usd || 0)
-      }
+      tradesCount: parseInt(row.trades_count || 0)
     }))
     
     console.log(`Chart data for token ${tokenId}, interval ${interval}: ${chartData.length} candles`)
