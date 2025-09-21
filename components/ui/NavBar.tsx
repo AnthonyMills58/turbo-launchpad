@@ -78,12 +78,6 @@ export default function NavBar() {
       </button>
       
       <button
-        onClick={() => router.push('/portfolio')}
-        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
-      >
-        <span className="text-gray-400">Portfolio</span>
-      </button>
-      <button
         onClick={() => router.push('/profile')}
         className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
       >

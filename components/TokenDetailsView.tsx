@@ -113,6 +113,7 @@ export default function TokenDetailsView({
   const maxCreatorLock = 0.2 * Number(token.supply || 0);
   const lifetimeUsed = Number(token.creator_lock_cumulative ?? 0);
   const lifetimeLeft = Math.max(0, maxCreatorLock - lifetimeUsed);
+  
 
   const canCreatorBuyLock =
     isCreator &&
