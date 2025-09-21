@@ -216,8 +216,15 @@ async function processTokenChartAgg(
     
     console.log(`Token ${token.id}: Found ${intervalData.length} ${interval.type} candles to process`)
     
-    // Insert candles for this interval
-    for (const candle of intervalData) {
+    // Filter to only insert records with activity (sparse storage)
+    const activeCandles = intervalData.filter(candle => 
+      candle.volume_usd > 0 || candle.trades_count > 0
+    )
+    
+    console.log(`Token ${token.id}: Filtering to ${activeCandles.length} active candles (from ${intervalData.length} total)`)
+    
+    // Insert only active candles
+    for (const candle of activeCandles) {
       await pool.query(`
         INSERT INTO public.token_chart_agg 
         (token_id, chain_id, interval_type, ts, 
@@ -233,7 +240,7 @@ async function processTokenChartAgg(
       ])
     }
     
-    console.log(`✅ Token ${token.id}: Processed ${intervalData.length} ${interval.type} candles`)
+    console.log(`✅ Token ${token.id}: Processed ${activeCandles.length} active ${interval.type} candles`)
   }
 }
 

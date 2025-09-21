@@ -19,25 +19,64 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid interval. Supported: 4h' }, { status: 400 })
     }
 
-    // Query token_chart_agg table for the specific interval
+    // Query sparse data from token_chart_agg and generate continuous time series with gap-filling
     const query = `
+      WITH token_lifespan AS (
+        -- Get token's actual lifespan from first transfer to now
+        SELECT 
+          MIN(block_time) as start_time,
+          NOW() as end_time
+        FROM token_transfers 
+        WHERE token_id = $1
+      ),
+      time_series AS (
+        -- Generate continuous 4-hour intervals for token's actual lifespan
+        SELECT generate_series(
+          DATE_TRUNC('day', tl.start_time) + 
+            (EXTRACT(hour FROM tl.start_time)::int / 4) * interval '4 hours',
+          DATE_TRUNC('day', tl.end_time) + interval '1 day' - interval '1 second',
+          '4 hours'::interval
+        ) as ts
+        FROM token_lifespan tl
+      ),
+      sparse_data AS (
+        -- Get sparse data from token_chart_agg
+        SELECT 
+          ts as time,
+          price_open_usd,
+          price_high_usd,
+          price_low_usd,
+          price_close_usd,
+          volume_usd,
+          trades_count
+        FROM token_chart_agg 
+        WHERE token_id = $1 
+          AND interval_type = $2
+      ),
+      price_timeline AS (
+        -- Create price timeline for forward-filling gaps
+        SELECT 
+          ts.ts,
+          -- Get the last known price before or at this timestamp
+          (SELECT price_close_usd FROM sparse_data 
+           WHERE time <= ts.ts 
+           ORDER BY time DESC 
+           LIMIT 1) as last_price
+        FROM time_series ts
+      )
+      -- Combine time series with sparse data, filling gaps with last known price
       SELECT 
-        ts as time,
-        price_open_usd,
-        price_high_usd,
-        price_low_usd,
-        price_close_usd,
-        price_open_usd,
-        price_high_usd,
-        price_low_usd,
-        price_close_usd,
-        volume_usd,
-        volume_usd,
-        trades_count
-      FROM token_chart_agg 
-      WHERE token_id = $1 
-        AND interval_type = $2
-      ORDER BY ts ASC
+        ts.ts as time,
+        COALESCE(sd.price_open_usd, pt.last_price, 0) as price_open_usd,
+        COALESCE(sd.price_high_usd, pt.last_price, 0) as price_high_usd,
+        COALESCE(sd.price_low_usd, pt.last_price, 0) as price_low_usd,
+        COALESCE(sd.price_close_usd, pt.last_price, 0) as price_close_usd,
+        COALESCE(sd.volume_usd, 0) as volume_usd,
+        COALESCE(sd.trades_count, 0) as trades_count
+      FROM time_series ts
+      LEFT JOIN sparse_data sd ON ts.ts = sd.time
+      LEFT JOIN price_timeline pt ON ts.ts = pt.ts
+      ORDER BY ts.ts ASC
     `
 
     const result = await pool.query(query, [tokenId, interval])
