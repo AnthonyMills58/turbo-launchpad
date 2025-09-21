@@ -17,6 +17,7 @@ interface Transaction {
   value: number | string | null
   block_time: string
   trader_name: string | null
+  log_index: number
 }
 
 export default function NewestTransactionsLine() {
