@@ -803,7 +803,7 @@ export default function TokenDetailsView({
           </div>
 
           {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
-          <div className="w-full max-w-sm space-y-4 border border-gray-600 bg-transparent p-3">
+          <div className="w-96 flex-shrink-0 space-y-4 border border-gray-600 bg-transparent p-3">
             {/* CREATOR / PUBLIC ACTIONS */}
             {isCreator ? (
               <>

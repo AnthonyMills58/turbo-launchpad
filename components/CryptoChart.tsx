@@ -68,11 +68,15 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create chart
     const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
+      width: chartContainerRef.current.clientWidth - 120, // Subtract padding from width
+      height: 400, // Reduced height to leave more space for other components
       layout: {
         background: { color: '#151827' },
         textColor: '#d1d5db',
+        padding: {
+          right: 60, // Add padding for right axis labels
+          left: 60,  // Add padding for left axis labels
+        },
       },
       grid: {
         vertLines: { color: '#2a2d3a' },
@@ -88,6 +92,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         scaleMargins: {
           top: 0.1,
           bottom: 0.1,
+          right: 0.1, // Add right margin for labels
         },
         entireTextOnly: false,
       },
@@ -305,16 +310,18 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     volumeSeriesRef.current = volumeSeries
     lineSeriesRef.current = lineSeries
 
-    // Handle resize
+    // Resize handling with proper padding calculation
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
+        // Update width accounting for padding (60px left + 60px right = 120px total)
         chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
+          width: chartContainerRef.current.clientWidth - 120,
         })
       }
     }
 
-    window.addEventListener('resize', handleResize)
+    // Use passive event listener to not interfere with other components
+    window.addEventListener('resize', handleResize, { passive: true })
 
     return () => {
       window.removeEventListener('resize', handleResize)
@@ -398,8 +405,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           </div>
         </div>
       </div>
-      <div className="relative w-full">
-        <div ref={chartContainerRef} className="w-full px-16" />
+      <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-xl lg:max-w-xl xl:max-w-4xl 2xl:max-w-7xl mx-auto">
+        <div ref={chartContainerRef} className="w-full px-4 sm:px-8 lg:px-16" />
         {/* Y-axis labels */}
         <div className="absolute left-2 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs text-gray-400 font-medium whitespace-nowrap">
           Volume (USD)
