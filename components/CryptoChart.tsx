@@ -26,23 +26,15 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const lineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedInterval, setSelectedInterval] = useState('1m')
-
-  const intervals = [
-    { value: '1m', label: '1m' },
-    { value: '1d', label: '1d' },
-    { value: '1w', label: '1w' },
-    { value: '1M', label: '1M' },
-  ]
 
   // Fetch chart data from your API
   const fetchChartData = useCallback(async () => {
     try {
       setLoading(true)
-      console.log(`Fetching chart data for tokenId: ${tokenId}, interval: ${selectedInterval}`)
+      console.log(`Fetching chart data for tokenId: ${tokenId}, interval: 4h`)
       
       // Try the regular endpoint first
-      const response = await fetch(`/api/chart-data/${tokenId}/${selectedInterval}`)
+      const response = await fetch(`/api/chart-data/${tokenId}/4h`)
       console.log('Response status:', response.status)
       
       if (!response.ok) {
@@ -64,11 +56,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     } finally {
       setLoading(false)
     }
-  }, [tokenId, selectedInterval])
+  }, [tokenId])
 
   useEffect(() => {
     fetchChartData()
-  }, [tokenId, selectedInterval, fetchChartData])
+  }, [tokenId, fetchChartData])
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return
@@ -156,8 +148,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Create line series to connect closing prices - use right Y-axis (same as candlesticks)
     const lineSeries = chart.addSeries(LineSeries, {
-      color: '#cccccc', // Light gray color
-      lineWidth: 2,
+      color: '#00ff88', // Same green color as up candles
+      lineWidth: 1, // Thinner line
       lineStyle: 1, // Dashed line (0 = solid, 1 = dashed, 2 = dotted)
       priceScaleId: 'right', // Use right Y-axis for prices (same as candlesticks)
       priceFormat: {
@@ -366,7 +358,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
             )}
           </h3>
           <div className="text-sm text-gray-400">
-            {data.length} candles • {selectedInterval} interval
+            {data.length} candles • 4h interval
           </div>
           
           {/* Chart Legend */}
@@ -382,21 +374,9 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           </div>
         </div>
         
-        {/* Interval selector buttons */}
-        <div className="flex gap-1">
-          {intervals.map(interval => (
-            <button
-              key={interval.value}
-              onClick={() => setSelectedInterval(interval.value)}
-              className={`px-3 py-1 text-sm transition ${
-                selectedInterval === interval.value
-                  ? 'bg-gray-600 text-white'
-                  : 'bg-transparent text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
-            >
-              {interval.label}
-            </button>
-          ))}
+        {/* 4h interval display */}
+        <div className="text-sm text-gray-400">
+          4-hour candles
         </div>
       </div>
       <div className="relative w-full">

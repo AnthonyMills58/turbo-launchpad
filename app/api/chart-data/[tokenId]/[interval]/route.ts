@@ -13,10 +13,10 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid token ID' }, { status: 400 })
     }
 
-    // Validate interval - only support intervals we have in token_chart_agg
-    const validIntervals = ['1m', '1d', '1w', '1M']
+    // Validate interval - only support 4h interval
+    const validIntervals = ['4h']
     if (!validIntervals.includes(interval)) {
-      return NextResponse.json({ error: 'Invalid interval. Supported: 1m, 1d, 1w, 1M' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid interval. Supported: 4h' }, { status: 400 })
     }
 
     // Query token_chart_agg table for the specific interval

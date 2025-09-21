@@ -96,40 +96,122 @@ async function processTokenChartAgg(
     WHERE token_id = $1 AND chain_id = $2 AND ts >= $3
   `, [token.id, chainId, cutoffDate])
   
-  // Process each interval type
+  // Process 4-hour interval only
   const intervals = [
-    { type: '1m', trunc: 'minute' },
-    { type: '1d', trunc: 'day' },
-    { type: '1w', trunc: 'week' },
-    { type: '1M', trunc: 'month' }
+    { type: '4h', trunc: 'hour', interval: '4 hours' }
   ]
   
   for (const interval of intervals) {
-    // Group trading data by time interval
+    // Generate continuous time series with filled gaps
     const { rows: intervalData } = await pool.query(`
+      WITH time_series AS (
+        -- Generate continuous 4-hour intervals (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+        SELECT generate_series(
+          DATE_TRUNC('day', $3::timestamp) + 
+            (EXTRACT(hour FROM $3::timestamp)::int / 4) * interval '4 hours',
+          DATE_TRUNC('day', NOW()) + interval '1 day' - interval '1 second',
+          '4 hours'::interval
+        ) as ts
+      ),
+      trading_data AS (
+        -- Get actual trading data grouped by 4-hour intervals (matching time_series pattern)
+        SELECT 
+          DATE_TRUNC('day', block_time) + 
+            (EXTRACT(hour FROM block_time)::int / 4) * interval '4 hours' as ts,
+          COUNT(*) as trades_count,
+          SUM(amount_eth_wei/1e18) as volume_eth,
+          SUM((amount_eth_wei/1e18) * COALESCE(eth_price_usd, 0)) as volume_usd,
+          MIN(price_eth_per_token) as price_low_eth,
+          MAX(price_eth_per_token) as price_high_eth,
+          (ARRAY_AGG(price_eth_per_token ORDER BY block_time ASC))[1] as price_open_eth,
+          (ARRAY_AGG(price_eth_per_token ORDER BY block_time DESC))[1] as price_close_eth,
+          (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time ASC))[1] as price_open_usd,
+          (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time DESC))[1] as price_close_usd,
+          MIN(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_low_usd,
+          MAX(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_high_usd
+        FROM token_transfers 
+        WHERE token_id = $1 
+          AND chain_id = $2
+          AND block_time >= $3
+          AND amount_eth_wei IS NOT NULL 
+          AND amount_eth_wei <> 0
+          AND price_eth_per_token IS NOT NULL
+          AND price_eth_per_token > 0
+        GROUP BY DATE_TRUNC('day', block_time) + 
+          (EXTRACT(hour FROM block_time)::int / 4) * interval '4 hours'
+      ),
+      -- Get all trading data with prices for progressive forward-filling
+      all_trades AS (
+        SELECT 
+          block_time,
+          price_eth_per_token as price_eth,
+          price_eth_per_token * COALESCE(eth_price_usd, 0) as price_usd
+        FROM token_transfers 
+        WHERE token_id = $1 
+          AND chain_id = $2
+          AND price_eth_per_token IS NOT NULL
+          AND price_eth_per_token > 0
+        ORDER BY block_time ASC
+      ),
+      -- Create price timeline for forward-filling
+      price_timeline AS (
+        SELECT 
+          ts.ts,
+          -- Get the last price before or at this timestamp
+          (SELECT price_eth FROM all_trades 
+           WHERE block_time <= ts.ts 
+           ORDER BY block_time DESC 
+           LIMIT 1) as forward_price_eth,
+          (SELECT price_usd FROM all_trades 
+           WHERE block_time <= ts.ts 
+           ORDER BY block_time DESC 
+           LIMIT 1) as forward_price_usd
+        FROM time_series ts
+      )
+      -- Combine time series with trading data, filling gaps with zero volume and progressive forward-filled prices
       SELECT 
-        DATE_TRUNC('${interval.trunc}', block_time) as ts,
-        COUNT(*) as trades_count,
-        SUM(amount_eth_wei/1e18) as volume_eth,
-        SUM((amount_eth_wei/1e18) * COALESCE(eth_price_usd, 0)) as volume_usd,
-        MIN(price_eth_per_token) as price_low_eth,
-        MAX(price_eth_per_token) as price_high_eth,
-        (ARRAY_AGG(price_eth_per_token ORDER BY block_time ASC))[1] as price_open_eth,
-        (ARRAY_AGG(price_eth_per_token ORDER BY block_time DESC))[1] as price_close_eth,
-        (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time ASC))[1] as price_open_usd,
-        (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time DESC))[1] as price_close_usd,
-        MIN(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_low_usd,
-        MAX(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_high_usd
-      FROM token_transfers 
-      WHERE token_id = $1 
-        AND chain_id = $2
-        AND block_time >= $3
-        AND amount_eth_wei IS NOT NULL 
-        AND amount_eth_wei <> 0
-        AND price_eth_per_token IS NOT NULL
-        AND price_eth_per_token > 0
-      GROUP BY DATE_TRUNC('${interval.trunc}', block_time)
-      ORDER BY ts ASC
+        ts.ts,
+        COALESCE(td.trades_count, 0) as trades_count,
+        COALESCE(td.volume_eth, 0) as volume_eth,
+        COALESCE(td.volume_usd, 0) as volume_usd,
+        -- For gaps: all OHLC prices equal to forward-filled price (flat candle)
+        -- For actual data: use real OHLC values
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_low_eth 
+        END as price_low_eth,
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_high_eth 
+        END as price_high_eth,
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_open_eth 
+        END as price_open_eth,
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_close_eth 
+        END as price_close_eth,
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_open_usd 
+        END as price_open_usd,
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_close_usd 
+        END as price_close_usd,
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_low_usd 
+        END as price_low_usd,
+        CASE 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_high_usd 
+        END as price_high_usd
+      FROM time_series ts
+      LEFT JOIN trading_data td ON ts.ts = td.ts
+      LEFT JOIN price_timeline pt ON ts.ts = pt.ts
+      ORDER BY ts.ts ASC
     `, [token.id, chainId, cutoffDate])
     
     console.log(`Token ${token.id}: Found ${intervalData.length} ${interval.type} candles to process`)
