@@ -110,7 +110,7 @@ export default function NewestTransactionsLine() {
           msOverflowStyle: 'none'
         }}
       >
-        {transactions.map((transaction, index) => {
+        {transactions.map((transaction) => {
           const transactionKey = `${transaction.id}-${transaction.block_time}-${transaction.log_index}`
           const isNew = newTransactionIds.has(transactionKey)
           
