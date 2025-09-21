@@ -19,6 +19,10 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid interval. Supported: 4h' }, { status: 400 })
     }
 
+    // Get time range parameter
+    const { searchParams } = new URL(request.url)
+    const timeRange = searchParams.get('timeRange') || 'Max'
+
     // Query sparse data from token_chart_agg and generate continuous time series with gap-filling
     const query = `
       WITH token_lifespan AS (
@@ -29,15 +33,31 @@ export async function GET(
         FROM token_transfers 
         WHERE token_id = $1
       ),
+      time_range AS (
+        -- Calculate time range based on parameter
+        SELECT 
+          tl.start_time as max_start_time,
+          tl.end_time as max_end_time,
+          CASE 
+            WHEN $3 = 'Max' THEN tl.start_time
+            WHEN $3 = '1Y' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 year')
+            WHEN $3 = '3M' THEN GREATEST(tl.start_time, NOW() - INTERVAL '3 months')
+            WHEN $3 = '1M' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 month')
+            WHEN $3 = '1W' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 week')
+            ELSE tl.start_time
+          END as range_start_time,
+          tl.end_time as range_end_time
+        FROM token_lifespan tl
+      ),
       time_series AS (
-        -- Generate continuous 4-hour intervals for token's actual lifespan
+        -- Generate continuous 4-hour intervals for selected time range
         SELECT generate_series(
-          DATE_TRUNC('day', tl.start_time) + 
-            (EXTRACT(hour FROM tl.start_time)::int / 4) * interval '4 hours',
-          DATE_TRUNC('day', tl.end_time) + interval '1 day' - interval '1 second',
+          DATE_TRUNC('day', tr.range_start_time) + 
+            (EXTRACT(hour FROM tr.range_start_time)::int / 4) * interval '4 hours',
+          DATE_TRUNC('day', tr.range_end_time) + interval '1 day' - interval '1 second',
           '4 hours'::interval
         ) as ts
-        FROM token_lifespan tl
+        FROM time_range tr
       ),
       sparse_data AS (
         -- Get sparse data from token_chart_agg
@@ -79,7 +99,7 @@ export async function GET(
       ORDER BY ts.ts ASC
     `
 
-    const result = await pool.query(query, [tokenId, interval])
+    const result = await pool.query(query, [tokenId, interval, timeRange])
     
     // Format data for TradingView Lightweight Charts
     const chartData = result.rows.map(row => ({

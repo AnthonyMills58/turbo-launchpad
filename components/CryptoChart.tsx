@@ -26,6 +26,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const lineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedTimeRange, setSelectedTimeRange] = useState('Max')
 
   // Fetch chart data from your API
   const fetchChartData = useCallback(async () => {
@@ -33,8 +34,8 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       setLoading(true)
       console.log(`Fetching chart data for tokenId: ${tokenId}, interval: 4h`)
       
-      // Try the regular endpoint first
-      const response = await fetch(`/api/chart-data/${tokenId}/4h`)
+      // Try the regular endpoint first with time range parameter
+      const response = await fetch(`/api/chart-data/${tokenId}/4h?timeRange=${selectedTimeRange}`)
       console.log('Response status:', response.status)
       
       if (!response.ok) {
@@ -56,7 +57,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     } finally {
       setLoading(false)
     }
-  }, [tokenId])
+  }, [tokenId, selectedTimeRange])
 
   useEffect(() => {
     fetchChartData()
@@ -374,9 +375,27 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
           </div>
         </div>
         
-        {/* 4h interval display */}
-        <div className="text-sm text-gray-400">
-          4-hour candles
+        {/* Time Range Buttons */}
+        <div className="flex flex-col gap-2">
+          <div className="text-sm text-gray-400 mb-1">Time Range</div>
+          <div className="flex gap-1">
+            {['Max', '1Y', '3M', '1M', '1W'].map((range) => (
+              <button
+                key={range}
+                onClick={() => setSelectedTimeRange(range)}
+                className={`px-3 py-1 text-xs rounded transition-colors ${
+                  selectedTimeRange === range
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs text-gray-500">
+            4-hour candles
+          </div>
         </div>
       </div>
       <div className="relative w-full">

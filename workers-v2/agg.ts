@@ -11,7 +11,7 @@ import {
 } from './core/config'
 
 // Aggregation configuration
-const CHART_AGG_UPDATE_DAYS = Number(process.env.CHART_AGG_UPDATE_DAYS ?? 15)  // Update last 15 days by default (covers oldest token)
+const CHART_AGG_UPDATE_DAYS = Number(process.env.CHART_AGG_UPDATE_DAYS ?? 20)  // Update last 20 days by default (covers oldest token)
 
 /**
  * Aggregation Worker
