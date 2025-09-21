@@ -139,7 +139,7 @@ export default function HoldersTable({ tokenId }: HoldersTableProps) {
   return (
     <div className="w-full bg-transparent">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-700">
               <th className="py-3 px-2 text-left text-gray-400 font-medium">Rank</th>

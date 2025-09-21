@@ -257,13 +257,13 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-gray-600">
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Date</th>
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Type</th>
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">USD</th>
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">ETH</th>
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">{tokenSymbol}</th>
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Trader</th>
-              <th className="text-left py-3 px-2 text-sm text-gray-400 font-medium">Tx</th>
+              <th className="text-left py-3 px-2 text-xs text-gray-400 font-medium">Date</th>
+              <th className="text-left py-3 px-2 text-xs text-gray-400 font-medium">Type</th>
+              <th className="text-left py-3 px-2 text-xs text-gray-400 font-medium">USD</th>
+              <th className="text-left py-3 px-2 text-xs text-gray-400 font-medium">ETH</th>
+              <th className="text-left py-3 px-2 text-xs text-gray-400 font-medium">{tokenSymbol}</th>
+              <th className="text-left py-3 px-2 text-xs text-gray-400 font-medium">Trader</th>
+              <th className="text-left py-3 px-2 text-xs text-gray-400 font-medium">Tx</th>
             </tr>
           </thead>
           <tbody>
@@ -290,10 +290,10 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
 
                 return (
                   <tr key={`${tx.tx_hash}-${index}`} className="border-b border-gray-700 hover:bg-[#04140A]/20">
-                    <td className="py-3 px-2 text-sm text-gray-300">
+                    <td className="py-3 px-2 text-xs text-gray-300">
                       {formatTimeAgo(tx.block_time)}
                     </td>
-                    <td className="py-3 px-2 text-sm font-medium">
+                    <td className="py-3 px-2 text-xs font-medium">
                       <div className="flex items-center gap-1">
                         <span className={getTransactionColor(tx.side)}>
                           {tx.side}
@@ -305,19 +305,19 @@ export default function TransactionTable({ tokenId, tokenSymbol, creatorWallet }
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-2 text-sm text-gray-300">
+                    <td className="py-3 px-2 text-xs text-gray-300">
                       {usdValue}
                     </td>
-                    <td className="py-3 px-2 text-sm text-gray-300">
+                    <td className="py-3 px-2 text-xs text-gray-300">
                       {ethDisplay}
                     </td>
-                    <td className="py-3 px-2 text-sm text-gray-300">
+                    <td className="py-3 px-2 text-xs text-gray-300">
                       {tokenAmount}
                     </td>
-                    <td className="py-3 px-2 text-sm text-gray-300">
+                    <td className="py-3 px-2 text-xs text-gray-300">
                       <TraderDisplay address={traderAddress} />
                     </td>
-                    <td className="py-3 px-2 text-sm">
+                    <td className="py-3 px-2 text-xs">
                       <a
                         href={explorerLink}
                         target="_blank"
