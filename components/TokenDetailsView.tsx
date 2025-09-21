@@ -630,6 +630,34 @@ export default function TokenDetailsView({
                     </div>
                   )}
                 </div>
+
+                {/* Mobile version of progress info - only show if token is not on DEX */}
+                {!token.on_dex && (
+                  <div className="mt-2 lg:hidden">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white">
+                        Graduation Progress
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-400">
+                          Raised: <span className="text-white">{formatETHValue(Number(token.eth_raised) || 0)}</span> of <span className="text-white">{formatETHValue(Number(token.raise_target) || 0)}</span> ETH
+                        </span>
+                        <span className="text-sm font-semibold text-orange-400">
+                          {token.raise_target && token.eth_raised
+                            ? `${Math.min(
+                                Math.floor(
+                                  (Number(token.eth_raised) /
+                                    Number(token.raise_target)) *
+                                    100
+                                ),
+                                100
+                              )}%`
+                            : '0%'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

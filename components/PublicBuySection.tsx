@@ -160,8 +160,7 @@ export default function PublicBuySection({
   return (
     <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a]">
       <h3 className="text-white text-sm font-semibold mb-2">
-        Public Buy
-        <br />
+      
         <span className="text-sm text-gray-400">
           max <span className="text-green-500">{maxAvailableAmount.toLocaleString()}</span>
         </span>
