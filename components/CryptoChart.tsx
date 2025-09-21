@@ -360,19 +360,20 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
               </span>
             )}
           </h3>
-          <div className="text-sm text-gray-400">
-            {data.length} candles • 4h interval
+          <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+            <span className="text-yellow-400 pl-2">⚠️</span>
+            <span>Chart data and Dashboards updates may take a few minutes to appear</span>
           </div>
           
           {/* Chart Legend */}
-          <div className="mt-2 flex items-center gap-4 text-xs text-gray-400">
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 border border-green-400 bg-green-400/20"></div>
-              <span>Price (Candlesticks)</span>
+          <div className="mt-2 flex items-center gap-4 text-sm text-gray-300">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 border-2 border-green-400 bg-green-400/30"></div>
+              <span className="font-medium">Price (Candlesticks)</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 bg-teal-400"></div>
-              <span>Volume (Bars)</span>
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 bg-teal-400 border border-teal-300"></div>
+              <span className="font-medium">Volume (Bars)</span>
             </div>
           </div>
         </div>
