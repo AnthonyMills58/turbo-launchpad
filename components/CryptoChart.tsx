@@ -73,10 +73,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       layout: {
         background: { color: '#151827' },
         textColor: '#d1d5db',
-        padding: {
-          right: 60, // Add padding for right axis labels
-          left: 60,  // Add padding for left axis labels
-        },
       },
       grid: {
         vertLines: { color: '#2a2d3a' },
@@ -92,7 +88,6 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         scaleMargins: {
           top: 0.1,
           bottom: 0.1,
-          right: 0.1, // Add right margin for labels
         },
         entireTextOnly: false,
       },
