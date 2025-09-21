@@ -222,7 +222,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
   }
 
   return (
-    <div className="bg-[#1e1f25] p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
+    <div className="bg-[#1e1f25]/40 p-6 rounded-lg border border-[#2a2d3a] w-full max-w-xl">
       <h2 className="text-lg font-bold text-white mb-4">Edit Token Info</h2>
 
       <Input
@@ -262,7 +262,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
           value={dexName}
           onChange={(e) => setDexName(e.target.value)}
           disabled={isSaving}
-          className="w-full rounded-md bg-[#2c2f3a] text-white p-2 text-sm border border-[#3a3d4a] focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-md bg-[#232633]/40 text-white p-2 text-sm border border-[#3a3d4a] focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <option value="Bronto">Bronto</option>
           <option value="GTE">GTE</option>
@@ -287,7 +287,7 @@ export default function EditTokenForm({ token, onCancel, onSuccess }: Props) {
            
            {/* Current Logo Display */}
            {currentLogoUrl && !selectedFile && (
-             <div className="mb-3 p-3 bg-[#2a2d3a] rounded-md border border-[#3a3d4a]">
+             <div className="mb-3 p-3 rounded-md">
                <div className="text-xs text-gray-300">
                  <p>Logo is currently set</p>
                  <p className="text-gray-400">Upload a new file to replace it</p>

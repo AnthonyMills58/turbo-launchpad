@@ -181,7 +181,7 @@ export default function PublicSellSection({
   const displayPrice = formatValue(Number(ethReceived || 0))
 
   return (
-    <div className="flex flex-col flex-grow max-w-xs bg-[#2b2e3c] p-4 rounded-lg shadow border border-[#2a2d3a] mt-0 gap-1">
+    <div className="flex flex-col flex-grow w-full bg-[#2b2e3c]/40 p-4 rounded-lg shadow border border-[#2a2d3a] mt-0 gap-1">
       <h3 className="text-white text-sm font-semibold mb-2">
         Public Sell
         <br />

@@ -88,7 +88,7 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
 
   if (claimed) {
     return (
-      <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-0">
+      <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a] mt-0">
         <div className="text-green-400 text-sm font-semibold text-center">
           ✅ {allocation} Airdrop Claimed!
         </div>
@@ -97,7 +97,7 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
   }
 
  return (
-  <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a] mt-0">
+  <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a] mt-0">
     <div className="text-sm text-gray-300 mb-2">
       You have <span className="text-white font-semibold">{allocation}</span> tokens waiting.
     </div>

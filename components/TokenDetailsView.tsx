@@ -60,7 +60,8 @@ export default function TokenDetailsView({
   const [showTransactions, setShowTransactions] = useState(true);
   const [showHolders, setShowHolders] = useState(false);
   const [showChart, setShowChart] = useState(true);
-
+  const [activeBuySellTab, setActiveBuySellTab] = useState<'buy' | 'sell'>('buy');
+  
   // Track if we've already synced this token to prevent infinite loops
   const syncedTokens = useRef(new Set<number>());
   // Track ongoing sync operations to prevent race conditions
@@ -189,6 +190,21 @@ export default function TokenDetailsView({
     fetchTokenBalance();
   }, [token.contract_address]);
 
+  // Set smart default tab based on available sections
+  useEffect(() => {
+    const hasPublicBuy = !graduated && !isCreator;
+    const hasPublicSell = !graduated && userTokenBalance !== null && userTokenBalance > 0;
+    const hasCreatorBuyLock = !graduated && canCreatorBuyLock;
+    
+    if (!hasPublicBuy && !hasCreatorBuyLock && hasPublicSell) {
+      setActiveBuySellTab('sell');
+    } else if ((hasPublicBuy || hasCreatorBuyLock) && !hasPublicSell) {
+      setActiveBuySellTab('buy');
+    } else {
+      setActiveBuySellTab('buy'); // Default to buy if both available
+    }
+  }, [graduated, userTokenBalance, canCreatorBuyLock, isCreator]);
+
   useEffect(() => {
     if (!contract_address || !chainId) return;
 
@@ -203,16 +219,16 @@ export default function TokenDetailsView({
       try {
         syncingTokens.current.add(token.id);
         lastSyncTime.current = Date.now();
-
+        
         const isOnDex = await checkIfTokenOnDex(contract_address, chainId);
-
+        
         if (isOnDex) {
           const response = await fetch('/api/sync-dex-state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token, chainId }),
           });
-
+          
           if (response.ok) {
             syncedTokens.current.add(token.id);
             if (isMounted.current) onRefresh();
@@ -228,7 +244,7 @@ export default function TokenDetailsView({
         syncingTokens.current.delete(token.id);
       }
     };
-
+    
     checkAndSyncDex();
   }, [contract_address, chainId, onRefresh, token]);
 
@@ -351,6 +367,11 @@ export default function TokenDetailsView({
     }
   };
 
+  // Determine which buy/sell sections are available (for JSX)
+  const hasPublicBuy = !graduated && !isCreator; // Regular BUY for non-creators
+  const hasPublicSell = !graduated && userTokenBalance !== null && userTokenBalance > 0;
+  const hasCreatorBuyLock = !graduated && canCreatorBuyLock;
+
   // ========= JSX =========
   try {
     return (
@@ -361,54 +382,54 @@ export default function TokenDetailsView({
           <div className="group relative flex-1 border border-gray-600 bg-transparent p-3">
             {/* Social media icons - responsive positioning */}
             <div className="absolute top-3 right-3 hidden items-center gap-2 lg:flex">
-              {token.website && (
-                <a
+                {token.website && (
+                  <a
                   href={
                     /^https?:\/\//i.test(token.website)
                       ? token.website
                       : `https://${token.website}`
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   className="inline-flex items-center text-lg text-gray-400 hover:text-gray-300"
                   title="Website"
                   onClick={(e) => e.stopPropagation()}
-                >
+                  >
                   <Globe size={20} />
-                </a>
-              )}
-              {token.twitter && (
-                <a
+                  </a>
+                )}
+                {token.twitter && (
+                  <a
                   href={
                     /^https?:\/\//i.test(token.twitter)
                       ? token.twitter
                       : `https://${token.twitter}`
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   className="inline-flex items-center text-lg text-gray-400 hover:text-gray-300"
                   title="Social"
                   onClick={(e) => e.stopPropagation()}
-                >
+                  >
                   <Twitter size={20} />
-                </a>
-              )}
-              {token.telegram && (
-                <a
+                  </a>
+                )}
+                {token.telegram && (
+                  <a
                   href={
                     /^https?:\/\//i.test(token.telegram)
                       ? token.telegram
                       : `https://${token.telegram}`
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   className="inline-flex items-center text-lg text-gray-400 hover:text-gray-300"
                   title="Community"
                   onClick={(e) => e.stopPropagation()}
-                >
+                  >
                   <MessageCircle size={20} />
-                </a>
-              )}
+                  </a>
+                )}
             </div>
 
             {/* A-B-C Layout: (Avatar + Token+Creator) | TokenInfo+Progress */}
@@ -438,8 +459,8 @@ export default function TokenDetailsView({
                   ) : (
                     <div className="flex h-32 w-32 lg:h-[202px] lg:w-[202px] items-center justify-center bg-gradient-to-br from-purple-500 to-indigo-500 text-sm font-bold text-white">
                       {token.symbol[0]}
-                    </div>
-                  )}
+            </div>
+          )}
                 </div>
 
                 {/* B: Token section + Creator section (stacked vertically) */}
@@ -457,9 +478,9 @@ export default function TokenDetailsView({
                       <div className="flex items-center gap-2 text-xs text-gray-400">
                         <span className="font-mono">
                           {token.contract_address.slice(0, 4)}...
-                          {token.contract_address.slice(-4)}
-                        </span>
-                        <button
+              {token.contract_address.slice(-4)}
+            </span>
+            <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleCopy();
@@ -468,8 +489,8 @@ export default function TokenDetailsView({
                           title="Copy contract address"
                         >
                           <Copy size={12} />
-                        </button>
-                        {copied && (
+            </button>
+            {copied && (
                           <Check size={12} className="text-green-400" />
                         )}
                       </div>
@@ -486,18 +507,18 @@ export default function TokenDetailsView({
                         >
                           On DEX <ExternalLink size={12} />
                         </a>
-                      )}
-                      <a
-                        href={explorerLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
+            )}
+            <a
+              href={explorerLink}
+              target="_blank"
+              rel="noopener noreferrer"
                         className="mt-1 inline-flex items-center gap-1 text-xs text-blue-400 transition-colors hover:text-blue-300"
                         title="View on Explorer"
                         onClick={(e) => e.stopPropagation()}
-                      >
+            >
                         On Explorer <ExternalLink size={12} />
-                      </a>
-                  </div>
+            </a>
+          </div>
 
                   {/* Creator section */}
                   <div className="flex-shrink-0">
@@ -543,8 +564,8 @@ export default function TokenDetailsView({
                       >
                         {token.description}
                       </p>
-                    )}
-                  </div>
+              )}
+            </div>
 
                   {/* Progress bar - only show if token is not on DEX */}
                   {!token.on_dex && (
@@ -638,7 +659,7 @@ export default function TokenDetailsView({
                       : '—'}
                   </span>
                 </div>
-              </div>
+            </div>
 
               {/* Holders */}
               <div className="min-w-[140px] flex-1 border border-[#2a2d3a] px-3 py-2 sm:flex-none">
@@ -651,7 +672,7 @@ export default function TokenDetailsView({
                       : '—'}
                   </span>
                 </div>
-              </div>
+            </div>
 
               {/* Volume 24h (only if on DEX) */}
               {token.on_dex && (
@@ -669,7 +690,7 @@ export default function TokenDetailsView({
                         : '—'}
                     </span>
                   </div>
-                </div>
+            </div>
               )}
 
               {/* Liquidity (only if on DEX) */}
@@ -714,7 +735,7 @@ export default function TokenDetailsView({
                 </button>
 
                 {isEditing && (
-                  <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
+                  <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3 flex justify-center">
                     <EditTokenForm
                       token={token}
                       onSuccess={() => {
@@ -744,8 +765,8 @@ export default function TokenDetailsView({
                       tokenId={token.id} 
                       symbol={token.symbol} 
                     />
-                  </div>
-                )}
+            </div>
+          )}
               </div>
 
             {/* ===== Transaction and Holders Buttons — hidden on mobile ===== */}
@@ -802,12 +823,58 @@ export default function TokenDetailsView({
 
           {/* ================= RIGHT: ACTIONS WRAPPER (stacked, no extra cards) ================= */}
           <div className="w-96 flex-shrink-0 space-y-4 border border-gray-600 bg-transparent p-3">
+            {/* BUY/SELL TABBED INTERFACE - ALWAYS FIRST */}
+            {!graduated && (hasPublicBuy || hasPublicSell || hasCreatorBuyLock) && (
+              <div className="space-y-4">
+                {/* Buy/Sell Tab Buttons */}
+                <div className="flex">
+                  <button
+                    onClick={() => setActiveBuySellTab('buy')}
+                    disabled={!hasPublicBuy && !hasCreatorBuyLock}
+                    className={`flex-1 border border-r-0 px-4 py-2 text-sm transition ${
+                      activeBuySellTab === 'buy'
+                        ? 'border-gray-500 text-white bg-gray-700'
+                        : (hasPublicBuy || hasCreatorBuyLock)
+                        ? 'border-gray-600 bg-transparent text-gray-400 hover:border-gray-500'
+                        : 'border-gray-600 bg-transparent text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {hasCreatorBuyLock ? 'BUY&LOCK' : 'BUY'}
+                  </button>
+                  <button
+                    onClick={() => setActiveBuySellTab('sell')}
+                    disabled={!hasPublicSell}
+                    className={`flex-1 border px-4 py-2 text-sm transition ${
+                      activeBuySellTab === 'sell'
+                        ? 'border-gray-500 text-white bg-gray-700'
+                        : hasPublicSell
+                        ? 'border-gray-600 bg-transparent text-gray-400 hover:border-gray-500'
+                        : 'border-gray-600 bg-transparent text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    SELL
+                  </button>
+                </div>
+                
+                {/* Tab Content */}
+                {activeBuySellTab === 'buy' && hasPublicBuy && (
+                  <PublicBuySection token={token} onSuccess={onRefresh} />
+                )}
+                {activeBuySellTab === 'buy' && hasCreatorBuyLock && (
+                  <CreatorBuySection token={token} onSuccess={onRefresh} />
+                )}
+                {activeBuySellTab === 'sell' && hasPublicSell && (
+                  <PublicSellSection token={token} onSuccess={onRefresh} />
+                )}
+              </div>
+            )}
+
             {/* CREATOR / PUBLIC ACTIONS */}
             {isCreator ? (
               <>
                 {canUnlock && (
                   <div>
-                    <button
+              <button
                       onClick={handleUnlock}
                       disabled={isUnlocking}
                       className={`w-full px-5 py-2.5 text-sm font-semibold text-white transition ${
@@ -819,42 +886,24 @@ export default function TokenDetailsView({
                       {isUnlocking
                         ? 'Unlocking...'
                         : '🔓 Unlock Creator Tokens'}
-                    </button>
-                  </div>
-                )}
+              </button>
+            </div>
+          )}
 
-                {!graduated && canCreatorBuyLock && (
-                  <CreatorBuySection token={token} onSuccess={onRefresh} />
-                )}
-
-                {!graduated && (
+              {!graduated && (
                   <AirdropForm token={token} onSuccess={onRefresh} />
                 )}
-
-                {!graduated &&
-                  userTokenBalance !== null &&
-                  userTokenBalance > 0 && (
-                    <PublicSellSection token={token} onSuccess={onRefresh} />
-                  )}
 
                 {graduated && hasAirdrops && (
                   <AirdropForm token={token} onSuccess={onRefresh} />
                 )}
               </>
             ) : (
-              <>
-                {!graduated && (
-                  <>
-                    <PublicBuySection token={token} onSuccess={onRefresh} />
-                    {userTokenBalance !== null && userTokenBalance > 0 && (
-                      <PublicSellSection token={token} onSuccess={onRefresh} />
-                    )}
-                  </>
-                )}
+              <> 
                 {graduated && <AirdropClaimForm token={token} />}
-              </>
-            )}
-          </div>
+                </>
+              )}
+                </div>
           {/* ================= /RIGHT: ACTIONS ================= */}
         </div>
       </div>

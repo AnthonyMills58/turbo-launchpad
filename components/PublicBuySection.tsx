@@ -158,7 +158,7 @@ export default function PublicBuySection({
   const displayPrice = formatValue(Number(price || 0))
 
   return (
-    <div className="flex flex-col flex-grow max-w-xs bg-[#232633] p-4 rounded-lg shadow border border-[#2a2d3a]">
+    <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a]">
       <h3 className="text-white text-sm font-semibold mb-2">
         Public Buy
         <br />
