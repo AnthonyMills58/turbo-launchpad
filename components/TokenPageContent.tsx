@@ -509,7 +509,7 @@ export default function TokenPageContent() {
   // Update active token when tokens data changes
   useEffect(() => {
     if (tokens.length > 0 && selectedId) {
-      const found = tokens.find(t => t.id.toString() === selectedId)
+      const found = tokens.find((t: Token) => t.id.toString() === selectedId)
       console.log('[TokenPageContent] Found token for selectedId:', selectedId, '->', found?.id)
       setActiveToken(found ?? null)
     } else if (!selectedId) {
@@ -542,7 +542,7 @@ export default function TokenPageContent() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!tokens.length || activeToken) return
 
-      const currentIndex = tokens.findIndex(t => t.id.toString() === selectedId)
+      const currentIndex = tokens.findIndex((t: Token) => t.id.toString() === selectedId)
 
       if (e.key === 'ArrowDown') {
         const next = currentIndex === -1 ? 0 : Math.min(currentIndex + 1, tokens.length - 1)
@@ -647,7 +647,7 @@ export default function TokenPageContent() {
         ) : tokens.length === 0 ? (
           <EmptyState />
         ) : (
-          tokens.map((token) => (
+          tokens.map((token: Token) => (
             <TokenCard
             key={token.id}
               token={token}
