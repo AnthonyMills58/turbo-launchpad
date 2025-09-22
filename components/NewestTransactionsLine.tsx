@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useChainId } from 'wagmi'
-import { useSync } from '@/lib/SyncContext'
 import TransactionCard from './TransactionCard'
-import SparkleAnimation from './SparkleAnimation'
+import { useNewestTransactions } from '@/hooks/useSWR'
+import { mutate } from 'swr'
 
 interface Transaction {
   id: number
@@ -22,79 +22,111 @@ interface Transaction {
 
 export default function NewestTransactionsLine() {
   const chainId = useChainId()
-  const { triggerSync } = useSync()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [newTransactionIds, setNewTransactionIds] = useState<Set<string>>(new Set())
+  const [isAnimating, setIsAnimating] = useState(false)
   const previousTransactionsRef = useRef<Transaction[]>([])
-  const sparkleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isFirstRunRef = useRef(true)
 
-  const fetchTransactions = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/newest-transactions?chainId=${chainId}`)
-      const data = await response.json()
+  // Use SWR for newest transactions
+  const { data: transactionData, isLoading } = useNewestTransactions(chainId)
+  const transactions = useMemo(() => transactionData?.transactions || [], [transactionData?.transactions])
+
+  // Handle sync logic when transactions data changes
+  const handleTransactionSync = useCallback(async (newTransactions: Transaction[]) => {
+    console.log(`[NewestTransactionsLine] 📝 Processing ${newTransactions.length} transactions`)
+    
+    // Check if this is the very first run or if there are new transactions
+    console.log(`[NewestTransactionsLine] 🔍 Debug - isFirstRunRef.current: ${isFirstRunRef.current}`)
+    console.log(`[NewestTransactionsLine] 🔍 Debug - previousTransactionsRef.current.length: ${previousTransactionsRef.current.length}`)
+    
+    if (isFirstRunRef.current) {
+      // First runtime - sync all tokens treating them as new
+      const uniqueTokenIds = new Set(newTransactions.map((t: Transaction) => t.id))
+      console.log(`[NewestTransactionsLine] 🚀 FIRST RUNTIME - syncing all ${uniqueTokenIds.size} unique tokens`)
       
-      if (data.success && data.transactions && data.transactions.length > 0) {
-        const newTransactions = data.transactions
-        
-        // Check for new transactions (not the first load)
-        if (previousTransactionsRef.current.length > 0) {
-          const previousIds = new Set(previousTransactionsRef.current.map(t => `${t.id}-${t.block_time}-${t.log_index}`))
-          const newIds = new Set<string>()
-          
-          newTransactions.forEach((transaction: Transaction) => {
-            const transactionKey = `${transaction.id}-${transaction.block_time}-${transaction.log_index}`
-            if (!previousIds.has(transactionKey)) {
-              newIds.add(transactionKey)
-            }
-          })
-          
-          if (newIds.size > 0) {
-            setNewTransactionIds(newIds)
+      // Trigger sync for each unique token (don't await to avoid blocking)
+      uniqueTokenIds.forEach(async (tokenId) => {
+        try {
+          const token = newTransactions.find((t: Transaction) => t.id === tokenId)
+          if (token) {
+            console.log(`[NewestTransactionsLine] First runtime sync for token ${tokenId} (${token.symbol})`)
+            await fetch('/api/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tokenId: tokenId,
+                contractAddress: token.contract_address,
+                chainId: chainId
+              })
+            })
             
-            // Clear any existing timeout
-            if (sparkleTimeoutRef.current) {
-              clearTimeout(sparkleTimeoutRef.current)
-            }
-            
-            // Clear new transaction IDs after animation duration and trigger refresh
-            sparkleTimeoutRef.current = setTimeout(() => {
-              setNewTransactionIds(new Set())
-              // Trigger TokenDetailsView refresh when sparkles end
-              triggerSync()
-            }, 2000)
+            // Invalidate all token list cache keys to refresh TokenPageContent and TokenDetailsView
+            mutate(key => typeof key === 'string' && key.startsWith('/api/all-tokens'))
           }
+        } catch (error) {
+          console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
         }
+      })
+      
+      // Mark first run as complete
+      isFirstRunRef.current = false
+    } else if (previousTransactionsRef.current.length > 0) {
+      const previousIds = new Set(previousTransactionsRef.current.map(t => `${t.id}-${t.block_time}-${t.log_index}`))
+      const newTransactionList = newTransactions.filter((t: Transaction) => 
+        !previousIds.has(`${t.id}-${t.block_time}-${t.log_index}`)
+      )
+      const hasNewTransactions = newTransactionList.length > 0
+      
+      if (hasNewTransactions) {
+        // Sync only tokens with new transactions
+        const newTokenIds = new Set(newTransactionList.map((t: Transaction) => t.id))
+        console.log(`[NewestTransactionsLine] Found ${newTransactionList.length} new transactions for ${newTokenIds.size} unique tokens`)
         
-        setTransactions(newTransactions)
-        previousTransactionsRef.current = newTransactions
+        // Trigger sync for each token with new transactions (don't await to avoid blocking)
+        newTokenIds.forEach(async (tokenId) => {
+          try {
+            const token = newTransactionList.find((t: Transaction) => t.id === tokenId)
+            if (token) {
+              console.log(`[NewestTransactionsLine] Syncing token ${tokenId} (${token.symbol}) - has new transaction`)
+              await fetch('/api/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  tokenId: tokenId,
+                  contractAddress: token.contract_address,
+                  chainId: chainId
+                })
+              })
+              
+              // Invalidate all token list cache keys to refresh TokenPageContent and TokenDetailsView
+              mutate(key => typeof key === 'string' && key.startsWith('/api/all-tokens'))
+            }
+          } catch (error) {
+            console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
+          }
+        })
+        
+        // Trigger sliding animation
+        setIsAnimating(true)
+        
+        // Stop animation after 1 second
+        setTimeout(() => {
+          setIsAnimating(false)
+        }, 1000)
       } else {
-        setTransactions([])
+        // No new transactions, just update silently
+        console.log(`[NewestTransactionsLine] No new transactions found, skipping sync`)
       }
-    } catch (error) {
-      console.error('Error fetching newest transactions:', error)
-      setTransactions([])
-    } finally {
-      setIsLoading(false)
     }
-  }, [chainId, triggerSync])
+    
+    previousTransactionsRef.current = newTransactions
+  }, [chainId])
 
+  // Handle transaction sync when data changes
   useEffect(() => {
-    if (chainId) {
-      fetchTransactions()
-      
-      // Set up polling every 60 seconds
-      const interval = setInterval(fetchTransactions, 60000)
-      
-      return () => {
-        clearInterval(interval)
-        // Clean up sparkle timeout on unmount
-        if (sparkleTimeoutRef.current) {
-          clearTimeout(sparkleTimeoutRef.current)
-        }
-      }
+    if (transactions.length > 0) {
+      handleTransactionSync(transactions)
     }
-  }, [chainId, fetchTransactions])
+  }, [transactions, handleTransactionSync])
 
   // Don't render if loading, no transactions, or no chain ID
   if (isLoading || transactions.length === 0 || !chainId) {
@@ -105,20 +137,31 @@ export default function NewestTransactionsLine() {
     <div className="w-full bg-transparent">
       {/* Horizontal scrollable container */}
       <div 
-        className="flex gap-2 overflow-x-auto px-4 py-3 bg-transparent" 
+        className={`flex gap-2 overflow-x-auto px-4 py-3 bg-transparent transition-all duration-1000 ease-in-out ${
+          isAnimating ? 'transform translate-x-2' : 'transform translate-x-0'
+        }`}
         style={{ 
           scrollbarWidth: 'none', 
           msOverflowStyle: 'none'
         }}
       >
-        {transactions.map((transaction) => {
+        {transactions.map((transaction: Transaction, index: number) => {
           const transactionKey = `${transaction.id}-${transaction.block_time}-${transaction.log_index}`
-          const isNew = newTransactionIds.has(transactionKey)
           
           return (
-            <SparkleAnimation key={transactionKey} isVisible={isNew}>
+            <div
+              key={transactionKey}
+              className={`transition-all duration-1000 ease-in-out ${
+                isAnimating 
+                  ? `transform translate-x-${Math.min(index * 2, 20)} opacity-90` 
+                  : 'transform translate-x-0 opacity-100'
+              }`}
+              style={{
+                transitionDelay: `${index * 50}ms`
+              }}
+            >
               <TransactionCard transaction={transaction} />
-            </SparkleAnimation>
+            </div>
           )
         })}
       </div>

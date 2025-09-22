@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, memo } from 'react'
+import { useEffect, useState, useCallback, memo, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { Copy, Users, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink } from 'lucide-react'
@@ -11,6 +11,7 @@ import { useSync } from '@/lib/SyncContext'
 import { getUsdPrice } from '@/lib/getUsdPrice'
 import { formatPriceMetaMask } from '@/lib/ui-utils'
 import { formatLargeNumber } from '@/lib/displayFormats'
+import { useTokenList } from '@/hooks/useSWR'
 import LogoContainer from './LogoContainer'
 import ExternalImageContainer from './ExternalImageContainer'
 import UserProfile from './UserProfile'
@@ -439,20 +440,46 @@ export default function TokenPageContent() {
   // Debug logging
   console.log('[TokenPageContent] selectedId from URL:', selectedId)
 
-  const [tokens, setTokens] = useState<Token[]>([])
   const [activeToken, setActiveToken] = useState<Token | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [updatingHolders, setUpdatingHolders] = useState<Set<number>>(new Set())
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
   const pageSize = 40 // 5 rows × 8 cards per row
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount()
   const { refreshKey } = useSync()
+
+  // Build API params for SWR
+  const apiParams = useMemo(() => {
+    const params = new URLSearchParams({
+      search,
+      creator: creatorFilter,
+      status: statusFilter,
+      sort: sortFilter,
+      page: currentPage.toString(),
+      pageSize: pageSize.toString(),
+    })
+
+    if (chain?.id) {
+      params.set('chainId', String(chain.id))
+    }
+
+    if (creatorFilter !== 'all' && address) {
+      params.set('address', address)
+    }
+
+    return params
+  }, [search, creatorFilter, statusFilter, sortFilter, currentPage, chain?.id, address])
+
+  // Use SWR for token data
+  const { data: tokenData, isLoading, mutate } = useTokenList(apiParams)
+  
+  // Extract data from SWR response
+  const tokens = useMemo(() => tokenData?.tokens || [], [tokenData?.tokens])
+  const totalPages = tokenData?.totalPages || 1
+  const totalCount = tokenData?.totalCount || 0
 
   const updateHolderCount = useCallback(async (tokenId: number, contractAddress: string, chainId: number) => {
     if (updatingHolders.has(tokenId)) return // Already updating
@@ -464,14 +491,9 @@ export default function TokenPageContent() {
       if (response.ok) {
         const data = await response.json()
         
-        // Update the token in the tokens array
-        setTokens(prevTokens => 
-          prevTokens.map(token => 
-            token.id === tokenId 
-              ? { ...token, holder_count: data.holderCount, holder_count_updated_at: data.lastUpdated }
-              : token
-          )
-        )
+        // Note: With SWR, we don't manually update tokens state
+        // The holder count will be updated when the token data is refetched
+        console.log(`[TokenPageContent] Updated holder count for token ${tokenId}: ${data.holderCount}`)
       }
     } catch (error) {
       console.error('Failed to update holder count:', error)
@@ -484,75 +506,25 @@ export default function TokenPageContent() {
     }
   }, [updatingHolders])
 
-  const fetchTokens = useCallback(async (page: number = 1) => {
-    setIsLoading(true)
-    const params = new URLSearchParams({
-      search,
-      creator: creatorFilter,
-      status: statusFilter,
-      sort: sortFilter,
-      page: page.toString(),
-      pageSize: pageSize.toString(),
-    })
-
-    if (chain?.id) {
-      params.set('chainId', String(chain.id))
-    }
-
-    if (creatorFilter !== 'all' && address) {
-      params.set('address', address)
-    }
-
-    try {
-      console.log('[TokenPageContent] Fetching tokens with params:', params.toString())
-      const res = await fetch(`/api/all-tokens?${params.toString()}`)
-      console.log('[TokenPageContent] Response status:', res.status)
-      
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-      }
-      
-      const data = await res.json()
-      const baseTokens: Token[] = data.tokens || data // Handle both paginated and non-paginated responses
-      console.log('[TokenPageContent] Fetched tokens count:', baseTokens.length)
-      setTokens(baseTokens)
-
-      // Update pagination info if available
-      if (data.totalPages) {
-        setTotalPages(data.totalPages)
-        setTotalCount(data.totalCount || 0)
-        setCurrentPage(page)
-      }
-
-      const found = baseTokens.find(t => t.id.toString() === selectedId)
+  // Update active token when tokens data changes
+  useEffect(() => {
+    if (tokens.length > 0 && selectedId) {
+      const found = tokens.find((t: Token) => t.id.toString() === selectedId)
       console.log('[TokenPageContent] Found token for selectedId:', selectedId, '->', found?.id)
       setActiveToken(found ?? null)
-      
-      // Fetch holder count for the selected token if it exists
-      // DISABLED: Automatic holder count fetching
-      // if (found && found.contract_address && found.chain_id) {
-      //   updateHolderCount(found.id, found.contract_address, found.chain_id).catch(error => {
-      //     console.error('Failed to fetch holder count for selected token:', error)
-      //   })
-      // }
-
-    } catch (error) {
-      console.error('Failed to fetch tokens:', error)
-      setTokens([])
+    } else if (!selectedId) {
       setActiveToken(null)
-    } finally {
-      setIsLoading(false)
     }
-  }, [search, creatorFilter, statusFilter, sortFilter, address, chain, selectedId, pageSize])
+  }, [tokens, selectedId])
 
   useEffect(() => {
     getUsdPrice().then(setUsdPrice)
   }, [])
 
+  // Reset to first page when filters change
   useEffect(() => {
-    setCurrentPage(1) // Reset to first page when filters change
-    fetchTokens(1)
-  }, [fetchTokens, refreshKey])
+    setCurrentPage(1)
+  }, [search, creatorFilter, statusFilter, sortFilter, refreshKey])
 
   const selectToken = async (id: string) => {
     // DISABLED: Automatic holder count fetching
@@ -570,7 +542,7 @@ export default function TokenPageContent() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!tokens.length || activeToken) return
 
-      const currentIndex = tokens.findIndex(t => t.id.toString() === selectedId)
+      const currentIndex = tokens.findIndex((t: Token) => t.id.toString() === selectedId)
 
       if (e.key === 'ArrowDown') {
         const next = currentIndex === -1 ? 0 : Math.min(currentIndex + 1, tokens.length - 1)
@@ -605,7 +577,7 @@ export default function TokenPageContent() {
           token={activeToken}
           usdPrice={usdPrice}
           onBack={backToList}
-          onRefresh={fetchTokens}
+          onRefresh={() => mutate()}
         />
       </div>
     )
@@ -675,7 +647,7 @@ export default function TokenPageContent() {
         ) : tokens.length === 0 ? (
           <EmptyState />
         ) : (
-          tokens.map((token) => (
+          tokens.map((token: Token) => (
             <TokenCard
             key={token.id}
               token={token}
@@ -694,7 +666,7 @@ export default function TokenPageContent() {
       {!isLoading && tokens.length > 0 && totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 mt-8">
           <button
-            onClick={() => fetchTokens(1)}
+            onClick={() => setCurrentPage(1)}
             disabled={currentPage === 1}
             className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="First page"
@@ -703,7 +675,7 @@ export default function TokenPageContent() {
           </button>
           
           <button
-            onClick={() => fetchTokens(currentPage - 1)}
+            onClick={() => setCurrentPage(currentPage - 1)}
             disabled={currentPage === 1}
             className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Previous page"
@@ -716,7 +688,7 @@ export default function TokenPageContent() {
           </span>
           
           <button
-            onClick={() => fetchTokens(currentPage + 1)}
+            onClick={() => setCurrentPage(currentPage + 1)}
             disabled={currentPage === totalPages}
             className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Next page"
@@ -725,7 +697,7 @@ export default function TokenPageContent() {
           </button>
           
           <button
-            onClick={() => fetchTokens(totalPages)}
+            onClick={() => setCurrentPage(totalPages)}
             disabled={currentPage === totalPages}
             className="p-2 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Last page"

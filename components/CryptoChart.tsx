@@ -67,8 +67,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     if (!chartContainerRef.current || data.length === 0) return
 
     // Create chart
+    const containerWidth = chartContainerRef.current.clientWidth
+    const chartWidth = Math.max(containerWidth - 120, 200) // Ensure minimum width of 200px
+    
     const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth - 120, // Subtract padding from width
+      width: chartWidth,
       height: 400, // Reduced height to leave more space for other components
       layout: {
         background: { color: '#151827' },
@@ -309,8 +312,11 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
         // Update width accounting for padding (60px left + 60px right = 120px total)
+        const containerWidth = chartContainerRef.current.clientWidth
+        const chartWidth = Math.max(containerWidth - 120, 200) // Ensure minimum width of 200px
+        
         chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth - 120,
+          width: chartWidth,
         })
       }
     }

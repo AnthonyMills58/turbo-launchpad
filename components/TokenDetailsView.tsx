@@ -30,6 +30,7 @@ import HoldersTable from './HoldersTable';
 import { useSync } from '@/lib/SyncContext';
 import { formatLargeNumber } from '@/lib/displayFormats';
 import { checkIfTokenOnDex } from '@/lib/checkDexListing';
+// import { mutate } from 'swr'; // Not needed since cache invalidation is handled by NewestTransactionsLine
 import LogoContainer from './LogoContainer';
 import ExternalImageContainer from './ExternalImageContainer';
 import UserProfile from './UserProfile';
@@ -254,6 +255,8 @@ export default function TokenDetailsView({
       isMounted.current = false;
     };
   }, []);
+
+  // Note: Cache invalidation is now handled by NewestTransactionsLine after sync operations complete
 
   // ===== Helpers to mirror card formatting =====
   const getNumericPrice = (): number => {
@@ -788,14 +791,13 @@ export default function TokenDetailsView({
                 </button>
 
                 {showChart && (
-                  <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
-                    <ChartForm 
-                      onCancel={() => setShowChart(false)} 
-                      tokenId={token.id} 
-                      symbol={token.symbol} 
-                    />
-            </div>
-          )}
+                  <ChartForm 
+                    onCancel={() => setShowChart(false)} 
+                    tokenId={token.id} 
+                    symbol={token.symbol}
+                    wrapperClassName="mt-3 border border-[#2a2d3a] bg-transparent p-3"
+                  />
+                )}
               </div>
 
             {/* ===== Transaction and Holders Buttons — hidden on mobile ===== */}
