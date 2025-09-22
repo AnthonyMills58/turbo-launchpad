@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useChainId } from 'wagmi'
 import TransactionCard from './TransactionCard'
 import { useNewestTransactions } from '@/hooks/useSWR'
+import { mutate } from 'swr'
 
 interface Transaction {
   id: number
@@ -57,6 +58,9 @@ export default function NewestTransactionsLine() {
                 chainId: chainId
               })
             })
+            
+            // Invalidate token list cache to refresh TokenDetailsView
+            mutate('/api/all-tokens')
           }
         } catch (error) {
           console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
@@ -92,6 +96,9 @@ export default function NewestTransactionsLine() {
                   chainId: chainId
                 })
               })
+              
+              // Invalidate token list cache to refresh TokenDetailsView
+              mutate('/api/all-tokens')
             }
           } catch (error) {
             console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
@@ -138,7 +145,7 @@ export default function NewestTransactionsLine() {
           msOverflowStyle: 'none'
         }}
       >
-        {transactions.map((transaction, index) => {
+        {transactions.map((transaction: Transaction, index: number) => {
           const transactionKey = `${transaction.id}-${transaction.block_time}-${transaction.log_index}`
           
           return (

@@ -30,6 +30,7 @@ import HoldersTable from './HoldersTable';
 import { useSync } from '@/lib/SyncContext';
 import { formatLargeNumber } from '@/lib/displayFormats';
 import { checkIfTokenOnDex } from '@/lib/checkDexListing';
+// import { mutate } from 'swr'; // Not needed since cache invalidation is handled by NewestTransactionsLine
 import LogoContainer from './LogoContainer';
 import ExternalImageContainer from './ExternalImageContainer';
 import UserProfile from './UserProfile';
@@ -255,7 +256,7 @@ export default function TokenDetailsView({
     };
   }, []);
 
-  // Note: Periodic refresh is now handled by SWR in the parent component
+  // Note: Cache invalidation is now handled by NewestTransactionsLine after sync operations complete
 
   // ===== Helpers to mirror card formatting =====
   const getNumericPrice = (): number => {
