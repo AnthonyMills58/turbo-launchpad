@@ -91,10 +91,14 @@ export default function PublicBuySection({
     setLoadingPrice(false)
   }, [amount, token.contract_address])
 
-  // Auto-fetch price when amount changes
+  // Auto-fetch price when amount changes (with debounce to prevent input focus loss)
   useEffect(() => {
     if (amount > 0) {
-      fetchPrice()
+      const timeoutId = setTimeout(() => {
+        fetchPrice()
+      }, 500) // 500ms debounce
+      
+      return () => clearTimeout(timeoutId)
     } else {
       setPrice('0')
     }

@@ -81,10 +81,14 @@ export default function PublicSellSection({
     setLoadingPrice(false)
   }, [amount, token.contract_address])
 
-  // Auto-fetch sell price when amount changes
+  // Auto-fetch sell price when amount changes (with debounce to prevent input focus loss)
   useEffect(() => {
     if (amount > 0) {
-      fetchSellPrice()
+      const timeoutId = setTimeout(() => {
+        fetchSellPrice()
+      }, 500) // 500ms debounce
+      
+      return () => clearTimeout(timeoutId)
     } else {
       setEthReceived('0')
     }

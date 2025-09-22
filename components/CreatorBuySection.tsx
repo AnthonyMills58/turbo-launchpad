@@ -159,10 +159,14 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
     setLoadingPrice(false)
   }, [amount, isCreatorWallet, lockingClosed, token.contract_address])
 
-  // Auto-fetch price when amount changes
+  // Auto-fetch price when amount changes (with debounce to prevent input focus loss)
   useEffect(() => {
     if (amount > 0 && isCreatorWallet && !lockingClosed) {
-      fetchPrice()
+      const timeoutId = setTimeout(() => {
+        fetchPrice()
+      }, 500) // 500ms debounce
+      
+      return () => clearTimeout(timeoutId)
     } else {
       setPrice('0')
     }
