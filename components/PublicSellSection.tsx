@@ -57,10 +57,9 @@ export default function PublicSellSection({
     setAmount(val)
     setShowSuccess(false)
     setErrorMessage(null)
-    setEthReceived('0')
   }
 
-  const fetchSellPrice = async () => {
+  const fetchSellPrice = useCallback(async () => {
     if (!amount || amount <= 0 || isNaN(amount)) return
     setLoadingPrice(true)
     setEthReceived('0')
@@ -80,16 +79,20 @@ export default function PublicSellSection({
     }
 
     setLoadingPrice(false)
-  }
+  }, [amount, token.contract_address])
+
+  // Auto-fetch sell price when amount changes
+  useEffect(() => {
+    if (amount > 0) {
+      fetchSellPrice()
+    } else {
+      setEthReceived('0')
+    }
+  }, [amount, fetchSellPrice])
 
   const handleSell = async () => {
     if (!amount || amount <= 0 || isNaN(amount)) {
       setErrorMessage('Invalid sell amount')
-      return
-    }
-
-    if (ethReceived === '0') {
-      setErrorMessage('Please check price first')
       return
     }
 
@@ -200,7 +203,6 @@ export default function PublicSellSection({
                 const value = parseFloat(sellAmount.toFixed(2))
                 setAmount(value)
                 setShowSuccess(false)
-                setEthReceived('0')
                 setErrorMessage(null)
               }}
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
@@ -215,7 +217,6 @@ export default function PublicSellSection({
             const value = parseFloat(maxSellable.toString())
             setAmount(value)
             setShowSuccess(false)
-            setEthReceived('0')
             setErrorMessage(null)
           }}
           className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
@@ -235,14 +236,6 @@ export default function PublicSellSection({
         placeholder="e.g. 10.0"
         disabled={isBusy}
       />
-
-      <button
-        onClick={fetchSellPrice}
-        disabled={!amount || isBusy}
-        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
-      >
-        {loadingPrice ? 'Checking price…' : 'Check ETH Received'}
-      </button>
 
       {ethReceived !== '0' && (
         <>

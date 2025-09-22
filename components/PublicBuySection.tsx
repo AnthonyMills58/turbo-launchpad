@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { usePublicClient, useWriteContract } from 'wagmi'
 import { ethers } from 'ethers'
 import type { InterfaceAbi } from 'ethers'
@@ -8,7 +8,7 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
-import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
+// import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount' // Not used in auto-fetch version
 import { useSync } from '@/lib/SyncContext'
 import { formatValue } from '@/lib/displayFormats'
 
@@ -67,11 +67,10 @@ export default function PublicBuySection({
     if (val < 1) val = 1
     else if (val > maxAvailableAmount) val = maxAvailableAmount
     setAmount(val)
-    setPrice('0')
     setShowSuccess(false)
   }
 
-  const fetchPrice = async () => {
+  const fetchPrice = useCallback(async () => {
     if (!amount || amount <= 0) return
     setLoadingPrice(true)
     setPrice('0')
@@ -90,7 +89,16 @@ export default function PublicBuySection({
     }
 
     setLoadingPrice(false)
-  }
+  }, [amount, token.contract_address])
+
+  // Auto-fetch price when amount changes
+  useEffect(() => {
+    if (amount > 0) {
+      fetchPrice()
+    } else {
+      setPrice('0')
+    }
+  }, [amount, fetchPrice])
 
   const handleBuy = async () => {
     if (!amount || price === '0') return
@@ -173,34 +181,10 @@ export default function PublicBuySection({
             <button
               key={fraction}
               type="button"
-              onClick={async () => {
+              onClick={() => {
                 setShowSuccess(false)
-                try {
-                  const ethWei = BigInt(Math.floor(ethAmount * 1e18))
-
-                  const provider = new ethers.BrowserProvider(window.ethereum)
-                  const signer = await provider.getSigner()
-                  const contract = new ethers.Contract(
-                    token.contract_address,
-                    TURBO_ABI_ETHERS,
-                    signer
-                  )
-                  const currentPriceWei = await contract.getCurrentPrice()
-
-                  const calculated2 = calculateBuyAmountFromETH(
-                    ethWei,
-                    BigInt(currentPriceWei.toString()),
-                    BigInt(Math.floor(token.slope))
-                  )
-
-                  const rounded = Math.min(calculated2, maxAvailableAmount)
-                  const precise = parseFloat(rounded.toFixed(2))
-
-                  setAmount(precise)
-                  setPrice('0')
-                } catch (err) {
-                  console.error('Curve calc error:', err)
-                }
+                const amount = maxAvailableAmount * fraction
+                setAmount(parseFloat(amount.toFixed(2)))
               }}
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
@@ -221,14 +205,6 @@ export default function PublicBuySection({
         placeholder="e.g. 1.5"
         disabled={isBusy}
       />
-
-      <button
-        onClick={fetchPrice}
-        disabled={!amount || isBusy}
-        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
-      >
-        {loadingPrice ? 'Checking price…' : 'Check Price'}
-      </button>
 
       {price !== '0' && (
         <>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { usePublicClient, useWriteContract } from 'wagmi'
 import { ethers } from 'ethers'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
@@ -137,11 +137,10 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
     if (val < 1) val = 1
     if (val > maxAllowedAmount) val = maxAllowedAmount
     setAmount(val)
-    setPrice('0')
     setShowSuccess(false)
   }
 
-  const fetchPrice = async () => {
+  const fetchPrice = useCallback(async () => {
     if (!amount || amount <= 0 || !isCreatorWallet || lockingClosed) return
     setShowSuccess(false)
     setLoadingPrice(true)
@@ -158,7 +157,16 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
       setPrice('0')
     }
     setLoadingPrice(false)
-  }
+  }, [amount, isCreatorWallet, lockingClosed, token.contract_address])
+
+  // Auto-fetch price when amount changes
+  useEffect(() => {
+    if (amount > 0 && isCreatorWallet && !lockingClosed) {
+      fetchPrice()
+    } else {
+      setPrice('0')
+    }
+  }, [amount, isCreatorWallet, lockingClosed, fetchPrice])
 
   const handleBuy = async () => {
     if (!amount || price === '0' || !isCreatorWallet || lockingClosed) return
@@ -309,20 +317,6 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
         placeholder="e.g. 1.5"
         disabled={isBusy || !isCreatorWallet || lockingClosed || maxAllowedAmount <= 0}
       />
-
-      <button
-        onClick={fetchPrice}
-        disabled={
-          !amount ||
-          isBusy ||
-          maxAllowedAmount <= 0 ||
-          !isCreatorWallet ||
-          lockingClosed
-        }
-        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
-      >
-        {loadingPrice ? 'Checking price…' : 'Check Price'}
-      </button>
 
       {price !== '0' && (
         <>
