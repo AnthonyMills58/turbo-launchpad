@@ -8,7 +8,7 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
-// import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount' // Not used in auto-fetch version
+import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
 import { formatValue } from '@/lib/displayFormats'
 
@@ -181,10 +181,33 @@ export default function PublicBuySection({
             <button
               key={fraction}
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 setShowSuccess(false)
-                const amount = maxAvailableAmount * fraction
-                setAmount(parseFloat(amount.toFixed(2)))
+                try {
+                  const ethWei = BigInt(Math.floor(ethAmount * 1e18))
+
+                  const provider = new ethers.BrowserProvider(window.ethereum)
+                  const signer = await provider.getSigner()
+                  const contract = new ethers.Contract(
+                    token.contract_address,
+                    TURBO_ABI_ETHERS,
+                    signer
+                  )
+                  const currentPriceWei = await contract.getCurrentPrice()
+
+                  const calculated2 = calculateBuyAmountFromETH(
+                    ethWei,
+                    BigInt(currentPriceWei.toString()),
+                    BigInt(Math.floor(token.slope))
+                  )
+
+                  const rounded = Math.min(calculated2, maxAvailableAmount)
+                  const precise = parseFloat(rounded.toFixed(2))
+
+                  setAmount(precise)
+                } catch (err) {
+                  console.error('Curve calc error:', err)
+                }
               }}
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
