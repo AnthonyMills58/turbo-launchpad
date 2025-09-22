@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useChainId } from 'wagmi'
 import TransactionCard from './TransactionCard'
+import { useNewestTransactions } from '@/hooks/useSWR'
 
 interface Transaction {
   id: number
@@ -20,137 +21,105 @@ interface Transaction {
 
 export default function NewestTransactionsLine() {
   const chainId = useChainId()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [isAnimating, setIsAnimating] = useState(false)
   const previousTransactionsRef = useRef<Transaction[]>([])
   const isFirstRunRef = useRef(true)
 
-  const fetchTransactions = useCallback(async () => {
-    try {
-      console.log(`[NewestTransactionsLine] 🔍 Fetching transactions for chainId: ${chainId}`)
-      const response = await fetch(`/api/newest-transactions?chainId=${chainId}`)
-      const data = await response.json()
+  // Use SWR for newest transactions
+  const { data: transactionData, isLoading } = useNewestTransactions(chainId)
+  const transactions = useMemo(() => transactionData?.transactions || [], [transactionData?.transactions])
+
+  // Handle sync logic when transactions data changes
+  const handleTransactionSync = useCallback(async (newTransactions: Transaction[]) => {
+    console.log(`[NewestTransactionsLine] 📝 Processing ${newTransactions.length} transactions`)
+    
+    // Check if this is the very first run or if there are new transactions
+    console.log(`[NewestTransactionsLine] 🔍 Debug - isFirstRunRef.current: ${isFirstRunRef.current}`)
+    console.log(`[NewestTransactionsLine] 🔍 Debug - previousTransactionsRef.current.length: ${previousTransactionsRef.current.length}`)
+    
+    if (isFirstRunRef.current) {
+      // First runtime - sync all tokens treating them as new
+      const uniqueTokenIds = new Set(newTransactions.map((t: Transaction) => t.id))
+      console.log(`[NewestTransactionsLine] 🚀 FIRST RUNTIME - syncing all ${uniqueTokenIds.size} unique tokens`)
       
-      console.log(`[NewestTransactionsLine] 📊 API Response:`, data)
-      
-      if (data.success && data.transactions && data.transactions.length > 0) {
-        const newTransactions = data.transactions
-        console.log(`[NewestTransactionsLine] 📝 Found ${newTransactions.length} transactions`)
-        
-        // Check if this is the very first run or if there are new transactions
-        console.log(`[NewestTransactionsLine] 🔍 Debug - isFirstRunRef.current: ${isFirstRunRef.current}`)
-        console.log(`[NewestTransactionsLine] 🔍 Debug - previousTransactionsRef.current.length: ${previousTransactionsRef.current.length}`)
-        
-        if (isFirstRunRef.current) {
-          // First runtime - sync all tokens treating them as new
-          const uniqueTokenIds = new Set(newTransactions.map((t: Transaction) => t.id))
-          console.log(`[NewestTransactionsLine] 🚀 FIRST RUNTIME - syncing all ${uniqueTokenIds.size} unique tokens`)
-          
-          // Trigger sync for each unique token (don't await to avoid blocking)
-          uniqueTokenIds.forEach(async (tokenId) => {
-            try {
-              const token = newTransactions.find((t: Transaction) => t.id === tokenId)
-              if (token) {
-                console.log(`[NewestTransactionsLine] First runtime sync for token ${tokenId} (${token.symbol})`)
-                await fetch('/api/sync', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    tokenId: tokenId,
-                    contractAddress: token.contract_address,
-                    chainId: chainId
-                  })
-                })
-              }
-            } catch (error) {
-              console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
-            }
-          })
-          
-          // Mark first run as complete
-          isFirstRunRef.current = false
-          
-          // First load, no animation
-          setTransactions(newTransactions)
-        } else if (previousTransactionsRef.current.length > 0) {
-          const previousIds = new Set(previousTransactionsRef.current.map(t => `${t.id}-${t.block_time}-${t.log_index}`))
-          const newTransactionList = newTransactions.filter((t: Transaction) => 
-            !previousIds.has(`${t.id}-${t.block_time}-${t.log_index}`)
-          )
-          const hasNewTransactions = newTransactionList.length > 0
-          
-          if (hasNewTransactions) {
-            // Sync only tokens with new transactions
-            const newTokenIds = new Set(newTransactionList.map((t: Transaction) => t.id))
-            console.log(`[NewestTransactionsLine] Found ${newTransactionList.length} new transactions for ${newTokenIds.size} unique tokens`)
-            
-            // Trigger sync for each token with new transactions (don't await to avoid blocking)
-            newTokenIds.forEach(async (tokenId) => {
-              try {
-                const token = newTransactionList.find((t: Transaction) => t.id === tokenId)
-                if (token) {
-                  console.log(`[NewestTransactionsLine] Syncing token ${tokenId} (${token.symbol}) - has new transaction`)
-                  await fetch('/api/sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      tokenId: tokenId,
-                      contractAddress: token.contract_address,
-                      chainId: chainId
-                    })
-                  })
-                }
-              } catch (error) {
-                console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
-              }
+      // Trigger sync for each unique token (don't await to avoid blocking)
+      uniqueTokenIds.forEach(async (tokenId) => {
+        try {
+          const token = newTransactions.find((t: Transaction) => t.id === tokenId)
+          if (token) {
+            console.log(`[NewestTransactionsLine] First runtime sync for token ${tokenId} (${token.symbol})`)
+            await fetch('/api/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tokenId: tokenId,
+                contractAddress: token.contract_address,
+                chainId: chainId
+              })
             })
-            
-            // Trigger sliding animation
-            setIsAnimating(true)
-            
-            // Update transactions immediately
-            setTransactions(newTransactions)
-            
-            // Stop animation after 1 second
-            setTimeout(() => {
-              setIsAnimating(false)
-            }, 1000)
-          } else {
-            // No new transactions, just update silently
-            console.log(`[NewestTransactionsLine] No new transactions found, skipping sync`)
-            setTransactions(newTransactions)
           }
-        } else {
-          // No previous transactions and not first run - just update silently
-          console.log(`[NewestTransactionsLine] No previous transactions, updating silently`)
-          setTransactions(newTransactions)
+        } catch (error) {
+          console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
         }
+      })
+      
+      // Mark first run as complete
+      isFirstRunRef.current = false
+    } else if (previousTransactionsRef.current.length > 0) {
+      const previousIds = new Set(previousTransactionsRef.current.map(t => `${t.id}-${t.block_time}-${t.log_index}`))
+      const newTransactionList = newTransactions.filter((t: Transaction) => 
+        !previousIds.has(`${t.id}-${t.block_time}-${t.log_index}`)
+      )
+      const hasNewTransactions = newTransactionList.length > 0
+      
+      if (hasNewTransactions) {
+        // Sync only tokens with new transactions
+        const newTokenIds = new Set(newTransactionList.map((t: Transaction) => t.id))
+        console.log(`[NewestTransactionsLine] Found ${newTransactionList.length} new transactions for ${newTokenIds.size} unique tokens`)
         
-        previousTransactionsRef.current = newTransactions
+        // Trigger sync for each token with new transactions (don't await to avoid blocking)
+        newTokenIds.forEach(async (tokenId) => {
+          try {
+            const token = newTransactionList.find((t: Transaction) => t.id === tokenId)
+            if (token) {
+              console.log(`[NewestTransactionsLine] Syncing token ${tokenId} (${token.symbol}) - has new transaction`)
+              await fetch('/api/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  tokenId: tokenId,
+                  contractAddress: token.contract_address,
+                  chainId: chainId
+                })
+              })
+            }
+          } catch (error) {
+            console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
+          }
+        })
+        
+        // Trigger sliding animation
+        setIsAnimating(true)
+        
+        // Stop animation after 1 second
+        setTimeout(() => {
+          setIsAnimating(false)
+        }, 1000)
       } else {
-        setTransactions([])
+        // No new transactions, just update silently
+        console.log(`[NewestTransactionsLine] No new transactions found, skipping sync`)
       }
-    } catch (error) {
-      console.error('Error fetching newest transactions:', error)
-      setTransactions([])
-    } finally {
-      setIsLoading(false)
     }
+    
+    previousTransactionsRef.current = newTransactions
   }, [chainId])
 
+  // Handle transaction sync when data changes
   useEffect(() => {
-    if (chainId) {
-      fetchTransactions()
-      
-      // Set up polling every 60 seconds
-      const interval = setInterval(fetchTransactions, 60000)
-      
-      return () => {
-        clearInterval(interval)
-      }
+    if (transactions.length > 0) {
+      handleTransactionSync(transactions)
     }
-  }, [chainId, fetchTransactions])
+  }, [transactions, handleTransactionSync])
 
   // Don't render if loading, no transactions, or no chain ID
   if (isLoading || transactions.length === 0 || !chainId) {
