@@ -178,22 +178,6 @@ export default function DexSellSection({
         disabled={isBusy}
       />
 
-      <button
-        onClick={() => {
-          // TODO: Implement DEX sell price check
-          setLoadingPrice(true)
-          setTimeout(() => {
-            const totalEth = amount * (token.current_price || 0)
-            setEthReceived(totalEth.toFixed(6))
-            setLoadingPrice(false)
-          }, 1000)
-        }}
-        disabled={!amount || isBusy}
-        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
-      >
-        {loadingPrice ? 'Checking price…' : 'Check ETH Received'}
-      </button>
-
       {ethReceived !== '0' && (
         <>
           {!isNaN(Number(displayPrice)) && (

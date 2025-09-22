@@ -161,22 +161,6 @@ export default function DexBuySection({
         disabled={isBusy}
       />
 
-      <button
-        onClick={() => {
-          // TODO: Implement DEX price check
-          setLoadingPrice(true)
-          setTimeout(() => {
-            const totalCost = amount * (token.current_price || 0)
-            setPrice(totalCost.toFixed(6))
-            setLoadingPrice(false)
-          }, 1000)
-        }}
-        disabled={!amount || isBusy}
-        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
-      >
-        {loadingPrice ? 'Checking price…' : 'Check Price'}
-      </button>
-
       {price !== '0' && (
         <>
           <div className="mt-2 text-sm text-gray-300 text-center">
