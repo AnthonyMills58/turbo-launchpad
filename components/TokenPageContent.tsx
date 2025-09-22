@@ -554,6 +554,23 @@ export default function TokenPageContent() {
     fetchTokens(1)
   }, [fetchTokens, refreshKey])
 
+  // Periodic refresh to keep token list in sync with DB (every 3 minutes)
+  useEffect(() => {
+    const refreshInterval = setInterval(async () => {
+      // Only refresh if tab is visible and we're on the first page
+      if (document.visibilityState === 'visible' && currentPage === 1) {
+        console.log('[TokenPageContent] Periodic refresh of token list');
+        try {
+          await fetchTokens(1);
+        } catch (error) {
+          console.error('[TokenPageContent] Periodic refresh failed:', error);
+        }
+      }
+    }, 180000); // 3 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [fetchTokens, currentPage])
+
   const selectToken = async (id: string) => {
     // DISABLED: Automatic holder count fetching
     // Previously: Found token and fetched holder count before navigation

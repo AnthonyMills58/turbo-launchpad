@@ -255,6 +255,39 @@ export default function TokenDetailsView({
     };
   }, []);
 
+  // Periodic refresh to keep data in sync with DB (every 2 minutes)
+  useEffect(() => {
+    if (!contract_address || !chainId) return;
+
+    const refreshInterval = setInterval(async () => {
+      // Only refresh if tab is visible
+      if (document.visibilityState === 'visible') {
+        console.log(`[TokenDetailsView] Periodic refresh for token ${token.id}`);
+        try {
+          // Call sync to update token state
+          await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tokenId: token.id,
+              contractAddress: contract_address,
+              chainId: chainId
+            })
+          });
+          
+          // Trigger parent refresh to update displayed data
+          if (isMounted.current) {
+            onRefresh();
+          }
+        } catch (error) {
+          console.error('[TokenDetailsView] Periodic refresh failed:', error);
+        }
+      }
+    }, 120000); // 2 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [contract_address, chainId, token.id, onRefresh]);
+
   // ===== Helpers to mirror card formatting =====
   const getNumericPrice = (): number => {
     if (token.current_price !== undefined && token.current_price !== null) {
@@ -788,14 +821,13 @@ export default function TokenDetailsView({
                 </button>
 
                 {showChart && (
-                  <div className="mt-3 border border-[#2a2d3a] bg-transparent p-3">
-                    <ChartForm 
-                      onCancel={() => setShowChart(false)} 
-                      tokenId={token.id} 
-                      symbol={token.symbol} 
-                    />
-            </div>
-          )}
+                  <ChartForm 
+                    onCancel={() => setShowChart(false)} 
+                    tokenId={token.id} 
+                    symbol={token.symbol}
+                    wrapperClassName="mt-3 border border-[#2a2d3a] bg-transparent p-3"
+                  />
+                )}
               </div>
 
             {/* ===== Transaction and Holders Buttons — hidden on mobile ===== */}
