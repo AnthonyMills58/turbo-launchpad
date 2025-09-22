@@ -1,10 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useChainId } from 'wagmi'
-import { useSync } from '@/lib/SyncContext'
 import TransactionCard from './TransactionCard'
-import SparkleAnimation from './SparkleAnimation'
 
 interface Transaction {
   id: number
@@ -22,12 +20,10 @@ interface Transaction {
 
 export default function NewestTransactionsLine() {
   const chainId = useChainId()
-  const { triggerSync } = useSync()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [newTransactionIds, setNewTransactionIds] = useState<Set<string>>(new Set())
+  const [isAnimating, setIsAnimating] = useState(false)
   const previousTransactionsRef = useRef<Transaction[]>([])
-  const sparkleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const fetchTransactions = useCallback(async () => {
     try {
@@ -37,36 +33,33 @@ export default function NewestTransactionsLine() {
       if (data.success && data.transactions && data.transactions.length > 0) {
         const newTransactions = data.transactions
         
-        // Check for new transactions (not the first load)
+        // Check if there are new transactions (not the first load)
         if (previousTransactionsRef.current.length > 0) {
           const previousIds = new Set(previousTransactionsRef.current.map(t => `${t.id}-${t.block_time}-${t.log_index}`))
-          const newIds = new Set<string>()
+          const hasNewTransactions = newTransactions.some((t: Transaction) => 
+            !previousIds.has(`${t.id}-${t.block_time}-${t.log_index}`)
+          )
           
-          newTransactions.forEach((transaction: Transaction) => {
-            const transactionKey = `${transaction.id}-${transaction.block_time}-${transaction.log_index}`
-            if (!previousIds.has(transactionKey)) {
-              newIds.add(transactionKey)
-            }
-          })
-          
-          if (newIds.size > 0) {
-            setNewTransactionIds(newIds)
+          if (hasNewTransactions) {
+            // Trigger sliding animation
+            setIsAnimating(true)
             
-            // Clear any existing timeout
-            if (sparkleTimeoutRef.current) {
-              clearTimeout(sparkleTimeoutRef.current)
-            }
+            // Update transactions immediately
+            setTransactions(newTransactions)
             
-            // Clear new transaction IDs after animation duration and trigger refresh
-            sparkleTimeoutRef.current = setTimeout(() => {
-              setNewTransactionIds(new Set())
-              // Trigger TokenDetailsView refresh when sparkles end
-              triggerSync()
+            // Stop animation after 2 seconds
+            setTimeout(() => {
+              setIsAnimating(false)
             }, 2000)
+          } else {
+            // No new transactions, just update silently
+            setTransactions(newTransactions)
           }
+        } else {
+          // First load, no animation
+          setTransactions(newTransactions)
         }
         
-        setTransactions(newTransactions)
         previousTransactionsRef.current = newTransactions
       } else {
         setTransactions([])
@@ -77,7 +70,7 @@ export default function NewestTransactionsLine() {
     } finally {
       setIsLoading(false)
     }
-  }, [chainId, triggerSync])
+  }, [chainId])
 
   useEffect(() => {
     if (chainId) {
@@ -88,10 +81,6 @@ export default function NewestTransactionsLine() {
       
       return () => {
         clearInterval(interval)
-        // Clean up sparkle timeout on unmount
-        if (sparkleTimeoutRef.current) {
-          clearTimeout(sparkleTimeoutRef.current)
-        }
       }
     }
   }, [chainId, fetchTransactions])
@@ -105,20 +94,31 @@ export default function NewestTransactionsLine() {
     <div className="w-full bg-transparent">
       {/* Horizontal scrollable container */}
       <div 
-        className="flex gap-2 overflow-x-auto px-4 py-3 bg-transparent" 
+        className={`flex gap-2 overflow-x-auto px-4 py-3 bg-transparent transition-all duration-2000 ease-in-out ${
+          isAnimating ? 'transform translate-x-2' : 'transform translate-x-0'
+        }`}
         style={{ 
           scrollbarWidth: 'none', 
           msOverflowStyle: 'none'
         }}
       >
-        {transactions.map((transaction) => {
+        {transactions.map((transaction, index) => {
           const transactionKey = `${transaction.id}-${transaction.block_time}-${transaction.log_index}`
-          const isNew = newTransactionIds.has(transactionKey)
           
           return (
-            <SparkleAnimation key={transactionKey} isVisible={isNew}>
+            <div
+              key={transactionKey}
+              className={`transition-all duration-2000 ease-in-out ${
+                isAnimating 
+                  ? `transform translate-x-${Math.min(index * 2, 20)} opacity-90` 
+                  : 'transform translate-x-0 opacity-100'
+              }`}
+              style={{
+                transitionDelay: `${index * 50}ms`
+              }}
+            >
               <TransactionCard transaction={transaction} />
-            </SparkleAnimation>
+            </div>
           )
         })}
       </div>
