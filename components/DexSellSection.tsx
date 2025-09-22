@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { usePublicClient, useWriteContract } from 'wagmi'
 import { ethers } from 'ethers'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
@@ -21,14 +20,11 @@ export default function DexSellSection({
   const [amount, setAmount] = useState<number>(0)
   const [ethReceived, setEthReceived] = useState<string>('0')
   const [loadingPrice, setLoadingPrice] = useState(false)
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [maxSellable, setMaxSellable] = useState<number>(0)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const { writeContractAsync } = useWriteContract()
-  const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
   const isBusy = loadingPrice || isPending
 
@@ -94,7 +90,6 @@ export default function DexSellSection({
       console.log(`ETH Received: ${ethReceived} ETH`)
       
       // Placeholder success
-      setTxHash('0x1234567890abcdef' as `0x${string}`)
       setShowSuccess(true)
       
       // Trigger refresh
@@ -104,22 +99,14 @@ export default function DexSellSection({
       if (onSuccess) {
         onSuccess()
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('DEX Sell failed:', err)
-      setErrorMessage(err.message || 'Transaction failed')
+      setErrorMessage(err instanceof Error ? err.message : 'Transaction failed')
     } finally {
       setIsPending(false)
     }
   }
 
-  const handleMax = () => {
-    setAmount(maxSellable)
-  }
-
-  const handlePercentage = (percentage: number) => {
-    const amount = (maxSellable * percentage) / 100
-    setAmount(amount)
-  }
 
   const displayPrice = formatValue(Number(ethReceived || 0))
 
