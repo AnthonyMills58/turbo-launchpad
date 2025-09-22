@@ -47,10 +47,10 @@ export default function NewestTransactionsLine() {
             // Update transactions immediately
             setTransactions(newTransactions)
             
-            // Stop animation after 2 seconds
+            // Stop animation after 1 second
             setTimeout(() => {
               setIsAnimating(false)
-            }, 2000)
+            }, 1000)
           } else {
             // No new transactions, just update silently
             setTransactions(newTransactions)
@@ -94,7 +94,7 @@ export default function NewestTransactionsLine() {
     <div className="w-full bg-transparent">
       {/* Horizontal scrollable container */}
       <div 
-        className={`flex gap-2 overflow-x-auto px-4 py-3 bg-transparent transition-all duration-2000 ease-in-out ${
+        className={`flex gap-2 overflow-x-auto px-4 py-3 bg-transparent transition-all duration-1000 ease-in-out ${
           isAnimating ? 'transform translate-x-2' : 'transform translate-x-0'
         }`}
         style={{ 
@@ -108,7 +108,7 @@ export default function NewestTransactionsLine() {
           return (
             <div
               key={transactionKey}
-              className={`transition-all duration-2000 ease-in-out ${
+              className={`transition-all duration-1000 ease-in-out ${
                 isAnimating 
                   ? `transform translate-x-${Math.min(index * 2, 20)} opacity-90` 
                   : 'transform translate-x-0 opacity-100'
