@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { usePublicClient, useWriteContract } from 'wagmi'
 import { ethers } from 'ethers'
 import type { InterfaceAbi } from 'ethers'
@@ -67,11 +67,10 @@ export default function PublicBuySection({
     if (val < 1) val = 1
     else if (val > maxAvailableAmount) val = maxAvailableAmount
     setAmount(val)
-    setPrice('0')
     setShowSuccess(false)
   }
 
-  const fetchPrice = async () => {
+  const fetchPrice = useCallback(async () => {
     if (!amount || amount <= 0) return
     setLoadingPrice(true)
     setPrice('0')
@@ -90,7 +89,20 @@ export default function PublicBuySection({
     }
 
     setLoadingPrice(false)
-  }
+  }, [amount, token.contract_address])
+
+  // Auto-fetch price when amount changes (with debounce to prevent input focus loss)
+  useEffect(() => {
+    if (amount > 0) {
+      const timeoutId = setTimeout(() => {
+        fetchPrice()
+      }, 500) // 500ms debounce
+      
+      return () => clearTimeout(timeoutId)
+    } else {
+      setPrice('0')
+    }
+  }, [amount, fetchPrice])
 
   const handleBuy = async () => {
     if (!amount || price === '0') return
@@ -197,7 +209,6 @@ export default function PublicBuySection({
                   const precise = parseFloat(rounded.toFixed(2))
 
                   setAmount(precise)
-                  setPrice('0')
                 } catch (err) {
                   console.error('Curve calc error:', err)
                 }
@@ -221,14 +232,6 @@ export default function PublicBuySection({
         placeholder="e.g. 1.5"
         disabled={isBusy}
       />
-
-      <button
-        onClick={fetchPrice}
-        disabled={!amount || isBusy}
-        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
-      >
-        {loadingPrice ? 'Checking price…' : 'Check Price'}
-      </button>
 
       {price !== '0' && (
         <>
