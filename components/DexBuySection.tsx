@@ -118,105 +118,86 @@ export default function DexBuySection({
     setAmount(maxAvailableAmount)
   }
 
+  const displayPrice = formatValue(Number(price || 0))
+
   return (
-    <div className="w-full bg-[#04140A]/40 border border-gray-600 rounded-lg p-4">
-      <div className="mb-4">
-        <h3 className="text-lg font-semibold text-white mb-2">DEX Buy</h3>
-        <p className="text-sm text-gray-400">
-          Buy {token.symbol} tokens directly from DEX liquidity pools
-        </p>
-      </div>
+    <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a]">
+      <h3 className="text-white text-sm font-semibold mb-2">
+        <span className="text-sm text-gray-400">
+          max <span className="text-green-500">{maxAvailableAmount.toLocaleString()}</span>
+        </span>
+      </h3>
 
-      <div className="space-y-4">
-        {/* Amount Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Amount ({token.symbol})
-          </label>
-          <div className="relative">
-            <Input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-              placeholder="Enter amount"
-              className="pr-20"
-              disabled={isBusy}
-            />
+      <div className="flex flex-wrap gap-2 mb-3">
+        {[1 / 1000, 1 / 100, 1 / 10, 1].map((fraction) => {
+          const ethAmount = maxAvailableAmount * fraction * (token.current_price || 0)
+          return (
             <button
-              onClick={handleMax}
-              disabled={isBusy || maxAvailableAmount <= 0}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              key={fraction}
+              type="button"
+              onClick={() => {
+                setShowSuccess(false)
+                const amount = maxAvailableAmount * fraction
+                setAmount(parseFloat(amount.toFixed(2)))
+                setPrice('0')
+              }}
+              className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
-              MAX
+              {parseFloat(ethAmount.toFixed(6)).toString()} ETH
             </button>
-          </div>
-          <div className="mt-1 text-xs text-gray-400">
-            Max available: {formatValue(maxAvailableAmount)} {token.symbol}
-          </div>
-        </div>
-
-        {/* Price Display */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Total Cost (ETH)
-          </label>
-          <div className="p-3 bg-[#04140A] border border-gray-600 rounded text-white">
-            {loadingPrice ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm">Calculating...</span>
-              </div>
-            ) : (
-              <span className="text-lg font-mono">{price}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Error Message */}
-        {errorMessage && (
-          <div className="p-3 bg-red-900/20 border border-red-500 rounded text-red-400 text-sm">
-            {errorMessage}
-          </div>
-        )}
-
-        {/* Success Message */}
-        {showSuccess && (
-          <div className="p-3 bg-green-900/20 border border-green-500 rounded text-green-400 text-sm">
-            <div className="flex items-center gap-2">
-              <span>✅ Transaction successful!</span>
-            </div>
-            {txHash && (
-              <div className="mt-2 text-xs">
-                <span className="text-gray-400">Tx Hash: </span>
-                <span className="font-mono">{txHash}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Buy Button */}
-        <button
-          onClick={handleBuy}
-          disabled={isBusy || amount <= 0 || parseFloat(price) <= 0}
-          className="w-full py-3 px-4 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isPending ? (
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              <span>Processing...</span>
-            </div>
-          ) : (
-            `Buy ${formatValue(amount)} ${token.symbol}`
-          )}
-        </button>
-
-        {/* Info */}
-        <div className="text-xs text-gray-400 space-y-1">
-          <div>• DEX trading with real-time liquidity</div>
-          <div>• Price may vary based on pool depth</div>
-          <div>• Slippage protection included</div>
-        </div>
+          )
+        })}
       </div>
+
+      <Input
+        type="number"
+        label={`Amount to Buy `}
+        name="amount"
+        value={amount}
+        onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+        min={1}
+        max={maxAvailableAmount}
+        placeholder="e.g. 1.5"
+        disabled={isBusy}
+      />
+
+      <button
+        onClick={() => {
+          // TODO: Implement DEX price check
+          setLoadingPrice(true)
+          setTimeout(() => {
+            const totalCost = amount * (token.current_price || 0)
+            setPrice(totalCost.toFixed(6))
+            setLoadingPrice(false)
+          }, 1000)
+        }}
+        disabled={!amount || isBusy}
+        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
+      >
+        {loadingPrice ? 'Checking price…' : 'Check Price'}
+      </button>
+
+      {price !== '0' && (
+        <>
+          <div className="mt-2 text-sm text-gray-300 text-center">
+            Total cost: <strong>{displayPrice} ETH</strong>
+          </div>
+
+          <button
+            onClick={handleBuy}
+            disabled={isPending}
+            className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 hover:bg-green-700 text-white mt-3 text-sm"
+          >
+            {isPending ? 'Processing...' : 'Buy Tokens'}
+          </button>
+        </>
+      )}
+
+      {showSuccess && (
+        <div className="mt-3 text-green-400 text-sm text-center">
+          ✅ Transaction confirmed!
+        </div>
+      )}
     </div>
   )
 }

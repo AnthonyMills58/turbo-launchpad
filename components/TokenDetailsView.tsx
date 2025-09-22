@@ -25,6 +25,8 @@ import {
 import EditTokenForm from './EditTokenForm'
 import ChartForm from './ChartForm';
 import PublicSellSection from './PublicSellSection';
+import DexBuySection from './DexBuySection';
+import DexSellSection from './DexSellSection';
 import TransactionTable from './TransactionTable';
 import HoldersTable from './HoldersTable';
 import { useSync } from '@/lib/SyncContext';
@@ -375,6 +377,10 @@ export default function TokenDetailsView({
   const hasPublicBuy = !graduated && !isCreator; // Regular BUY for non-creators
   const hasPublicSell = !graduated && userTokenBalance !== null && userTokenBalance > 0;
   const hasCreatorBuyLock = !graduated && canCreatorBuyLock;
+
+  // DEX trading availability (post-graduation / on DEX)
+  const hasDexBuy = token.on_dex === true;
+  const hasDexSell = token.on_dex === true;
 
   // ========= JSX =========
   try {
@@ -896,6 +902,43 @@ export default function TokenDetailsView({
                 )}
                 {activeBuySellTab === 'sell' && hasPublicSell && (
                   <PublicSellSection token={token} onSuccess={onRefresh} />
+                )}
+              </div>
+            )}
+
+            {/* DEX BUY/SELL (shown when token is on DEX) */}
+            {token.on_dex && (hasDexBuy || hasDexSell) && (
+              <div className="space-y-4">
+                {/* Buy/Sell Tab Buttons */}
+                <div className="flex">
+                  <button
+                    onClick={() => setActiveBuySellTab('buy')}
+                    className={`flex-1 border border-r-0 px-4 py-2 text-sm transition ${
+                      activeBuySellTab === 'buy'
+                        ? 'border-gray-500 text-white bg-gray-700'
+                        : 'border-gray-600 bg-transparent text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    BUY
+                  </button>
+                  <button
+                    onClick={() => setActiveBuySellTab('sell')}
+                    className={`flex-1 border px-4 py-2 text-sm transition ${
+                      activeBuySellTab === 'sell'
+                        ? 'border-gray-500 text-white bg-gray-700'
+                        : 'border-gray-600 bg-transparent text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    SELL
+                  </button>
+                </div>
+
+                {/* Tab Content */}
+                {activeBuySellTab === 'buy' && hasDexBuy && (
+                  <DexBuySection token={token} onSuccess={onRefresh} />
+                )}
+                {activeBuySellTab === 'sell' && hasDexSell && (
+                  <DexSellSection token={token} onSuccess={onRefresh} />
                 )}
               </div>
             )}

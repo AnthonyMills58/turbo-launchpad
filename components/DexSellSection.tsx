@@ -121,126 +121,108 @@ export default function DexSellSection({
     setAmount(amount)
   }
 
+  const displayPrice = formatValue(Number(ethReceived || 0))
+
   return (
-    <div className="w-full bg-[#04140A]/40 border border-gray-600 rounded-lg p-4">
-      <div className="mb-4">
-        <h3 className="text-lg font-semibold text-white mb-2">DEX Sell</h3>
-        <p className="text-sm text-gray-400">
-          Sell {token.symbol} tokens directly to DEX liquidity pools
-        </p>
-      </div>
+    <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a]">
+      <h3 className="text-white text-sm font-semibold mb-2">
+        <span className="text-sm text-gray-400">
+          balance <span className="text-green-500">{maxSellable.toLocaleString()}</span>
+        </span>
+      </h3>
 
-      <div className="space-y-4">
-        {/* Balance Display */}
-        <div className="p-3 bg-[#04140A] border border-gray-600 rounded">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-400">Your Balance:</span>
-            <span className="text-white font-mono">
-              {formatValue(maxSellable)} {token.symbol}
-            </span>
-          </div>
-        </div>
-
-        {/* Amount Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Amount ({token.symbol})
-          </label>
-          <div className="relative">
-            <Input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-              placeholder="Enter amount"
-              className="pr-20"
-              disabled={isBusy}
-            />
+      <div className="flex flex-wrap gap-2 mb-3">
+        {[0.25, 0.5, 0.75, 1].map((fraction) => {
+          const sellAmount = maxSellable * fraction
+          return (
             <button
-              onClick={handleMax}
-              disabled={isBusy || maxSellable <= 0}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              key={fraction}
+              type="button"
+              onClick={() => {
+                const value = parseFloat(sellAmount.toFixed(2))
+                setAmount(value)
+                setShowSuccess(false)
+                setEthReceived('0')
+                setErrorMessage(null)
+              }}
+              className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
             >
-              MAX
+              {Math.floor(fraction * 100)}%
             </button>
-          </div>
-        </div>
-
-        {/* Quick Percentage Buttons */}
-        <div className="flex gap-2">
-          {[25, 50, 75, 100].map((percentage) => (
-            <button
-              key={percentage}
-              onClick={() => handlePercentage(percentage)}
-              disabled={isBusy || maxSellable <= 0}
-              className="flex-1 py-2 px-3 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {percentage}%
-            </button>
-          ))}
-        </div>
-
-        {/* ETH Received Display */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            ETH Received
-          </label>
-          <div className="p-3 bg-[#04140A] border border-gray-600 rounded text-white">
-            {loadingPrice ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm">Calculating...</span>
-              </div>
-            ) : (
-              <span className="text-lg font-mono">{ethReceived}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Error Message */}
-        {errorMessage && (
-          <div className="p-3 bg-red-900/20 border border-red-500 rounded text-red-400 text-sm">
-            {errorMessage}
-          </div>
-        )}
-
-        {/* Success Message */}
-        {showSuccess && (
-          <div className="p-3 bg-green-900/20 border border-green-500 rounded text-green-400 text-sm">
-            <div className="flex items-center gap-2">
-              <span>✅ Transaction successful!</span>
-            </div>
-            {txHash && (
-              <div className="mt-2 text-xs">
-                <span className="text-gray-400">Tx Hash: </span>
-                <span className="font-mono">{txHash}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Sell Button */}
+          )
+        })}
         <button
-          onClick={handleSell}
-          disabled={isBusy || amount <= 0 || amount > maxSellable || parseFloat(ethReceived) <= 0}
-          className="w-full py-3 px-4 bg-orange-600 text-white font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          type="button"
+          onClick={() => {
+            const value = parseFloat(maxSellable.toString())
+            setAmount(value)
+            setShowSuccess(false)
+            setEthReceived('0')
+            setErrorMessage(null)
+          }}
+          className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs"
         >
-          {isPending ? (
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              <span>Processing...</span>
-            </div>
-          ) : (
-            `Sell ${formatValue(amount)} ${token.symbol}`
-          )}
+          Max
         </button>
-
-        {/* Info */}
-        <div className="text-xs text-gray-400 space-y-1">
-          <div>• DEX trading with real-time liquidity</div>
-          <div>• Price may vary based on pool depth</div>
-          <div>• Slippage protection included</div>
-        </div>
       </div>
+
+      <Input
+        type="number"
+        label={`Amount to Sell `}
+        name="sellAmount"
+        value={amount}
+        onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+        min={0}
+        max={maxSellable}
+        placeholder="e.g. 10.0"
+        disabled={isBusy}
+      />
+
+      <button
+        onClick={() => {
+          // TODO: Implement DEX sell price check
+          setLoadingPrice(true)
+          setTimeout(() => {
+            const totalEth = amount * (token.current_price || 0)
+            setEthReceived(totalEth.toFixed(6))
+            setLoadingPrice(false)
+          }, 1000)
+        }}
+        disabled={!amount || isBusy}
+        className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 text-white mt-2"
+      >
+        {loadingPrice ? 'Checking price…' : 'Check ETH Received'}
+      </button>
+
+      {ethReceived !== '0' && (
+        <>
+          {!isNaN(Number(displayPrice)) && (
+            <div className="mt-2 text-sm text-gray-300 text-center">
+              You will receive: <strong>{displayPrice} ETH</strong>
+            </div>
+          )}
+
+          <button
+            onClick={handleSell}
+            disabled={isPending}
+            className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700 text-white mt-3 text-sm"
+          >
+            {isPending ? 'Processing...' : 'Sell Tokens'}
+          </button>
+
+          {errorMessage && (
+            <div className="mt-2 text-sm text-red-400 text-center">
+              {errorMessage}
+            </div>
+          )}
+        </>
+      )}
+
+      {showSuccess && (
+        <div className="mt-3 text-green-400 text-sm text-center">
+          ✅ Sell transaction confirmed!
+        </div>
+      )}
     </div>
   )
 }
