@@ -59,8 +59,8 @@ export default function NewestTransactionsLine() {
               })
             })
             
-            // Invalidate token list cache to refresh TokenDetailsView
-            mutate('/api/all-tokens')
+            // Invalidate all token list cache keys to refresh TokenPageContent and TokenDetailsView
+            mutate(key => typeof key === 'string' && key.startsWith('/api/all-tokens'))
           }
         } catch (error) {
           console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
@@ -97,8 +97,8 @@ export default function NewestTransactionsLine() {
                 })
               })
               
-              // Invalidate token list cache to refresh TokenDetailsView
-              mutate('/api/all-tokens')
+              // Invalidate all token list cache keys to refresh TokenPageContent and TokenDetailsView
+              mutate(key => typeof key === 'string' && key.startsWith('/api/all-tokens'))
             }
           } catch (error) {
             console.error(`[NewestTransactionsLine] Failed to sync token ${tokenId}:`, error)
