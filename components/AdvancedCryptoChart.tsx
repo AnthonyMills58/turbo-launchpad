@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, IChartApi, ISeriesApi, Time, CandlestickSeries, HistogramSeries } from 'lightweight-charts'
 
 interface AdvancedCryptoChartProps {
@@ -41,7 +41,7 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
   ]
 
   // Fetch chart data from your API
-  const fetchChartData = async (interval: string) => {
+  const fetchChartData = useCallback(async (interval: string) => {
     try {
       setLoading(true)
       const response = await fetch(`/api/chart-data/${tokenId}/${interval}`)
@@ -73,11 +73,11 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
     } finally {
       setLoading(false)
     }
-  }
+  }, [tokenId])
 
   useEffect(() => {
     fetchChartData(selectedInterval)
-  }, [tokenId, selectedInterval])
+  }, [tokenId, selectedInterval, fetchChartData])
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return

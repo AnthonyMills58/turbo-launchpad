@@ -1,17 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { usePublicClient, useWriteContract } from 'wagmi'
-import { ethers } from 'ethers'
-import type { InterfaceAbi } from 'ethers'
-import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { useSync } from '@/lib/SyncContext'
 import { formatValue } from '@/lib/displayFormats'
-
-const TURBO_ABI_ETHERS = TurboTokenABI.abi as InterfaceAbi
 
 export default function DexBuySection({
   token,
@@ -24,14 +18,10 @@ export default function DexBuySection({
   const [amount, setAmount] = useState<number>(1.0)
   const [price, setPrice] = useState<string>('0')
   const [loadingPrice, setLoadingPrice] = useState(false)
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [maxAvailableAmount, setMaxAvailableAmount] = useState<number>(0)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const { writeContractAsync } = useWriteContract()
-  const publicClient = usePublicClient()
   const refreshWallet = useWalletRefresh()
   const isBusy = loadingPrice || isPending
 
@@ -60,7 +50,6 @@ export default function DexBuySection({
       }
 
       setLoadingPrice(true)
-      setErrorMessage(null)
 
       try {
         // TODO: Implement DEX price calculation
@@ -71,7 +60,6 @@ export default function DexBuySection({
         setPrice(totalCost.toFixed(6))
       } catch (err) {
         console.error('Failed to calculate DEX price:', err)
-        setErrorMessage('Failed to calculate price')
         setPrice('0')
       } finally {
         setLoadingPrice(false)
@@ -85,7 +73,6 @@ export default function DexBuySection({
     if (isBusy || amount <= 0) return
 
     setIsPending(true)
-    setErrorMessage(null)
 
     try {
       // TODO: Implement DEX buy transaction
@@ -96,7 +83,6 @@ export default function DexBuySection({
       console.log(`Price: ${price} ETH`)
       
       // Placeholder success
-      setTxHash('0x1234567890abcdef' as `0x${string}`)
       setShowSuccess(true)
       
       // Trigger refresh
@@ -106,17 +92,13 @@ export default function DexBuySection({
       if (onSuccess) {
         onSuccess()
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('DEX Buy failed:', err)
-      setErrorMessage(err.message || 'Transaction failed')
     } finally {
       setIsPending(false)
     }
   }
 
-  const handleMax = () => {
-    setAmount(maxAvailableAmount)
-  }
 
   const displayPrice = formatValue(Number(price || 0))
 
