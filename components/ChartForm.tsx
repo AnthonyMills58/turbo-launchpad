@@ -6,9 +6,10 @@ interface ChartFormProps {
   tokenId: number
   symbol: string
   wrapperClassName?: string
+  onDataStatusChange?: (hasData: boolean) => void
 }
 
-const ChartForm: React.FC<ChartFormProps> = ({ tokenId, symbol, wrapperClassName }) => {
+const ChartForm: React.FC<ChartFormProps> = ({ tokenId, symbol, wrapperClassName, onDataStatusChange }) => {
   const [hasData, setHasData] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -17,7 +18,7 @@ const ChartForm: React.FC<ChartFormProps> = ({ tokenId, symbol, wrapperClassName
     const checkData = async () => {
       try {
         // Use same default interval/timeRange as CryptoChart initial load
-        const response = await fetch(`/api/chart-data/${tokenId}/4h?timeRange=Max`)
+        const response = await fetch(`/api/chart-data/${tokenId}/4h?timeRange=Since Launch`)
         if (!response.ok) {
           setHasData(false)
           return
@@ -25,9 +26,16 @@ const ChartForm: React.FC<ChartFormProps> = ({ tokenId, symbol, wrapperClassName
         const payload = await response.json()
         const chartData = payload.data || payload
         const finalData = Array.isArray(chartData) ? chartData : []
-        if (isMounted) setHasData(finalData.length > 0)
+        if (isMounted) {
+          const dataExists = finalData.length > 0
+          setHasData(dataExists)
+          onDataStatusChange?.(dataExists)
+        }
       } catch {
-        if (isMounted) setHasData(false)
+        if (isMounted) {
+          setHasData(false)
+          onDataStatusChange?.(false)
+        }
       }
     }
 
@@ -36,7 +44,7 @@ const ChartForm: React.FC<ChartFormProps> = ({ tokenId, symbol, wrapperClassName
     return () => {
       isMounted = false
     }
-  }, [tokenId])
+  }, [tokenId, onDataStatusChange])
 
   // While checking, render nothing to avoid flicker
   if (hasData !== true) return null

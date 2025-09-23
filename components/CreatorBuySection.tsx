@@ -7,9 +7,10 @@ import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
-import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
-import { formatValue } from '@/lib/displayFormats'
+import { formatPriceMetaMask } from '@/lib/ui-utils'
+import HashDisplay from '@/components/ui/HashDisplay'
+import { getUsdPrice } from '@/lib/getUsdPrice'
 
 type Props = {
   token: Token
@@ -24,11 +25,13 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string>('')
 
   const [maxAllowedAmount, setMaxAllowedAmount] = useState<number>(0)
   const [lifetimeLeft, setLifetimeLeft] = useState<number>(0)
   const [isCreatorWallet, setIsCreatorWallet] = useState<boolean>(false)
   const [lockingClosed, setLockingClosed] = useState<boolean>(false) // ✅ respect contract flag
+  const [usdPrice, setUsdPrice] = useState<number | null>(null)
 
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
@@ -138,6 +141,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
     if (val > maxAllowedAmount) val = maxAllowedAmount
     setAmount(val)
     setShowSuccess(false)
+    setErrorMessage('')
   }
 
   const fetchPrice = useCallback(async () => {
@@ -172,9 +176,15 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
     }
   }, [amount, isCreatorWallet, lockingClosed, fetchPrice])
 
+  // Load USD price for ETH
+  useEffect(() => {
+    getUsdPrice().then(setUsdPrice)
+  }, [])
+
   const handleBuy = async () => {
     if (!amount || price === '0' || !isCreatorWallet || lockingClosed) return
     setShowSuccess(false)
+    setErrorMessage('')
     setIsPending(true)
     try {
       const amountWei = ethers.parseUnits(amount.toString(), 18)
@@ -197,7 +207,13 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
 
     const waitForTx = async () => {
       try {
-        await publicClient.waitForTransactionReceipt({ hash: txHash })
+        // Add timeout to prevent hanging indefinitely (30 seconds should be enough for most transactions)
+        await Promise.race([
+          publicClient.waitForTransactionReceipt({ hash: txHash }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Transaction taking longer than expected. Check block explorer for transaction: ${txHash}`)), 30000) // 30 second timeout
+          )
+        ])
 
         setShowSuccess(true)
         setTxHash(null)
@@ -221,26 +237,68 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
 
         if (onSuccess) onSuccess()
       } catch (err) {
-        console.error('Tx failed or dropped:', err)
+        console.error('Tx failed, dropped, or timed out:', err)
+        // Show user-friendly error message below the button
+        setErrorMessage(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
       } finally {
         setIsPending(false)
+        setTxHash(null)
       }
     }
 
     void waitForTx()
   }, [txHash, publicClient, refreshWallet, onSuccess, token.id, token.contract_address, triggerSync])
 
-  const displayPrice = formatValue(Number(price || 0))
+  const priceInfo = formatPriceMetaMask(Number(price || 0))
+  
+  const renderPrice = () => {
+    if (priceInfo.type === 'empty') return '0'
+    if (priceInfo.type === 'normal') {
+      // For normal display, show only 1 digit after first non-zero digit
+      const value = parseFloat(priceInfo.value)
+      const str = value.toString()
+      const [intPart, decPart] = str.split('.')
+      
+      if (!decPart) return intPart
+      
+      // Find first non-zero digit
+      let firstNonZeroIndex = -1
+      for (let i = 0; i < decPart.length; i++) {
+        if (decPart[i] !== '0') {
+          firstNonZeroIndex = i
+          break
+        }
+      }
+      
+      if (firstNonZeroIndex === -1) return `${intPart}.0`
+      
+      // Take first non-zero digit + 1 more digit
+      const significantPart = decPart.substring(0, firstNonZeroIndex + 2)
+      return `${intPart}.${significantPart}`
+    }
+    if (priceInfo.type === 'metamask') {
+      return (
+        <>
+          0.0<sub>{priceInfo.zeros}</sub>{priceInfo.digits}
+        </>
+      )
+    }
+    if (priceInfo.type === 'scientific') return priceInfo.value
+    return '0'
+  }
   const isBusy = loadingPrice || isPending
 
   
   return (
     <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a]">
       <h3 className="text-white text-sm font-semibold mb-2">
+        <div className="text-xs text-gray-500 mb-1 text-right">
+          <sup>*</sup>BC trade
+        </div>
         Creator Buy &amp; Lock
         <br />
         <span className="text-sm text-gray-400">
-          lifetime left:{' '}
+          max available:{' '}
           <span className="text-green-500">
             {lifetimeLeft.toLocaleString()} 
           </span>
@@ -260,54 +318,37 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
       )}
 
       <div className="flex flex-wrap gap-2 mb-3">
-          {[1 / 10000, 1 / 1000, 1 / 100, 1 / 10].map((fraction) => {
-          const ethAmount = token.raise_target * fraction
+        {[0.1, 0.25, 0.5, 0.75].map((fraction) => {
+          const tokenAmount = lifetimeLeft * fraction
           return (
             <button
               key={fraction}
               type="button"
-              onClick={async () => {
-              setShowSuccess(false);
-              if (!isCreatorWallet) return;
-              try {
-                // 1) Convert preset ETH (number) → wei (bigint)
-                const ethWei = BigInt(Math.floor(ethAmount * 1e18));
-
-                // 2) Read current price from chain
-                const provider = new ethers.BrowserProvider(window.ethereum);
-                const signer = await provider.getSigner();
-                const contract = new ethers.Contract(
-                  token.contract_address,
-                  TurboTokenABI.abi,
-                  signer
-                );
-
-                const currentPriceWei = await contract.getCurrentPrice(); // bigint
-
-                const calculated = calculateBuyAmountFromETH(
-                  ethWei,                                   // ETH in wei (bigint)
-                  BigInt(currentPriceWei.toString()),       // price in wei/token (bigint)
-                  BigInt(Math.floor(token.slope))           // slope (bigint from DB number)
-                );
-
-               
-                const rounded = Math.min(calculated, maxAllowedAmount);
-                const precise = parseFloat(rounded.toFixed(2));
-
-                setAmount(precise);
-                setPrice('0');
-              } catch (err) {
-                console.error('Curve calc error:', err);
-              }
-            }}
-
+              onClick={() => {
+                setShowSuccess(false)
+                setErrorMessage('')
+                const amount = parseFloat(tokenAmount.toFixed(2))
+                setAmount(amount)
+              }}
               className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs disabled:opacity-50"
               disabled={!isCreatorWallet || lockingClosed || maxAllowedAmount <= 0}
             >
-              {parseFloat(ethAmount.toFixed(6)).toString()} ETH
+              {Math.floor(fraction * 100)}%
             </button>
           )
         })}
+        <button
+          type="button"
+          onClick={() => {
+            setShowSuccess(false)
+            setErrorMessage('')
+            setAmount(parseFloat(lifetimeLeft.toFixed(2)))
+          }}
+          className="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs disabled:opacity-50"
+          disabled={!isCreatorWallet || lockingClosed || maxAllowedAmount <= 0}
+        >
+          MAX
+        </button>
       </div>
 
       <Input
@@ -315,6 +356,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
         label="Amount to Buy & Lock"
         name="amount"
         value={amount}
+        className="[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
         onChange={handleAmountChange}
         min={1}
         max={maxAllowedAmount}
@@ -325,7 +367,49 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
       {price !== '0' && (
         <>
           <div className="mt-2 text-sm text-gray-300 text-center">
-            Total cost: <strong>{displayPrice} ETH</strong>
+            Total cost: <strong>{renderPrice()} ETH</strong>
+            {usdPrice && (
+              <div className="text-xs text-gray-400 mt-1">
+                ≈ ${(() => {
+                  const usdValue = Number(price || 0) * usdPrice
+                  const usdInfo = formatPriceMetaMask(usdValue)
+                  
+                  if (usdInfo.type === 'empty') return '0'
+                  if (usdInfo.type === 'normal') {
+                    // For USD normal format, show only first two significant digits after decimal
+                    const value = parseFloat(usdInfo.value)
+                    const str = value.toString()
+                    const [intPart, decPart] = str.split('.')
+                    
+                    if (!decPart) return intPart
+                    
+                    // Find first non-zero digit
+                    let firstNonZeroIndex = -1
+                    for (let i = 0; i < decPart.length; i++) {
+                      if (decPart[i] !== '0') {
+                        firstNonZeroIndex = i
+                        break
+                      }
+                    }
+                    
+                    if (firstNonZeroIndex === -1) return `${intPart}.0`
+                    
+                    // Take first non-zero digit + 1 more digit (2 significant digits total)
+                    const significantPart = decPart.substring(0, firstNonZeroIndex + 2)
+                    return `${intPart}.${significantPart}`
+                  }
+                    if (usdInfo.type === 'metamask') {
+                      return (
+                        <>
+                          0.0<sub>{usdInfo.zeros}</sub>{usdInfo.digits}
+                        </>
+                      )
+                    }
+                  if (usdInfo.type === 'scientific') return usdInfo.value
+                  return '0'
+                })()}
+              </div>
+            )}
           </div>
 
           <button
@@ -341,6 +425,22 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
       {showSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
           ✅ Transaction confirmed!
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mt-3 text-red-400 text-sm text-center">
+          ❌ {errorMessage.includes('transaction:') ? (
+            <>
+              Transaction taking longer than expected. Check block explorer for transaction:{' '}
+              <HashDisplay 
+                hash={txHash || errorMessage.match(/transaction: (0x[a-fA-F0-9]+)/)?.[1] || ''} 
+                className="text-red-400" 
+              />
+            </>
+          ) : (
+            errorMessage
+          )}
         </div>
       )}
     </div>

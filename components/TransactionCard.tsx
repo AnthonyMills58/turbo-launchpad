@@ -117,7 +117,9 @@ export default function TransactionCard({ transaction }: TransactionCardProps) {
         <div className="text-xs text-gray-300 truncate">
           <span className="text-gray-400">{traderDisplay}</span>
           <span className={`ml-1 ${sideColor}`}>{transaction.side}</span>
-          <span className={`ml-1 ${sideColor}`}>{usdValue}</span>
+          {transaction.side !== 'LAUNCH' && transaction.side !== 'UNLOCK' && (
+            <span className={`ml-1 ${sideColor}`}>{usdValue}</span>
+          )}
         </div>
       </div>
     </div>

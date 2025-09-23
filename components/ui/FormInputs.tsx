@@ -12,15 +12,16 @@ export type InputProps = {
   min?: number
   max?: number
   disabled?: boolean
+  className?: string
 }
 
-export function Input({ label, ...props }: InputProps) {
+export function Input({ label, className, ...props }: InputProps) {
   return (
     <div className="mb-4">
       <label htmlFor={props.name} className="block text-gray-400 mb-1">{label}</label>
       <input
         {...props}
-        className="w-full p-2 text-sm bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`w-full p-2 text-sm bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${className || ''}`}
       />
     </div>
   )
