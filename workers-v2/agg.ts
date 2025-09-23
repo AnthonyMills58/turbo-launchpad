@@ -323,13 +323,7 @@ async function processTokenBalances(
     WHERE token_id = $1 AND chain_id = $2 AND balance_wei::numeric <= 0
   `, [token.id, chainId])
   
-  // Get LP pool addresses to exclude from holder count
-  const { rows: lpAddresses } = await pool.query<{ pair_address: string }>(`
-    SELECT pair_address FROM public.dex_pools WHERE chain_id = $1
-  `, [chainId])
-  const lpAddressSet = new Set(lpAddresses.map(row => row.pair_address.toLowerCase()))
-  
-  // Update holder count (exclude LP pools, zero address, and token contract address)
+  // Update holder count (exclude LP pools via subquery to handle empty sets, zero address, and token contract address)
   const { rows: [{ holders }] } = await pool.query(`
     SELECT COUNT(*)::int AS holders
     FROM public.token_balances
@@ -337,7 +331,9 @@ async function processTokenBalances(
       AND balance_wei::numeric > 0
       AND holder != '0x0000000000000000000000000000000000000000'
       AND LOWER(holder) != LOWER($3)
-      AND LOWER(holder) NOT IN (${Array.from(lpAddressSet).map(addr => `'${addr}'`).join(',')})
+      AND LOWER(holder) NOT IN (
+        SELECT LOWER(pair_address) FROM public.dex_pools WHERE chain_id = $2
+      )
   `, [token.id, chainId, token.contract_address])
   
   await pool.query(`
