@@ -356,6 +356,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
         label="Amount to Buy & Lock"
         name="amount"
         value={amount}
+        className="[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
         onChange={handleAmountChange}
         min={1}
         max={maxAllowedAmount}
@@ -397,9 +398,13 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
                     const significantPart = decPart.substring(0, firstNonZeroIndex + 2)
                     return `${intPart}.${significantPart}`
                   }
-                  if (usdInfo.type === 'metamask') {
-                    return `0.0${usdInfo.zeros}${usdInfo.digits}`
-                  }
+                    if (usdInfo.type === 'metamask') {
+                      return (
+                        <>
+                          0.0<sub>{usdInfo.zeros}</sub>{usdInfo.digits}
+                        </>
+                      )
+                    }
                   if (usdInfo.type === 'scientific') return usdInfo.value
                   return '0'
                 })()}
