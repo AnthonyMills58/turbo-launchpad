@@ -44,7 +44,7 @@ const ChartForm: React.FC<ChartFormProps> = ({ tokenId, symbol, wrapperClassName
     return () => {
       isMounted = false
     }
-  }, [tokenId])
+  }, [tokenId, onDataStatusChange])
 
   // While checking, render nothing to avoid flicker
   if (hasData !== true) return null
