@@ -26,7 +26,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const lineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedTimeRange, setSelectedTimeRange] = useState('Max')
+  const [selectedTimeRange, setSelectedTimeRange] = useState('Since Launch')
 
   // Fetch chart data from your API
   const fetchChartData = useCallback(async () => {
@@ -388,7 +388,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         <div className="flex flex-col gap-2">
           <div className="text-sm text-gray-400 mb-1">Time Range</div>
           <div className="flex gap-1">
-            {['Max', '1Y', '3M', '1M', '1W'].map((range) => (
+            {['Since Launch', '1Y', '3M', '1M', '1W'].map((range) => (
               <button
                 key={range}
                 onClick={() => setSelectedTimeRange(range)}

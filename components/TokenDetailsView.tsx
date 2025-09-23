@@ -63,6 +63,7 @@ export default function TokenDetailsView({
   const [showTransactions, setShowTransactions] = useState(true);
   const [showHolders, setShowHolders] = useState(false);
   const [showChart, setShowChart] = useState(true);
+  const [chartHasData, setChartHasData] = useState(false);
   const [activeBuySellTab, setActiveBuySellTab] = useState<'buy' | 'sell'>('buy');
   
   // Track if we've already synced this token to prevent infinite loops
@@ -793,7 +794,7 @@ export default function TokenDetailsView({
                   onClick={() => setShowChart(!showChart)}
                   className="w-full border border-gray-600 bg-transparent px-5 py-2 text-sm text-gray-400 transition hover:border-gray-500"
                 >
-                  {showChart ? 'Hide Chart' : '📈 Chart'}
+                  {showChart && chartHasData ? 'Hide Chart' : '📈 Chart'}
                 </button>
 
                 {showChart && (
@@ -802,6 +803,7 @@ export default function TokenDetailsView({
                     tokenId={token.id} 
                     symbol={token.symbol}
                     wrapperClassName="mt-3 border border-[#2a2d3a] bg-transparent p-3"
+                    onDataStatusChange={setChartHasData}
                   />
                 )}
               </div>

@@ -21,7 +21,7 @@ export async function GET(
 
     // Get time range parameter
     const { searchParams } = new URL(request.url)
-    const timeRange = searchParams.get('timeRange') || 'Max'
+    const timeRange = searchParams.get('timeRange') || 'All Time'
 
     // Query sparse data from token_chart_agg and generate continuous time series with gap-filling
     const query = `
@@ -39,11 +39,11 @@ export async function GET(
           tl.start_time as max_start_time,
           tl.end_time as max_end_time,
           CASE 
-            WHEN $3 = 'Max' THEN tl.start_time
-            WHEN $3 = '1Y' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 year')
-            WHEN $3 = '3M' THEN GREATEST(tl.start_time, NOW() - INTERVAL '3 months')
-            WHEN $3 = '1M' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 month')
-            WHEN $3 = '1W' THEN GREATEST(tl.start_time, NOW() - INTERVAL '1 week')
+            WHEN $3 = 'All Time' THEN tl.start_time
+            WHEN $3 = '1Y' THEN NOW() - INTERVAL '1 year'
+            WHEN $3 = '3M' THEN NOW() - INTERVAL '3 months'
+            WHEN $3 = '1M' THEN NOW() - INTERVAL '1 month'
+            WHEN $3 = '1W' THEN NOW() - INTERVAL '1 week'
             ELSE tl.start_time
           END as range_start_time,
           tl.end_time as range_end_time
