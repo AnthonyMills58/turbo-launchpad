@@ -10,6 +10,7 @@ import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
 import { formatValue } from '@/lib/displayFormats'
+import HashDisplay from '@/components/ui/HashDisplay'
 
 type Props = {
   token: Token
@@ -24,6 +25,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string>('')
 
   const [maxAllowedAmount, setMaxAllowedAmount] = useState<number>(0)
   const [lifetimeLeft, setLifetimeLeft] = useState<number>(0)
@@ -138,6 +140,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
     if (val > maxAllowedAmount) val = maxAllowedAmount
     setAmount(val)
     setShowSuccess(false)
+    setErrorMessage('')
   }
 
   const fetchPrice = useCallback(async () => {
@@ -175,6 +178,7 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
   const handleBuy = async () => {
     if (!amount || price === '0' || !isCreatorWallet || lockingClosed) return
     setShowSuccess(false)
+    setErrorMessage('')
     setIsPending(true)
     try {
       const amountWei = ethers.parseUnits(amount.toString(), 18)
@@ -197,7 +201,13 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
 
     const waitForTx = async () => {
       try {
-        await publicClient.waitForTransactionReceipt({ hash: txHash })
+        // Add timeout to prevent hanging indefinitely (30 seconds should be enough for most transactions)
+        await Promise.race([
+          publicClient.waitForTransactionReceipt({ hash: txHash }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Transaction taking longer than expected. Check block explorer for transaction: ${txHash}`)), 30000) // 30 second timeout
+          )
+        ])
 
         setShowSuccess(true)
         setTxHash(null)
@@ -221,9 +231,12 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
 
         if (onSuccess) onSuccess()
       } catch (err) {
-        console.error('Tx failed or dropped:', err)
+        console.error('Tx failed, dropped, or timed out:', err)
+        // Show user-friendly error message below the button
+        setErrorMessage(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
       } finally {
         setIsPending(false)
+        setTxHash(null)
       }
     }
 
@@ -341,6 +354,22 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
       {showSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
           ✅ Transaction confirmed!
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mt-3 text-red-400 text-sm text-center">
+          ❌ {errorMessage.includes('transaction:') ? (
+            <>
+              Transaction taking longer than expected. Check block explorer for transaction:{' '}
+              <HashDisplay 
+                hash={txHash || errorMessage.match(/transaction: (0x[a-fA-F0-9]+)/)?.[1] || ''} 
+                className="text-red-400" 
+              />
+            </>
+          ) : (
+            errorMessage
+          )}
         </div>
       )}
     </div>

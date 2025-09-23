@@ -9,6 +9,7 @@ import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { useSync } from '@/lib/SyncContext'
 import { formatValue } from '@/lib/displayFormats'
+import HashDisplay from '@/components/ui/HashDisplay'
 
 export default function PublicSellSection({
   token,
@@ -113,22 +114,8 @@ export default function PublicSellSection({
         args: [amountWei],
       })
       setTxHash(hash)
-    } catch (err: unknown) {
-      const error = err as Error & { cause?: { message?: string } }
-
-      console.error('Transaction failed:', error)
-
-      let message = 'Sell transaction failed. Check console for details.'
-
-      if (
-        error.message?.includes('Contract has insufficient ETH') ||
-        error.message?.includes('insufficient') ||
-        error.cause?.message?.includes('Contract has insufficient ETH')
-      ) {
-        message = '❌ Not enough ETH in contract. Try selling a smaller amount.'
-      }
-
-      setErrorMessage(message)
+    } catch (err) {
+      console.error('Transaction failed:', err)
       setIsPending(false)
     }
   }
@@ -138,7 +125,13 @@ export default function PublicSellSection({
 
     const waitForTx = async () => {
       try {
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+        // Add timeout to prevent hanging indefinitely (30 seconds should be enough for most transactions)
+        const receipt = await Promise.race([
+          publicClient.waitForTransactionReceipt({ hash: txHash }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Transaction taking longer than expected. Check block explorer for transaction: ${txHash}`)), 30000) // 30 second timeout
+          )
+        ]) as { status: 'success' | 'reverted' }
 
         if (receipt.status === 'success') {
           setShowSuccess(true)
@@ -175,9 +168,12 @@ export default function PublicSellSection({
           setTxHash(null)
         }
       } catch (err) {
-        console.error('Tx failed or dropped:', err)
+        console.error('Tx failed, dropped, or timed out:', err)
+        // Show user-friendly error message below the button
+        setErrorMessage(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
       } finally {
         setIsPending(false)
+        setTxHash(null)
       }
     }
 
@@ -259,7 +255,14 @@ export default function PublicSellSection({
 
           {errorMessage && (
             <div className="mt-2 text-sm text-red-400 text-center">
-              {errorMessage}
+              {errorMessage.includes('transaction:') ? (
+                <>
+                  Transaction taking longer than expected. Check block explorer for transaction:{' '}
+                  <HashDisplay hash={txHash || ''} className="text-red-400" />
+                </>
+              ) : (
+                errorMessage
+              )}
             </div>
           )}
         </>

@@ -11,6 +11,7 @@ import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { calculateBuyAmountFromETH } from '@/lib/calculateBuyAmount'
 import { useSync } from '@/lib/SyncContext'
 import { formatValue } from '@/lib/displayFormats'
+import HashDisplay from '@/components/ui/HashDisplay'
 
 const TURBO_ABI_ETHERS = TurboTokenABI.abi as InterfaceAbi
 
@@ -28,6 +29,7 @@ export default function PublicBuySection({
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string>('')
   const [maxAvailableAmount, setMaxAvailableAmount] = useState<number>(0)
 
   const { writeContractAsync } = useWriteContract()
@@ -68,6 +70,7 @@ export default function PublicBuySection({
     else if (val > maxAvailableAmount) val = maxAvailableAmount
     setAmount(val)
     setShowSuccess(false)
+    setErrorMessage('')
   }
 
   const fetchPrice = useCallback(async () => {
@@ -107,6 +110,7 @@ export default function PublicBuySection({
   const handleBuy = async () => {
     if (!amount || price === '0') return
     setShowSuccess(false)
+    setErrorMessage('')
     setIsPending(true)
 
     try {
@@ -130,7 +134,14 @@ export default function PublicBuySection({
 
     const waitForTx = async () => {
       try {
-        await publicClient.waitForTransactionReceipt({ hash: txHash })
+        // Add timeout to prevent hanging indefinitely (30 seconds should be enough for most transactions)
+        await Promise.race([
+          publicClient.waitForTransactionReceipt({ hash: txHash }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Transaction taking longer than expected. Check block explorer for transaction: ${txHash}`)), 30000) // 30 second timeout
+          )
+        ])
+
         setShowSuccess(true)
         setTxHash(null)
         if (refreshWallet) refreshWallet()
@@ -158,9 +169,12 @@ export default function PublicBuySection({
 
         if (onSuccess) onSuccess()
       } catch (err) {
-        console.error('Tx failed or dropped:', err)
+        console.error('Tx failed, dropped, or timed out:', err)
+        // Show user-friendly error message below the button
+        setErrorMessage(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
       } finally {
         setIsPending(false)
+        setTxHash(null)
       }
     }
 
@@ -187,6 +201,7 @@ export default function PublicBuySection({
               type="button"
               onClick={async () => {
                 setShowSuccess(false)
+                setErrorMessage('')
                 try {
                   const ethWei = BigInt(Math.floor(ethAmount * 1e18))
 
@@ -209,6 +224,7 @@ export default function PublicBuySection({
                   const precise = parseFloat(rounded.toFixed(2))
 
                   setAmount(precise)
+                  setErrorMessage('')
                 } catch (err) {
                   console.error('Curve calc error:', err)
                 }
@@ -252,6 +268,22 @@ export default function PublicBuySection({
       {showSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
           ✅ Transaction confirmed!
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mt-3 text-red-400 text-sm text-center">
+          ❌ {errorMessage.includes('transaction:') ? (
+            <>
+              Transaction taking longer than expected. Check block explorer for transaction:{' '}
+              <HashDisplay 
+                hash={txHash || errorMessage.match(/transaction: (0x[a-fA-F0-9]+)/)?.[1] || ''} 
+                className="text-red-400" 
+              />
+            </>
+          ) : (
+            errorMessage
+          )}
         </div>
       )}
     </div>
