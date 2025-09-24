@@ -14,7 +14,9 @@ export const DEX_ROUTER_BY_CHAIN: Record<number, string> = {
 export const routerAbi = [
   'function factory() external view returns (address)',
   'function WETH() external pure returns (address)',
-  'function addLiquidityETH(address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin, address to, uint deadline) external payable returns (uint amountToken, uint amountETH, uint liquidity)'
+  'function addLiquidityETH(address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin, address to, uint deadline) external payable returns (uint amountToken, uint amountETH, uint liquidity)',
+  'function swapExactETHForTokens(uint amountOutMin, address[] path, address to, uint deadline) external payable returns (uint[] amounts)',
+  'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] path, address to, uint deadline) external returns (uint[] amounts)'
 ]
 
 // ✅ Minimal ABI for UniswapV2-style Factory

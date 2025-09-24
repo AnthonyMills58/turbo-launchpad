@@ -143,9 +143,12 @@ export default function PublicBuySection({
         // Add timeout to prevent hanging indefinitely (30 seconds should be enough for most transactions)
         await Promise.race([
           publicClient.waitForTransactionReceipt({ hash: txHash }),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Transaction taking longer than expected. Check block explorer for transaction: ${txHash}`)), 30000) // 30 second timeout
-          )
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Transaction taking longer than expected. Check block explorer for transaction: ${txHash}`)),
+              120000,
+            )
+          ),
         ])
 
         setShowSuccess(true)
