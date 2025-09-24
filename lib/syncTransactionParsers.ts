@@ -133,9 +133,30 @@ async function parseSimpleTransfer(
       break
     case 'BC_SELL':
       side = 'SELL'
-      // For SELL, we need to get the ETH received (this is complex, using placeholder for now)
-      ethAmount = 0n // TODO: Calculate actual ETH received
-      priceEthPerToken = 0 // TODO: Calculate actual price
+      // For SELL, calculate the ETH amount received by calling getSellPrice
+      // Use block before transaction to get the correct price (like worker)
+      try {
+        const blockBeforeTx = receipt.blockNumber - 1
+        
+        const turboTokenInterface = new ethers.Interface([
+          'function getSellPrice(uint256 tokenAmount) view returns (uint256)'
+        ])
+        
+        const sellPriceWei = await provider.call({
+          to: contractAddress,
+          data: turboTokenInterface.encodeFunctionData('getSellPrice', [amount]),
+          blockTag: blockBeforeTx
+        })
+        
+        if (sellPriceWei && sellPriceWei !== '0x') {
+          ethAmount = BigInt(sellPriceWei.toString())
+          if (ethAmount > 0n && amount > 0n) {
+            priceEthPerToken = Number(ethAmount) / Number(amount)
+          }
+        }
+      } catch (error) {
+        console.warn(`Could not get SELL price for token ${tokenId}: ${error}`)
+      }
       break
     case 'BC_AIRDROP_CLAIM':
       side = 'CLAIMAIRDROP'
