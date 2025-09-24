@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import { useEffect, useState, useCallback } from 'react'
 import { ethers } from 'ethers'
@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/FormInputs'
 import { Token } from '@/types/token'
 import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { useSync } from '@/lib/SyncContext'
-import { formatValue } from '@/lib/displayFormats'
+import { formatPriceMetaMask } from '@/lib/ui-utils'
+import { getUsdPrice } from '@/lib/getUsdPrice'
+import { calculateETHOutFromTokens, getDexPoolReserves, priceImpactBps } from '@/lib/dexMath'
 
 export default function DexSellSection({
   token,
@@ -24,6 +26,12 @@ export default function DexSellSection({
   const [showSuccess, setShowSuccess] = useState(false)
   const [maxSellable, setMaxSellable] = useState<number>(0)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [usdPrice, setUsdPrice] = useState<number | null>(null)
+  const [pairAddress, setPairAddress] = useState<string | null>(null)
+  const [token0, setToken0] = useState<string | null>(null)
+  const [slippagePct, setSlippagePct] = useState<number>(5)
+  const [impactBps, setImpactBps] = useState<number | null>(null)
+  const [avgRatio, setAvgRatio] = useState<number | null>(null)
 
   const refreshWallet = useWalletRefresh()
   const isBusy = loadingPrice || isPending
@@ -45,24 +53,54 @@ export default function DexSellSection({
     fetchBalance()
   }, [fetchBalance])
 
-  // TODO: Calculate DEX sell price based on liquidity pools
+  // Load USD price for ETH
+  useEffect(() => { getUsdPrice().then(setUsdPrice) }, [])
+
+  // Load DEX pool info (pairAddress, token0)
+  useEffect(() => {
+    const loadDexPoolInfo = async () => {
+      try {
+        const response = await fetch(`/api/dex-pool-info?tokenId=${token.id}&chainId=${token.chain_id}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.pairAddress) {
+            setPairAddress(data.pairAddress)
+            setToken0(data.token0)
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load DEX pool info:', e)
+      }
+    }
+    loadDexPoolInfo()
+  }, [token.id, token.chain_id])
+
+  // Calculate DEX sell price based on liquidity pools (debounced)
   useEffect(() => {
     const calculateDexSellPrice = async () => {
-      if (amount <= 0) {
-        setEthReceived('0')
-        return
-      }
-
       setLoadingPrice(true)
       setErrorMessage(null)
-
       try {
-        // TODO: Implement DEX sell price calculation
-        // This should query the DEX pool and calculate ETH received based on liquidity
-        // For now, use a placeholder calculation
-        const placeholderPrice = token.current_price || 0
-        const totalEth = amount * placeholderPrice
-        setEthReceived(totalEth.toFixed(6))
+        if (!pairAddress || !token0) { setEthReceived('0'); return }
+        const provider = new ethers.BrowserProvider(window.ethereum)
+        const chainId = token.chain_id || 0
+        const totalEth = await calculateETHOutFromTokens(amount, pairAddress, token0, provider, chainId)
+        setEthReceived(String(totalEth))
+        const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
+        if (reserves) {
+          const inWei = ethers.parseEther(String(amount))
+          const outWei = ethers.parseEther(String(totalEth))
+          const impact = priceImpactBps(inWei, outWei, reserves.reserveToken, reserves.reserveETH)
+          setImpactBps(impact)
+          // Avg price (ETH per token) vs current
+          const pmid = Number(reserves.reserveETH) / Number(reserves.reserveToken) // ETH per token mid
+          const pavg = totalEth / amount // ETH per token exec
+          if (pmid > 0 && pavg > 0) setAvgRatio(pmid / pavg) // lower is worse -> ratio >1 shows how many times lower
+          else setAvgRatio(null)
+        } else {
+          setImpactBps(null)
+          setAvgRatio(null)
+        }
       } catch (err) {
         console.error('Failed to calculate DEX sell price:', err)
         setErrorMessage('Failed to calculate sell price')
@@ -71,9 +109,13 @@ export default function DexSellSection({
         setLoadingPrice(false)
       }
     }
-
-    calculateDexSellPrice()
-  }, [amount, token.current_price])
+    if (amount > 0) {
+      const t = setTimeout(() => calculateDexSellPrice(), 500)
+      return () => clearTimeout(t)
+    } else {
+      setEthReceived('0')
+    }
+  }, [amount, pairAddress, token0, token.chain_id])
 
   const handleSell = async () => {
     if (isBusy || amount <= 0 || amount > maxSellable) return
@@ -108,11 +150,32 @@ export default function DexSellSection({
   }
 
 
-  const displayPrice = formatValue(Number(ethReceived || 0))
+  const priceInfo = formatPriceMetaMask(Number(ethReceived || 0))
+  const renderEth = () => {
+    if (priceInfo.type === 'empty') return '0'
+    if (priceInfo.type === 'normal') {
+      const value = parseFloat(priceInfo.value)
+      const [intPart, decPart] = value.toString().split('.')
+      if (!decPart) return intPart
+      let i = -1
+      for (let k = 0; k < decPart.length; k++) { if (decPart[k] !== '0') { i = k; break } }
+      if (i === -1) return `${intPart}.0`
+      const sig = decPart.substring(0, i + 2)
+      return `${intPart}.${sig}`
+    }
+    if (priceInfo.type === 'metamask') return (<>
+      0.0<sub>{priceInfo.zeros}</sub>{priceInfo.digits}
+    </>)
+    if (priceInfo.type === 'scientific') return priceInfo.value
+    return '0'
+  }
 
   return (
     <div className="flex flex-col flex-grow w-full bg-[#232633]/40 p-4 rounded-lg shadow border border-[#2a2d3a]">
       <h3 className="text-white text-sm font-semibold mb-2">
+        <div className="text-xs text-gray-500 mb-1 text-right">
+          <sup>*</sup>DEX trade
+        </div>
         <span className="text-sm text-gray-400">
           balance <span className="text-green-500">{maxSellable.toLocaleString()}</span>
         </span>
@@ -158,6 +221,7 @@ export default function DexSellSection({
         label={`Amount to Sell `}
         name="sellAmount"
         value={amount}
+        className="[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
         onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
         min={0}
         max={maxSellable}
@@ -165,13 +229,57 @@ export default function DexSellSection({
         disabled={isBusy}
       />
 
+      <div className="-mt-2 mb-2 flex items-center gap-1">
+        <span className="text-xs text-gray-400">Max Slippage %</span>
+        <input
+          type="number"
+          name="slippage"
+          value={slippagePct}
+          onChange={(e) => setSlippagePct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+          min={0}
+          max={100}
+          placeholder="5"
+          disabled={isBusy}
+          className="w-16 px-1 py-1 text-xs bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+        />
+        {impactBps !== null && (
+          <span className={`ml-2 text-xs ${impactBps > 500 ? 'text-red-400' : impactBps > 200 ? 'text-yellow-400' : 'text-gray-400'}`}>
+            {avgRatio && avgRatio >= 2
+              ? `Avg price: x${avgRatio.toFixed(avgRatio >= 10 ? 0 : 1)} lower`
+              : `Avg price: -${(((avgRatio||1)-1)*100).toFixed(2)}%`}
+          </span>
+        )}
+      </div>
+
       {ethReceived !== '0' && (
         <>
-          {!isNaN(Number(displayPrice)) && (
-            <div className="mt-2 text-sm text-gray-300 text-center">
-              You will receive: <strong>{displayPrice} ETH</strong>
-            </div>
-          )}
+          <div className="mt-2 text-sm text-gray-300 text-center">
+            You will receive: <strong>{renderEth()} ETH</strong>
+            {usdPrice && (
+              <div className="text-xs text-gray-400 mt-1">
+                ≈ ${(() => {
+                  const usdValue = Number(ethReceived || 0) * usdPrice
+                  const usdInfo = formatPriceMetaMask(usdValue)
+                  if (usdInfo.type === 'empty') return '0'
+                  if (usdInfo.type === 'normal') {
+                    const value = parseFloat(usdInfo.value)
+                    const [intPart, decPart] = value.toString().split('.')
+                    if (!decPart) return intPart
+                    let i = -1
+                    for (let k = 0; k < decPart.length; k++) { if (decPart[k] !== '0') { i = k; break } }
+                    if (i === -1) return `${intPart}.0`
+                    const sig = decPart.substring(0, i + 2)
+                    return `${intPart}.${sig}`
+                  }
+                  if (usdInfo.type === 'metamask') return (<>
+                    0.0<sub>{usdInfo.zeros}</sub>{usdInfo.digits}
+                  </>)
+                  if (usdInfo.type === 'scientific') return usdInfo.value
+                  return '0'
+                })()}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={handleSell}

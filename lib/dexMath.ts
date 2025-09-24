@@ -148,3 +148,29 @@ export async function calculateETHfromAmount(
     return 0
   }
 }
+
+/**
+ * Calculate ETH out for an exact token-in sell (preferred for quoting sells)
+ */
+export async function calculateETHOutFromTokens(
+  tokenAmountIn: number,
+  pairAddress: string,
+  token0: string,
+  provider: ethers.Provider,
+  chainId: number
+): Promise<number> {
+  try {
+    const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
+    if (!reserves) return 0
+
+    const { reserveToken, reserveETH } = reserves
+    const amountInTokens = ethers.parseEther(tokenAmountIn.toString())
+
+    // Exact-in: tokens in -> ETH out
+    const ethOut = getAmountOut(amountInTokens, reserveToken, reserveETH)
+    return parseFloat(ethers.formatEther(ethOut))
+  } catch (error) {
+    console.error('Error calculating ETH out from tokens:', error)
+    return 0
+  }
+}

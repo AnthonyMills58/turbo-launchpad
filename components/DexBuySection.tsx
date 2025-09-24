@@ -9,7 +9,7 @@ import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { useSync } from '@/lib/SyncContext'
 import { formatPriceMetaMask } from '@/lib/ui-utils'
 import { getUsdPrice } from '@/lib/getUsdPrice'
-import { calculateAmountFromETH, calculateETHfromAmount } from '@/lib/dexMath'
+import { calculateAmountFromETH, calculateETHfromAmount, getDexPoolReserves, priceImpactBps } from '@/lib/dexMath'
 
 export default function DexBuySection({
   token,
@@ -29,6 +29,8 @@ export default function DexBuySection({
   const [slippagePct, setSlippagePct] = useState<number>(5)
   const [pairAddress, setPairAddress] = useState<string | null>(null)
   const [token0, setToken0] = useState<string | null>(null)
+  const [impactBps, setImpactBps] = useState<number | null>(null)
+  const [avgRatio, setAvgRatio] = useState<number | null>(null)
 
   const refreshWallet = useWalletRefresh()
   const isBusy = loadingPrice || isPending
@@ -69,8 +71,25 @@ export default function DexBuySection({
           return
         }
         const provider = new ethers.BrowserProvider(window.ethereum)
-        const ethCost = await calculateETHfromAmount(amount, pairAddress, token0, provider, token.chain_id || 0)
+        const chainId = token.chain_id || 0
+        const ethCost = await calculateETHfromAmount(amount, pairAddress, token0, provider, chainId)
         setPrice(String(ethCost))
+        // Compute price impact for exact-out (ETH in for token out)
+        const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
+        if (reserves) {
+          const inWei = ethers.parseEther(String(ethCost))
+          const outWei = ethers.parseEther(String(amount))
+          const impact = priceImpactBps(inWei, outWei, reserves.reserveETH, reserves.reserveToken)
+          setImpactBps(impact)
+          // Avg price (ETH per token) vs current
+          const pmid = Number(reserves.reserveETH) / Number(reserves.reserveToken) // ETH per token
+          const pavg = ethCost / amount // ETH per token
+          if (pmid > 0 && pavg > 0) setAvgRatio(pavg / pmid)
+          else setAvgRatio(null)
+        } else {
+          setImpactBps(null)
+          setAvgRatio(null)
+        }
       } catch (err) {
         console.error('Failed to calculate DEX price:', err)
         setPrice('0')
@@ -221,12 +240,20 @@ export default function DexBuySection({
           disabled={isBusy}
           className="w-16 px-1 py-1 text-xs bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
         />
+        {impactBps !== null && (
+          <span className={`ml-2 text-xs ${impactBps > 500 ? 'text-red-400' : impactBps > 200 ? 'text-yellow-400' : 'text-gray-400'}`}>
+            {avgRatio && avgRatio >= 2
+              ? `Avg price: x${avgRatio.toFixed(avgRatio >= 10 ? 0 : 1)}`
+              : `Avg price: +${(((avgRatio||1)-1)*100).toFixed(2)}%`}
+          </span>
+        )}
       </div>
 
       {price !== '0' && (
         <>
           <div className="mt-2 text-sm text-gray-300 text-center">
             Total cost: <strong>{renderPrice()} ETH</strong>
+            {/* keep ETH+USD block clean; impact info shown under slippage below */}
             {usdPrice && (
               <div className="text-xs text-gray-400 mt-1">
                 ≈ ${(() => {
