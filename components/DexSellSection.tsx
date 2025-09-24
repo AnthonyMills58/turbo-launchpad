@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { ethers } from 'ethers'
 import TurboTokenABI from '@/lib/abi/TurboToken.json'
 import { Input } from '@/components/ui/FormInputs'
@@ -9,7 +9,9 @@ import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { useSync } from '@/lib/SyncContext'
 import { formatPriceMetaMask } from '@/lib/ui-utils'
 import { getUsdPrice } from '@/lib/getUsdPrice'
-import { calculateETHOutFromTokens, getDexPoolReserves, priceImpactBps } from '@/lib/dexMath'
+import { calculateETHOutFromTokens, getDexPoolReserves, priceImpactBps, getAmountOut, withSlippageMin } from '@/lib/dexMath'
+import { routerAbi, DEX_ROUTER_BY_CHAIN } from '@/lib/dex'
+import HashDisplay from '@/components/ui/HashDisplay'
 
 export default function DexSellSection({
   token,
@@ -19,7 +21,7 @@ export default function DexSellSection({
   onSuccess?: () => void
 }) {
   const { triggerSync } = useSync()
-  const [amount, setAmount] = useState<number>(0)
+  const [amount, setAmount] = useState<number>(1)
   const [ethReceived, setEthReceived] = useState<string>('0')
   const [loadingPrice, setLoadingPrice] = useState(false)
   const [isPending, setIsPending] = useState(false)
@@ -32,6 +34,10 @@ export default function DexSellSection({
   const [slippagePct, setSlippagePct] = useState<number>(5)
   const [impactBps, setImpactBps] = useState<number | null>(null)
   const [avgRatio, setAvgRatio] = useState<number | null>(null)
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
+  const [isUpdatingQuote, setIsUpdatingQuote] = useState(false)
+  const quoteReqIdRef = useRef(0)
+  const [phase, setPhase] = useState<'idle' | 'approving' | 'swapping'>('idle')
 
   const refreshWallet = useWalletRefresh()
   const isBusy = loadingPrice || isPending
@@ -53,7 +59,7 @@ export default function DexSellSection({
     fetchBalance()
   }, [fetchBalance])
 
-  // Load USD price for ETH
+  // Load USD
   useEffect(() => { getUsdPrice().then(setUsdPrice) }, [])
 
   // Load DEX pool info (pairAddress, token0)
@@ -78,16 +84,26 @@ export default function DexSellSection({
   // Calculate DEX sell price based on liquidity pools (debounced)
   useEffect(() => {
     const calculateDexSellPrice = async () => {
+      const reqId = ++quoteReqIdRef.current
       setLoadingPrice(true)
+      setIsUpdatingQuote(true)
       setErrorMessage(null)
+      setImpactBps(null)
+      setAvgRatio(null)
+      let gotValidLocal = false
       try {
-        if (!pairAddress || !token0) { setEthReceived('0'); return }
+        if (!pairAddress) { setEthReceived('0'); return }
         const provider = new ethers.BrowserProvider(window.ethereum)
-        const chainId = token.chain_id || 0
-        const totalEth = await calculateETHOutFromTokens(amount, pairAddress, token0, provider, chainId)
-        setEthReceived(String(totalEth))
-        const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
-        if (reserves) {
+        const totalEth = await calculateETHOutFromTokens(amount, pairAddress, token.contract_address, provider)
+        if (quoteReqIdRef.current === reqId) {
+          if (!Number.isNaN(totalEth) && totalEth >= 0) {
+            setEthReceived(String(totalEth))
+            setErrorMessage(null)
+            gotValidLocal = true
+          }
+        }
+        const reserves = await getDexPoolReserves(pairAddress, token.contract_address, provider)
+        if (reserves && quoteReqIdRef.current === reqId) {
           const inWei = ethers.parseEther(String(amount))
           const outWei = ethers.parseEther(String(totalEth))
           const impact = priceImpactBps(inWei, outWei, reserves.reserveToken, reserves.reserveETH)
@@ -98,15 +114,22 @@ export default function DexSellSection({
           if (pmid > 0 && pavg > 0) setAvgRatio(pmid / pavg) // lower is worse -> ratio >1 shows how many times lower
           else setAvgRatio(null)
         } else {
-          setImpactBps(null)
-          setAvgRatio(null)
+          if (quoteReqIdRef.current === reqId) {
+            setImpactBps(null)
+            setAvgRatio(null)
+          }
         }
       } catch (err) {
         console.error('Failed to calculate DEX sell price:', err)
-        setErrorMessage('Failed to calculate sell price')
-        setEthReceived('0')
+        // Soft-fail: keep previous value; only show error if this attempt had no valid quote
+        if (quoteReqIdRef.current === reqId) {
+          if (!gotValidLocal) setErrorMessage('Failed to calculate sell price')
+        }
       } finally {
-        setLoadingPrice(false)
+        if (quoteReqIdRef.current === reqId) {
+          setLoadingPrice(false)
+          setIsUpdatingQuote(false)
+        }
       }
     }
     if (amount > 0) {
@@ -115,40 +138,7 @@ export default function DexSellSection({
     } else {
       setEthReceived('0')
     }
-  }, [amount, pairAddress, token0, token.chain_id])
-
-  const handleSell = async () => {
-    if (isBusy || amount <= 0 || amount > maxSellable) return
-
-    setIsPending(true)
-    setErrorMessage(null)
-
-    try {
-      // TODO: Implement DEX sell transaction
-      // This should interact with the DEX router/swap contract
-      // For now, show a placeholder message
-      console.log('DEX Sell transaction would be executed here')
-      console.log(`Amount: ${amount} ${token.symbol}`)
-      console.log(`ETH Received: ${ethReceived} ETH`)
-      
-      // Placeholder success
-      setShowSuccess(true)
-      
-      // Trigger refresh
-      await refreshWallet()
-      triggerSync()
-      
-      if (onSuccess) {
-        onSuccess()
-      }
-    } catch (err: unknown) {
-      console.error('DEX Sell failed:', err)
-      setErrorMessage(err instanceof Error ? err.message : 'Transaction failed')
-    } finally {
-      setIsPending(false)
-    }
-  }
-
+  }, [amount, pairAddress, token0, token.chain_id, token.contract_address])
 
   const priceInfo = formatPriceMetaMask(Number(ethReceived || 0))
   const renderEth = () => {
@@ -168,6 +158,82 @@ export default function DexSellSection({
     </>)
     if (priceInfo.type === 'scientific') return priceInfo.value
     return '0'
+  }
+
+  const handleSell = async () => {
+    if (isBusy || amount <= 0 || amount > maxSellable || !pairAddress) return
+    setIsPending(true)
+    setShowSuccess(false)
+    setErrorMessage(null)
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      const chainId = token.chain_id || (await signer.provider!.getNetwork()).chainId
+      const router = new ethers.Contract(DEX_ROUTER_BY_CHAIN[Number(chainId)], routerAbi, signer)
+
+      // approve if needed
+      const tokenContract = new ethers.Contract(token.contract_address, TurboTokenABI.abi, signer)
+      const owner = await signer.getAddress()
+      const allowance: bigint = await tokenContract.allowance(owner, DEX_ROUTER_BY_CHAIN[Number(chainId)])
+      const amountInWei = ethers.parseEther(String(amount))
+      if (allowance < amountInWei) {
+        setPhase('approving')
+        const approveTx = await tokenContract.approve(DEX_ROUTER_BY_CHAIN[Number(chainId)], amountInWei)
+        setTxHash(approveTx.hash)
+        await Promise.race([
+          approveTx.wait(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Approval timeout')), 120_000)),
+        ])
+      }
+
+      // compute min out using proper getAmountOut
+      const reserves = await getDexPoolReserves(pairAddress, token.contract_address, provider)
+      if (!reserves) throw new Error('Pool reserves unavailable')
+      const outWei = getAmountOut(amountInWei, BigInt(reserves.reserveToken), BigInt(reserves.reserveETH))
+      const amountOutMin = withSlippageMin(outWei, slippagePct)
+      const deadline = Math.floor(Date.now() / 1000) + 60
+      const path = [token.contract_address, await router.WETH()]
+
+      setPhase('swapping')
+      const tx = await router.swapExactTokensForETH(amountInWei, amountOutMin, path, owner, deadline)
+      setTxHash(tx.hash)
+      await Promise.race([
+        tx.wait(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Swap timeout')), 120_000)),
+      ])
+
+      setShowSuccess(true)
+      setErrorMessage(null)
+      if (refreshWallet) await refreshWallet()
+
+      // Sync database and refresh frontend
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tokenId: token.id,
+            contractAddress: token.contract_address,
+            chainId: token.chain_id,
+          }),
+        })
+        triggerSync()
+      } catch (err) {
+        console.error('Failed to sync token state:', err)
+        triggerSync() // Still refresh frontend even if sync fails
+      }
+
+      if (onSuccess) setTimeout(() => onSuccess(), 3000)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      // If user rejected or we timed out, show that; otherwise, for first-try hiccup, keep soft
+      if (/User rejected|denied|timeout/i.test(msg)) setErrorMessage(msg)
+      else if (!ethReceived || ethReceived === '0') setErrorMessage('Failed to calculate sell price')
+      console.error('DEX Sell failed:', e)
+    } finally {
+      setIsPending(false)
+      setPhase('idle')
+    }
   }
 
   return (
@@ -222,9 +288,10 @@ export default function DexSellSection({
         name="sellAmount"
         value={amount}
         className="[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
-        onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+        onChange={(e) => { setAmount(parseFloat(e.target.value) || 0); setErrorMessage(null) }}
         min={0}
         max={maxSellable}
+        step="any"
         placeholder="e.g. 10.0"
         disabled={isBusy}
       />
@@ -251,34 +318,41 @@ export default function DexSellSection({
         )}
       </div>
 
-      {ethReceived !== '0' && (
+      {amount > 0 && (
         <>
           <div className="mt-2 text-sm text-gray-300 text-center">
-            You will receive: <strong>{renderEth()} ETH</strong>
-            {usdPrice && (
-              <div className="text-xs text-gray-400 mt-1">
-                ≈ ${(() => {
-                  const usdValue = Number(ethReceived || 0) * usdPrice
-                  const usdInfo = formatPriceMetaMask(usdValue)
-                  if (usdInfo.type === 'empty') return '0'
-                  if (usdInfo.type === 'normal') {
-                    const value = parseFloat(usdInfo.value)
-                    const [intPart, decPart] = value.toString().split('.')
-                    if (!decPart) return intPart
-                    let i = -1
-                    for (let k = 0; k < decPart.length; k++) { if (decPart[k] !== '0') { i = k; break } }
-                    if (i === -1) return `${intPart}.0`
-                    const sig = decPart.substring(0, i + 2)
-                    return `${intPart}.${sig}`
-                  }
-                  if (usdInfo.type === 'metamask') return (<>
-                    0.0<sub>{usdInfo.zeros}</sub>{usdInfo.digits}
-                  </>)
-                  if (usdInfo.type === 'scientific') return usdInfo.value
-                  return '0'
-                })()}
-              </div>
+            {isUpdatingQuote ? (
+              <div className="text-xs text-gray-500">Updating…</div>
+            ) : (
+              <>
+                You will receive: <strong>{renderEth()} ETH</strong>
+                {usdPrice && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    ≈ ${(() => {
+                      const usdValue = Number(ethReceived || 0) * usdPrice
+                      const usdInfo = formatPriceMetaMask(usdValue)
+                      if (usdInfo.type === 'empty') return '0'
+                      if (usdInfo.type === 'normal') {
+                        const value = parseFloat(usdInfo.value)
+                        const [intPart, decPart] = value.toString().split('.')
+                        if (!decPart) return intPart
+                        let i = -1
+                        for (let k = 0; k < decPart.length; k++) { if (decPart[k] !== '0') { i = k; break } }
+                        if (i === -1) return `${intPart}.0`
+                        const sig = decPart.substring(0, i + 2)
+                        return `${intPart}.${sig}`
+                      }
+                      if (usdInfo.type === 'metamask') return (<>
+                        0.0<sub>{usdInfo.zeros}</sub>{usdInfo.digits}
+                      </>)
+                      if (usdInfo.type === 'scientific') return usdInfo.value
+                      return '0'
+                    })()}
+                  </div>
+                )}
+              </>
             )}
+            { /* end updating vs values */ }
           </div>
 
           <button
@@ -286,12 +360,17 @@ export default function DexSellSection({
             disabled={isPending}
             className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700 text-white mt-3 text-sm"
           >
-            {isPending ? 'Processing...' : 'Sell Tokens'}
+            {isPending ? (phase === 'approving' ? 'Waiting for approval…' : 'Waiting for swap…') : 'Sell Tokens'}
           </button>
 
-          {errorMessage && (
-            <div className="mt-2 text-sm text-red-400 text-center">
-              {errorMessage}
+          {errorMessage && !isUpdatingQuote && (
+            <div className="mt-3 text-red-400 text-sm text-center">
+              ❌ {errorMessage.includes('timeout') ? (
+                <>
+                  Transaction taking longer than expected. Check block explorer for transaction: {' '}
+                  <HashDisplay hash={txHash || ''} className="text-red-400" />
+                </>
+              ) : errorMessage}
             </div>
           )}
         </>
@@ -299,7 +378,7 @@ export default function DexSellSection({
 
       {showSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
-          ✅ Sell transaction confirmed!
+          ✅ Sell transaction confirmed! {txHash && (<span className="ml-1"><HashDisplay hash={txHash} /></span>)}
         </div>
       )}
     </div>

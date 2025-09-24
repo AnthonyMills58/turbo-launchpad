@@ -1,5 +1,5 @@
 import { ethers } from 'ethers'
-import { DEX_ROUTER_BY_CHAIN, routerAbi, pairAbi } from './dex'
+import { pairAbi } from './dex'
 
 // BigInt-safe helpers for DEX calculations
 export const FEE_NUM = 997n;   // 0.30% fee -> 1000 - 3
@@ -62,28 +62,19 @@ export function priceImpactBps(
  */
 export async function getDexPoolReserves(
   pairAddress: string,
-  token0: string,
-  provider: ethers.Provider,
-  chainId: number
+  tokenAddress: string,
+  provider: ethers.Provider
 ): Promise<{ reserveToken: bigint; reserveETH: bigint } | null> {
   try {
-    // Get WETH address from router
-    const routerAddress = DEX_ROUTER_BY_CHAIN[chainId]
-    if (!routerAddress) {
-      throw new Error(`Unsupported chain ID: ${chainId}`)
-    }
-    
-    const router = new ethers.Contract(routerAddress, routerAbi, provider)
-    const wethAddress = await router.WETH()
-    
     // Get reserves from pair contract
     const pair = new ethers.Contract(pairAddress, pairAbi, provider)
     const [reserve0, reserve1] = await pair.getReserves()
+    const onChainToken0: string = await pair.token0()
     
-    // Determine which reserve is which based on token order
-    // token0 is our token, token1 is WETH
-    const reserveToken = token0.toLowerCase() === wethAddress.toLowerCase() ? reserve1 : reserve0
-    const reserveETH = token0.toLowerCase() === wethAddress.toLowerCase() ? reserve0 : reserve1
+    // Determine which reserve is the token and which is its pair (WETH/ETH)
+    const isToken0 = onChainToken0.toLowerCase() === tokenAddress.toLowerCase()
+    const reserveToken = isToken0 ? reserve0 : reserve1
+    const reserveETH = isToken0 ? reserve1 : reserve0
     
     return {
       reserveToken: BigInt(reserveToken.toString()),
@@ -101,12 +92,11 @@ export async function getDexPoolReserves(
 export async function calculateAmountFromETH(
   ethAmount: number,
   pairAddress: string,
-  token0: string,
-  provider: ethers.Provider,
-  chainId: number
+  tokenAddress: string,
+  provider: ethers.Provider
 ): Promise<number> {
   try {
-    const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
+    const reserves = await getDexPoolReserves(pairAddress, tokenAddress, provider)
     if (!reserves) return 0
 
     const { reserveToken, reserveETH } = reserves
@@ -128,12 +118,11 @@ export async function calculateAmountFromETH(
 export async function calculateETHfromAmount(
   tokenAmount: number,
   pairAddress: string,
-  token0: string,
-  provider: ethers.Provider,
-  chainId: number
+  tokenAddress: string,
+  provider: ethers.Provider
 ): Promise<number> {
   try {
-    const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
+    const reserves = await getDexPoolReserves(pairAddress, tokenAddress, provider)
     if (!reserves) return 0
 
     const { reserveToken, reserveETH } = reserves
@@ -155,12 +144,11 @@ export async function calculateETHfromAmount(
 export async function calculateETHOutFromTokens(
   tokenAmountIn: number,
   pairAddress: string,
-  token0: string,
-  provider: ethers.Provider,
-  chainId: number
+  tokenAddress: string,
+  provider: ethers.Provider
 ): Promise<number> {
   try {
-    const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
+    const reserves = await getDexPoolReserves(pairAddress, tokenAddress, provider)
     if (!reserves) return 0
 
     const { reserveToken, reserveETH } = reserves

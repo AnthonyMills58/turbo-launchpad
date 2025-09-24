@@ -13,6 +13,7 @@ export type InputProps = {
   max?: number
   disabled?: boolean
   className?: string
+  step?: number | string
 }
 
 export function Input({ label, className, ...props }: InputProps) {

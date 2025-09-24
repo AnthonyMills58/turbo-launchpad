@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAccount, useBalance } from 'wagmi'
 import { ethers } from 'ethers'
 import { Input } from '@/components/ui/FormInputs'
@@ -35,6 +35,8 @@ export default function DexBuySection({
   const [avgRatio, setAvgRatio] = useState<number | null>(null)
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [errorMessage, setErrorMessage] = useState<string>('')
+  const [isUpdatingQuote, setIsUpdatingQuote] = useState(false)
+  const quoteReqIdRef = useRef(0)
 
   const refreshWallet = useWalletRefresh()
   const isBusy = loadingPrice || isPending
@@ -65,22 +67,29 @@ export default function DexBuySection({
     loadDexPoolInfo()
   }, [token.id, token.chain_id])
 
-  // Calculate DEX price based on liquidity pools (debounced like BC buy)
+  // Calculate DEX price based on liquidity pools (debounced + anti-race)
   useEffect(() => {
-    const calculateDexPrice = async () => {
+        const calculateDexPrice = async () => {
+      const reqId = ++quoteReqIdRef.current
       setLoadingPrice(true)
+      setIsUpdatingQuote(true)
+      // Reset derived indicators so stale values don't persist between inputs
+      setImpactBps(null)
+      setAvgRatio(null)
       try {
-        if (!pairAddress || !token0) {
-          setPrice('0')
+        if (!pairAddress) {
+          // do not clear last good quote to avoid flicker
           return
         }
         const provider = new ethers.BrowserProvider(window.ethereum)
-        const chainId = token.chain_id || 0
-        const ethCost = await calculateETHfromAmount(amount, pairAddress, token0, provider, chainId)
-        setPrice(String(ethCost))
+        const ethCost = await calculateETHfromAmount(amount, pairAddress, token.contract_address, provider)
+        if (quoteReqIdRef.current === reqId) {
+          if (!Number.isNaN(ethCost) && ethCost > 0) setPrice(String(ethCost))
+          // else keep previous displayed price
+        }
         // Compute price impact for exact-out (ETH in for token out)
-        const reserves = await getDexPoolReserves(pairAddress, token0, provider, chainId)
-        if (reserves) {
+          const reserves = await getDexPoolReserves(pairAddress, token.contract_address, provider)
+        if (reserves && quoteReqIdRef.current === reqId) {
           const inWei = ethers.parseEther(String(ethCost))
           const outWei = ethers.parseEther(String(amount))
           const impact = priceImpactBps(inWei, outWei, reserves.reserveETH, reserves.reserveToken)
@@ -91,14 +100,19 @@ export default function DexBuySection({
           if (pmid > 0 && pavg > 0) setAvgRatio(pavg / pmid)
           else setAvgRatio(null)
         } else {
-          setImpactBps(null)
-          setAvgRatio(null)
+          if (quoteReqIdRef.current === reqId) {
+            setImpactBps(null)
+            setAvgRatio(null)
+          }
         }
       } catch (err) {
         console.error('Failed to calculate DEX price:', err)
-        setPrice('0')
+        // keep last price; do not overwrite with zero
       } finally {
-        setLoadingPrice(false)
+        if (quoteReqIdRef.current === reqId) {
+          setLoadingPrice(false)
+          setIsUpdatingQuote(false)
+        }
       }
     }
 
@@ -110,7 +124,7 @@ export default function DexBuySection({
     } else {
       setPrice('0')
     }
-  }, [amount, pairAddress, token0, token.chain_id])
+  }, [amount, pairAddress, token0, token.chain_id, token.contract_address])
 
   // Load USD price for ETH
   useEffect(() => {
@@ -118,7 +132,7 @@ export default function DexBuySection({
   }, [])
 
   const handleBuy = async () => {
-    if (isBusy || amount <= 0 || !pairAddress || !token0) return
+    if (isBusy || amount <= 0 || !pairAddress) return
 
     setIsPending(true)
     setShowSuccess(false)
@@ -131,7 +145,7 @@ export default function DexBuySection({
       const router = new ethers.Contract(DEX_ROUTER_BY_CHAIN[Number(chainId)], routerAbi, signer)
 
       // compute amountOutMin using exact getAmountOut with fee, then apply slippage
-      const reserves = await getDexPoolReserves(pairAddress, token0, provider, Number(chainId))
+      const reserves = await getDexPoolReserves(pairAddress, token.contract_address, provider)
       if (!reserves) throw new Error('Pool reserves unavailable')
       const amountInWei = ethers.parseEther(String(price))
       const amountOutWei = getAmountOut(amountInWei, BigInt(reserves.reserveETH), BigInt(reserves.reserveToken))
@@ -143,12 +157,29 @@ export default function DexBuySection({
       setTxHash(tx.hash)
       await Promise.race([
         tx.wait(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Transaction timeout')), 30_000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Transaction timeout')), 120_000)),
       ])
 
       setShowSuccess(true)
       if (refreshWallet) await refreshWallet()
-      triggerSync()
+
+      // Sync database and refresh frontend
+      try {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tokenId: token.id,
+            contractAddress: token.contract_address,
+            chainId: token.chain_id,
+          }),
+        })
+        triggerSync()
+      } catch (err) {
+        console.error('Failed to sync token state:', err)
+        triggerSync() // Still refresh frontend even if sync fails
+      }
+
       // Defer parent onSuccess a bit so the success banner is visible
       if (onSuccess) setTimeout(() => onSuccess(), 3000)
     } catch (err: unknown) {
@@ -205,7 +236,7 @@ export default function DexBuySection({
             type="button"
             onClick={() => {
               setShowSuccess(false)
-              if (!pairAddress || !token0) {
+              if (!pairAddress) {
                 setAmount(0)
                 setPrice('0')
                 return
@@ -213,7 +244,7 @@ export default function DexBuySection({
               
               // Use real DEX calculation
               const provider = new ethers.BrowserProvider(window.ethereum)
-              calculateAmountFromETH(ethValue, pairAddress, token0, provider, token.chain_id || 0)
+              calculateAmountFromETH(ethValue, pairAddress, token.contract_address, provider)
                 .then(tokensToBuy => {
                   setAmount(parseFloat(tokensToBuy.toFixed(2)))
                   setPrice('0') // Will be recalculated by useEffect
@@ -240,6 +271,7 @@ export default function DexBuySection({
         onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
         min={1}
         max={maxAvailableAmount}
+        step="any"
         placeholder="e.g. 1.5"
         disabled={isBusy}
       />
@@ -266,10 +298,16 @@ export default function DexBuySection({
         )}
       </div>
 
-      {price !== '0' && (
+      {amount > 0 && (
         <>
           <div className="mt-2 text-sm text-gray-300 text-center">
-            Total cost: <strong>{renderPrice()} ETH</strong>
+            {isUpdatingQuote ? (
+              <div className="text-xs text-gray-500">Updating…</div>
+            ) : (
+              <>
+                Total cost: <strong>{renderPrice()} ETH</strong>
+              </>
+            )}
             {/* keep ETH+USD block clean; impact info shown under slippage below */}
             {usdPrice && (
               <div className="text-xs text-gray-400 mt-1">
