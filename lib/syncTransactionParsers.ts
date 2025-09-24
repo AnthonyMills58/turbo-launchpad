@@ -8,15 +8,6 @@ const SWAP_TOPIC = '0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d1308401
 const SYNC_TOPIC = '0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1'
 
 
-/**
- * Get ETH price for transfer (simplified - use reasonable default)
- * TODO: Implement proper ETH price caching mechanism
- */
-function getEthPriceForTransfer(): number {
-  // Use a reasonable default ETH price
-  // The worker will update this with the correct price when it processes the same transaction
-  return 2500 // Default ETH price - will be updated by worker
-}
 
 /**
  * Parse BC transfer (BUY/SELL/AIRDROP_CLAIM/UNLOCK)
@@ -25,7 +16,8 @@ export async function parseBCTransfer(
   txHash: string,
   tokenId: number,
   chainId: number,
-  operationType: string
+  operationType: string,
+  ethPriceUsd: number
 ): Promise<void> {
   console.log(`[parseBCTransfer] Starting for token ${tokenId}, tx ${txHash}, operation ${operationType}`)
   
@@ -81,13 +73,13 @@ export async function parseBCTransfer(
       // Simple transfer (BUY/SELL/AIRDROP_CLAIM/UNLOCK)
       await parseSimpleTransfer(
         tokenId, chainId, contractAddress, receipt, tokenTransferLogs[0], 
-        blockTime, operationType, provider
+        blockTime, operationType, provider, ethPriceUsd
       )
     } else if (tokenTransferLogs.length >= 3) {
       // Graduation (multiple transfers)
       await parseGraduationTransfers(
         tokenId, chainId, contractAddress, receipt, tokenTransferLogs,
-        blockTime, provider
+        blockTime, provider, ethPriceUsd
       )
     } else {
       throw new Error(`Unexpected number of transfer logs: ${tokenTransferLogs.length}`)
@@ -110,7 +102,8 @@ async function parseSimpleTransfer(
   log: ethers.Log,
   blockTime: Date,
   operationType: string,
-  provider: ethers.JsonRpcProvider
+  provider: ethers.JsonRpcProvider,
+  ethPriceUsd: number
 ): Promise<void> {
   // Decode transfer log
   const fromAddress = ethers.getAddress('0x' + log.topics[1].slice(26))
@@ -162,11 +155,14 @@ async function parseSimpleTransfer(
     ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
       side = EXCLUDED.side,
       src = EXCLUDED.src,
-      eth_price_usd = EXCLUDED.eth_price_usd
+      eth_price_usd = EXCLUDED.eth_price_usd,
+      amount_wei = EXCLUDED.amount_wei,
+      amount_eth_wei = EXCLUDED.amount_eth_wei,
+      price_eth_per_token = EXCLUDED.price_eth_per_token
   `, [
     tokenId, chainId, contractAddress, log.blockNumber, blockTime, log.transactionHash,
     log.index, fromAddress, toAddress, amount.toString(), ethAmount.toString(), 
-    priceEthPerToken, side, src, getEthPriceForTransfer()
+    priceEthPerToken, side, src, ethPriceUsd
   ])
 
   console.log(`✅ Parsed simple ${side} transfer for token ${tokenId}`)
@@ -182,7 +178,8 @@ async function parseGraduationTransfers(
   receipt: ethers.TransactionReceipt,
   transferLogs: ethers.Log[],
   blockTime: Date,
-  provider: ethers.JsonRpcProvider
+  provider: ethers.JsonRpcProvider,
+  ethPriceUsd: number
 ): Promise<void> {
   // Proper graduation handling: insert three ordered records (MINT, BUY, GRADUATION)
   // 1) Detect specific transfer logs
@@ -311,7 +308,7 @@ async function parseGraduationTransfers(
       'MINT',
       'BC',
       JSON.stringify({ type: 'graduation', phase: 'mint' }),
-      getEthPriceForTransfer()
+      ethPriceUsd
     ])
 
     // Record 2: BUY (index = userBuyLog.index)
@@ -330,7 +327,7 @@ async function parseGraduationTransfers(
       userPriceEthPerToken,
       'BUY',
       'BC',
-      getEthPriceForTransfer()
+      ethPriceUsd
     ])
 
     // Record 3: GRADUATION summary (index = userBuyLog.index + 1)
@@ -350,7 +347,7 @@ async function parseGraduationTransfers(
       'GRADUATION',
       'BC',
       JSON.stringify({ type: 'graduation', phase: 'summary' }),
-      getEthPriceForTransfer()
+      ethPriceUsd
     ])
 
   } catch (e) {
@@ -365,7 +362,8 @@ export async function parseDEXSwap(
   txHash: string,
   tokenId: number,
   chainId: number,
-  operationType: string
+  operationType: string,
+  ethPriceUsd: number
 ): Promise<void> {
   // RPCs by chain (same as syncTokenState)
   const rpcUrlsByChainId: Record<number, string> = {
@@ -421,7 +419,7 @@ export async function parseDEXSwap(
     }
 
     // Parse swap log
-    await parseSwapLog(tokenId, chainId, receipt, swapLog, blockTime, operationType, provider)
+    await parseSwapLog(tokenId, chainId, receipt, swapLog, blockTime, operationType, provider, ethPriceUsd)
     
     // Parse sync log
     await parseSyncLog(tokenId, chainId, syncLog, blockTime, dexPool, provider)
@@ -442,7 +440,8 @@ async function parseSwapLog(
   log: ethers.Log,
   blockTime: Date,
   operationType: string,
-  provider: ethers.JsonRpcProvider
+  provider: ethers.JsonRpcProvider,
+  ethPriceUsd: number
 ): Promise<void> {
   // Decode swap log
   const [amount0In, amount1In, amount0Out, amount1Out] = ethers.AbiCoder.defaultAbiCoder().decode(
@@ -469,23 +468,75 @@ async function parseSwapLog(
   
   const tokenContractAddress = tokenRows[0].contract_address
   
-  // Simplified logic: use operationType to determine buy/sell
-  const isBuy = operationType === 'DEX_BUY'
+  // Get actual token addresses from the DEX pair contract to determine correct mapping
+  const pairContract = new ethers.Contract(log.address, [
+    'function token0() view returns (address)',
+    'function token1() view returns (address)'
+  ], provider)
+  
+  const actualToken0 = await pairContract.token0()
+  
+  // Get WETH address from database (quote_token is always WETH)
+  const { rows: dexPoolRows } = await db.query(`
+    SELECT quote_token FROM public.dex_pools WHERE pair_address = $1 AND chain_id = $2
+  `, [log.address, chainId])
+  
+  if (dexPoolRows.length === 0) {
+    throw new Error(`DEX pool not found for pair ${log.address} on chain ${chainId}`)
+  }
+  
+  const wethAddress = dexPoolRows[0].quote_token
+  
+  // Determine which amount corresponds to which token
+  const isWethToken0 = actualToken0.toLowerCase() === wethAddress.toLowerCase()
+  
+  // Determine if this is a BUY or SELL based on actual token order (EXACT worker logic)
+  let isBuy: boolean
+  if (isWethToken0) {
+    // WETH is token0, our token is token1
+    // BUY: amount1Out > 0 (receiving our token)
+    // SELL: amount1In > 0 (selling our token)
+    isBuy = amount1Out > 0n
+  } else {
+    // Our token is token0, WETH is token1
+    // BUY: amount0Out > 0 (receiving our token)
+    // SELL: amount0In > 0 (selling our token)
+    isBuy = amount0Out > 0n
+  }
+  
   const side = isBuy ? 'BUY' : 'SELL'
 
-  // Simplified amount calculation - use the non-zero amounts
+  // Calculate amounts based on actual token order (EXACT worker logic)
   let tokenAmount: bigint
   let ethAmount: bigint
   
-  if (isBuy) {
-    // BUY: receiving tokens (out), paying ETH (in)
-    tokenAmount = amount0Out > 0n ? amount0Out : amount1Out
-    ethAmount = amount0In > 0n ? amount0In : amount1In
+  if (isWethToken0) {
+    // WETH is token0, our token is token1
+    if (isBuy) {
+      // BUY: receiving token1 (our token), paying with token0 (WETH)
+      tokenAmount = amount1Out
+      ethAmount = amount0In
+    } else {
+      // SELL: selling token1 (our token), receiving token0 (WETH)
+      tokenAmount = amount1In
+      ethAmount = amount0Out
+    }
   } else {
-    // SELL: selling tokens (in), receiving ETH (out)
-    tokenAmount = amount0In > 0n ? amount0In : amount1In
-    ethAmount = amount0Out > 0n ? amount0Out : amount1Out
+    // Our token is token0, WETH is token1
+    if (isBuy) {
+      // BUY: receiving token0 (our token), paying with token1 (WETH)
+      tokenAmount = amount0Out
+      ethAmount = amount1In
+    } else {
+      // SELL: selling token0 (our token), receiving token1 (WETH)
+      tokenAmount = amount0In
+      ethAmount = amount1Out
+    }
   }
+
+  // Debug logging
+  console.log(`DEX ${side} debug - operationType: ${operationType}, amount0In: ${amount0In}, amount1In: ${amount1In}, amount0Out: ${amount0Out}, amount1Out: ${amount1Out}`)
+  console.log(`DEX ${side} calculated - tokenAmount: ${tokenAmount}, ethAmount: ${ethAmount}`)
 
   // Check for zero values
   if (tokenAmount === 0n || ethAmount === 0n) {
@@ -508,11 +559,14 @@ async function parseSwapLog(
     ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
       side = EXCLUDED.side,
       src = EXCLUDED.src,
-      eth_price_usd = EXCLUDED.eth_price_usd
+      eth_price_usd = EXCLUDED.eth_price_usd,
+      amount_wei = EXCLUDED.amount_wei,
+      amount_eth_wei = EXCLUDED.amount_eth_wei,
+      price_eth_per_token = EXCLUDED.price_eth_per_token
   `, [
     tokenId, chainId, tokenContractAddress, log.blockNumber, blockTime, log.transactionHash,
     log.index, fromAddress, toAddress, tokenAmount.toString(), ethAmount.toString(),
-    priceEthPerToken, side, 'DEX', getEthPriceForTransfer()
+    priceEthPerToken, side, 'DEX', ethPriceUsd
   ])
 
   console.log(`✅ Parsed DEX ${side} swap for token ${tokenId}`)

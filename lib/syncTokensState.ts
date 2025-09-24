@@ -333,11 +333,18 @@ export async function syncTokenState(
       console.log(`[syncTokenState] Parsing transaction ${txHash} for operation ${operationType}`)
       
       try {
+        // Get ETH price once for all parsing functions
+        const { rows: ethPriceRows } = await db.query(`
+          SELECT price_usd FROM public.eth_price_cache 
+          ORDER BY fetched_at DESC LIMIT 1
+        `)
+        const ethPriceUsd = ethPriceRows.length > 0 ? Number(ethPriceRows[0].price_usd) : 0
+        
         // Parse transaction based on operation type
         if (operationType.startsWith('BC_')) {
-          await parseBCTransfer(txHash, tokenId, chainId, operationType)
+          await parseBCTransfer(txHash, tokenId, chainId, operationType, ethPriceUsd)
         } else if (operationType.startsWith('DEX_')) {
-          await parseDEXSwap(txHash, tokenId, chainId, operationType)
+          await parseDEXSwap(txHash, tokenId, chainId, operationType, ethPriceUsd)
         } else {
           console.warn(`Unknown operation type: ${operationType}`)
         }
