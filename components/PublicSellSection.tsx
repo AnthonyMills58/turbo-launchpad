@@ -165,6 +165,8 @@ export default function PublicSellSection({
                 tokenId: token.id,
                 contractAddress: token.contract_address,
                 chainId: publicClient?.chain.id,
+                txHash: txHash,
+                operationType: 'BC_SELL',
               }),
             })
             triggerSync() // 🔁 frontendowy refresh TokenDetailsView

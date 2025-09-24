@@ -156,6 +156,8 @@ export default function TokenDetailsView({
           tokenId: token.id,
           contractAddress: token.contract_address,
           chainId,
+          txHash: txHash,
+          operationType: 'BC_UNLOCK',
         }),
       });
       triggerSync();

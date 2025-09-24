@@ -3,6 +3,8 @@ import TurboTokenABI from './abi/TurboToken.json'
 import db from './db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from './chains'
 import { DEX_ROUTER_BY_CHAIN, routerAbi, factoryAbi, pairAbi } from './dex'
+import { parseBCTransfer, parseDEXSwap } from './syncTransactionParsers'
+import { updateTokenBalances, updateTokenChart } from './syncIncrementalUpdates'
 
 type SyncFields = {
   current_price: number
@@ -114,7 +116,9 @@ async function getDexPrice(contractAddress: string, chainId: number): Promise<nu
 export async function syncTokenState(
   contractAddress: string,
   tokenId: number,
-  chainId: number
+  chainId: number,
+  txHash?: string,
+  operationType?: 'BC_BUY' | 'BC_SELL' | 'BC_BUY&LOCK' | 'DEX_BUY' | 'DEX_SELL' | 'BC_AIRDROP_CLAIM' | 'BC_UNLOCK'
 ): Promise<void> {
   console.log(`[syncTokenState] Starting sync for token ID: ${tokenId}, contract: ${contractAddress}, chainId: ${chainId}`)
   
@@ -322,6 +326,39 @@ export async function syncTokenState(
     )
 
     console.log(`✅ Synced token ID ${tokenId}`)
+
+    // NEW: Parse transaction and update tables if txHash provided
+    // DEBUGGING RPC ISSUES - enabled with logging
+    if (txHash && operationType) {
+      console.log(`[syncTokenState] Parsing transaction ${txHash} for operation ${operationType}`)
+      
+      try {
+        // Get ETH price once for all parsing functions
+        const { rows: ethPriceRows } = await db.query(`
+          SELECT price_usd FROM public.eth_price_cache 
+          ORDER BY fetched_at DESC LIMIT 1
+        `)
+        const ethPriceUsd = ethPriceRows.length > 0 ? Number(ethPriceRows[0].price_usd) : 0
+        
+        // Parse transaction based on operation type
+        if (operationType.startsWith('BC_')) {
+          await parseBCTransfer(txHash, tokenId, chainId, operationType, ethPriceUsd)
+        } else if (operationType.startsWith('DEX_')) {
+          await parseDEXSwap(txHash, tokenId, chainId, operationType, ethPriceUsd)
+        } else {
+          console.warn(`Unknown operation type: ${operationType}`)
+        }
+
+        // Update balances and charts incrementally
+        await updateTokenBalances(tokenId, chainId, txHash)
+        await updateTokenChart(tokenId, chainId, txHash)
+        
+        console.log(`✅ Parsed transaction ${txHash} and updated tables for token ${tokenId}`)
+      } catch (parseError) {
+        console.error(`❌ Failed to parse transaction ${txHash} for token ${tokenId}:`, parseError)
+        // Don't throw - token stats were updated successfully, just the new sync failed
+      }
+    }
   } catch (error) {
     console.error(`❌ Failed to sync token ID ${tokenId}:`, error)
     throw error
