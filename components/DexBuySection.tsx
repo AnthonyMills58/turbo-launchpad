@@ -9,7 +9,9 @@ import { useWalletRefresh } from '@/lib/WalletRefreshContext'
 import { useSync } from '@/lib/SyncContext'
 import { formatPriceMetaMask } from '@/lib/ui-utils'
 import { getUsdPrice } from '@/lib/getUsdPrice'
-import { calculateAmountFromETH, calculateETHfromAmount, getDexPoolReserves, priceImpactBps } from '@/lib/dexMath'
+import { calculateAmountFromETH, calculateETHfromAmount, getDexPoolReserves, priceImpactBps, getAmountOut, withSlippageMin } from '@/lib/dexMath'
+import { routerAbi, DEX_ROUTER_BY_CHAIN } from '@/lib/dex'
+import HashDisplay from '@/components/ui/HashDisplay'
 
 export default function DexBuySection({
   token,
@@ -31,6 +33,8 @@ export default function DexBuySection({
   const [token0, setToken0] = useState<string | null>(null)
   const [impactBps, setImpactBps] = useState<number | null>(null)
   const [avgRatio, setAvgRatio] = useState<number | null>(null)
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string>('')
 
   const refreshWallet = useWalletRefresh()
   const isBusy = loadingPrice || isPending
@@ -114,30 +118,43 @@ export default function DexBuySection({
   }, [])
 
   const handleBuy = async () => {
-    if (isBusy || amount <= 0) return
+    if (isBusy || amount <= 0 || !pairAddress || !token0) return
 
     setIsPending(true)
+    setShowSuccess(false)
+    setErrorMessage('')
 
     try {
-      // TODO: Implement DEX buy transaction
-      // This should interact with the DEX router/swap contract
-      // For now, show a placeholder message
-      console.log('DEX Buy transaction would be executed here')
-      console.log(`Amount: ${amount} ${token.symbol}`)
-      console.log(`Price: ${price} ETH`)
-      
-      // Placeholder success
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      const chainId = token.chain_id || (await signer.provider!.getNetwork()).chainId
+      const router = new ethers.Contract(DEX_ROUTER_BY_CHAIN[Number(chainId)], routerAbi, signer)
+
+      // compute amountOutMin using exact getAmountOut with fee, then apply slippage
+      const reserves = await getDexPoolReserves(pairAddress, token0, provider, Number(chainId))
+      if (!reserves) throw new Error('Pool reserves unavailable')
+      const amountInWei = ethers.parseEther(String(price))
+      const amountOutWei = getAmountOut(amountInWei, BigInt(reserves.reserveETH), BigInt(reserves.reserveToken))
+      const amountOutMin = withSlippageMin(amountOutWei, slippagePct)
+      const deadline = Math.floor(Date.now() / 1000) + 60
+      const path = [await router.WETH(), token.contract_address]
+
+      const tx = await router.swapExactETHForTokens(amountOutMin, path, await signer.getAddress(), deadline, { value: ethers.parseEther(String(price)) })
+      setTxHash(tx.hash)
+      await Promise.race([
+        tx.wait(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Transaction timeout')), 30_000)),
+      ])
+
       setShowSuccess(true)
-      
-      // Trigger refresh
-      await refreshWallet()
+      if (refreshWallet) await refreshWallet()
       triggerSync()
-      
-      if (onSuccess) {
-        onSuccess()
-      }
+      // Defer parent onSuccess a bit so the success banner is visible
+      if (onSuccess) setTimeout(() => onSuccess(), 3000)
     } catch (err: unknown) {
       console.error('DEX Buy failed:', err)
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setErrorMessage(msg)
     } finally {
       setIsPending(false)
     }
@@ -300,7 +317,18 @@ export default function DexBuySection({
 
       {showSuccess && (
         <div className="mt-3 text-green-400 text-sm text-center">
-          ✅ Transaction confirmed!
+          ✅ Transaction confirmed! {txHash && (<span className="ml-1"><HashDisplay hash={txHash} /></span>)}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mt-3 text-red-400 text-sm text-center">
+          ❌ {errorMessage.includes('timeout') ? (
+            <>
+              Transaction taking longer than expected. Check block explorer for transaction: {' '}
+              <HashDisplay hash={txHash || ''} className="text-red-400" />
+            </>
+          ) : errorMessage}
         </div>
       )}
     </div>
