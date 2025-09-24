@@ -1276,7 +1276,10 @@ async function processDexLog(
       ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
         side = EXCLUDED.side,
         src = EXCLUDED.src,
-        eth_price_usd = EXCLUDED.eth_price_usd
+        eth_price_usd = EXCLUDED.eth_price_usd,
+        amount_wei = EXCLUDED.amount_wei,
+        amount_eth_wei = EXCLUDED.amount_eth_wei,
+        price_eth_per_token = EXCLUDED.price_eth_per_token
     `, [
       token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
       log.index,
