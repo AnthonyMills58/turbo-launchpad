@@ -172,6 +172,8 @@ export default function DexBuySection({
             tokenId: token.id,
             contractAddress: token.contract_address,
             chainId: token.chain_id,
+            txHash: tx.hash,
+            operationType: 'DEX_BUY',
           }),
         })
         triggerSync()

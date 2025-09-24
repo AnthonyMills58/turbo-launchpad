@@ -169,6 +169,8 @@ export default function PublicBuySection({
               tokenId: token.id,
               contractAddress: token.contract_address,
               chainId: publicClient?.chain.id,
+              txHash: txHash,
+              operationType: 'BC_BUY',
             }),
           })
           triggerSync()

@@ -215,6 +215,8 @@ export default function DexSellSection({
             tokenId: token.id,
             contractAddress: token.contract_address,
             chainId: token.chain_id,
+            txHash: tx.hash,
+            operationType: 'DEX_SELL',
           }),
         })
         triggerSync()

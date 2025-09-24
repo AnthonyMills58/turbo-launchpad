@@ -65,7 +65,9 @@ export default function AirdropClaimForm({ token }: { token: Token }) {
         body: JSON.stringify({
           tokenId: token.id,
           contractAddress: token.contract_address,
-          chainId: publicClient?.chain.id, // 👈 include chainId here
+          chainId: publicClient?.chain.id,
+          txHash: txHash,
+          operationType: 'BC_AIRDROP_CLAIM',
         }),
       })
       triggerSync() // 🔁 frontendowy refresh TokenDetailsView

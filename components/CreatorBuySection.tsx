@@ -230,6 +230,8 @@ export default function CreatorBuySection({ token, onSuccess }: Props) {
               tokenId: token.id,
               contractAddress: token.contract_address,
               chainId: publicClient?.chain.id,
+              txHash: txHash,
+              operationType: 'BC_BUY&LOCK',
             }),
           })
           // bump refreshKey ⇒ remount TokenDetailsView

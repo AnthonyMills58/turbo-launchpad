@@ -172,25 +172,25 @@ async function processTokenChartAgg(
       SELECT 
         ts.ts,
         COALESCE(td.trades_count, 0) as trades_count,
-        COALESCE(td.volume_usd, 0) as volume_eth,
+        COALESCE(td.volume_eth, 0) as volume_eth,
         COALESCE(td.volume_usd, 0) as volume_usd,
         -- For gaps: all OHLC prices equal to forward-filled price (flat candle)
         -- For actual data: use real OHLC values
         CASE 
-          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
-          ELSE td.price_low_usd 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_low_eth 
         END as price_low_eth,
         CASE 
-          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
-          ELSE td.price_high_usd 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_high_eth 
         END as price_high_eth,
         CASE 
-          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
-          ELSE td.price_open_usd 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_open_eth 
         END as price_open_eth,
         CASE 
-          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
-          ELSE td.price_close_usd 
+          WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_eth, 0)  -- Gap: flat candle with forward-filled price
+          ELSE td.price_close_eth 
         END as price_close_eth,
         CASE 
           WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
@@ -198,16 +198,16 @@ async function processTokenChartAgg(
         END as price_open_usd,
         CASE 
           WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
-          ELSE td.price_close_usd 
-        END as price_close_usd,
+          ELSE td.price_high_usd 
+        END as price_high_usd,
         CASE 
           WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
           ELSE td.price_low_usd 
         END as price_low_usd,
         CASE 
           WHEN td.ts IS NULL THEN COALESCE(pt.forward_price_usd, 0)  -- Gap: flat candle with forward-filled price
-          ELSE td.price_high_usd 
-        END as price_high_usd
+          ELSE td.price_close_usd 
+        END as price_close_usd
       FROM time_series ts
       LEFT JOIN trading_data td ON ts.ts = td.ts
       LEFT JOIN price_timeline pt ON ts.ts = pt.ts
