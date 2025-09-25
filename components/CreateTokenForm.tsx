@@ -217,7 +217,7 @@ export default function CreateTokenForm() {
       return
     }
 
-    const validationError = validateTokenForm(form, proMode)
+    const validationError = validateTokenForm(form, showProSettings)
     if (validationError) {
       setError(validationError)
       return
@@ -587,7 +587,7 @@ export default function CreateTokenForm() {
             suffix="days"
           />
           <p className="text-xs text-gray-500">
-            Creator can unlock locked tokens after this time if the token hasn't graduated yet.
+            Creator can unlock locked tokens after this time if the token hasn&apos;t graduated yet.
           </p>
 
           {/* d) Target DEX - invisible but stays in code */}
@@ -640,7 +640,7 @@ export default function CreateTokenForm() {
       <button
         type="submit"
         disabled={isSubmitting || isUploading || !isConnected || (!imageValid && !selectedFile) || !form.name.trim() || !form.symbol.trim()}
-        className="w-full bg-green-600 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-green-800 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSubmitting ? 'Creating...' : isUploading ? 'Uploading...' : isConnected ? 'Create Token' : 'Connect Wallet to Create'}
       </button>

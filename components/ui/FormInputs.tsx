@@ -14,7 +14,7 @@ export type InputProps = {
   disabled?: boolean
   className?: string
   step?: number | string
-  inputMode?: string
+  inputMode?: "search" | "none" | "text" | "numeric" | "email" | "tel" | "url" | "decimal"
   pattern?: string
 }
 

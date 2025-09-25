@@ -276,7 +276,7 @@ export default function ProfileForm() {
 
   return (
     <div className="bg-transparent p-6 rounded-lg w-full max-w-xl">
-      <h2 className="text-lg font-bold text-white mb-4">Your Profile</h2>
+     
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
@@ -417,19 +417,13 @@ export default function ProfileForm() {
         {error && <div className="text-red-400 text-sm">{error}</div>}
         {success && <div className="text-green-400 text-sm">✅ Profile saved successfully!</div>}
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isSaving || isUploading}
-            className={`px-4 py-2 rounded-md text-white text-sm font-semibold transition ${
-              isSaving || isUploading
-                ? 'bg-neutral-700 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700'
-            }`}
-          >
-            {isSaving ? 'Saving...' : isUploading ? 'Uploading...' : 'Save Profile'}
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={isSaving || isUploading}
+          className="w-full bg-green-800 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSaving ? 'Saving...' : isUploading ? 'Uploading...' : 'Save Profile'}
+        </button>
       </form>
     </div>
   )
