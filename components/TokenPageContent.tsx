@@ -445,7 +445,9 @@ export default function TokenPageContent() {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 40 // 5 rows × 8 cards per row
+  // Page size comes from env (build-time) with a sensible fallback
+  const pageSizeEnv = Number(process.env.NEXT_PUBLIC_TOKENS_PAGE_SIZE || '20')
+  const pageSize = Number.isFinite(pageSizeEnv) && pageSizeEnv > 0 ? Math.floor(pageSizeEnv) : 40
 
   const { search, creatorFilter, statusFilter, sortFilter } = useFilters()
   const { address, chain } = useAccount()
