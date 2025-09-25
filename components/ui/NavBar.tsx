@@ -70,26 +70,29 @@ export default function NavBar() {
           Turbo Launch
         </button>
       </div>
-      <button
-        onClick={() => router.push('/leaderboard')}
-        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
-      >
-        <span className="text-gray-400">Leaderboard</span>
-      </button>
-      
-      <button
-        onClick={() => router.push('/profile')}
-        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
-      >
-        <span className="text-gray-400">Profile</span>
-      </button>
-
+      {/* Create Token */}
       <button
         onClick={() => router.push('/create')}
         className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
       >
         <HiOutlinePlusCircle className="text-lg inline mr-2" />
         <span>Create Token</span>
+      </button>
+
+      {/* Tokens (formerly Leaderboard) */}
+      <button
+        onClick={() => router.push('/leaderboard')}
+        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
+      >
+        <span className="text-gray-400">Tokens</span>
+      </button>
+      
+      {/* Profile */}
+      <button
+        onClick={() => router.push('/profile')}
+        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
+      >
+        <span className="text-gray-400">Profile</span>
       </button>
   </div>
 
