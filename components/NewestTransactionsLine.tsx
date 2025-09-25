@@ -32,7 +32,7 @@ export default function NewestTransactionsLine() {
 
   // Handle sync logic when transactions data changes
   const handleTransactionSync = useCallback(async (newTransactions: Transaction[]) => {
-    console.log(`[NewestTransactionsLine] 📝 Processing ${newTransactions.length} transactions`)
+    console.log(`[NewestTransactionsLine] Processing ${newTransactions.length} transactions`)
     
     // Check if this is the very first run or if there are new transactions
     console.log(`[NewestTransactionsLine] 🔍 Debug - isFirstRunRef.current: ${isFirstRunRef.current}`)
@@ -48,7 +48,7 @@ export default function NewestTransactionsLine() {
         try {
           const token = newTransactions.find((t: Transaction) => t.id === tokenId)
           if (token) {
-            console.log(`[NewestTransactionsLine] First runtime sync for token ${tokenId} (${token.symbol})`)
+            console.log(`[NewestTransactionsLine] Syncing ${token.symbol}...`)
             await fetch('/api/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -79,14 +79,14 @@ export default function NewestTransactionsLine() {
       if (hasNewTransactions) {
         // Sync only tokens with new transactions
         const newTokenIds = new Set(newTransactionList.map((t: Transaction) => t.id))
-        console.log(`[NewestTransactionsLine] Found ${newTransactionList.length} new transactions for ${newTokenIds.size} unique tokens`)
+        console.log(`[NewestTransactionsLine] ${newTransactionList.length} new transactions for ${newTokenIds.size} tokens`)
         
         // Trigger sync for each token with new transactions (don't await to avoid blocking)
         newTokenIds.forEach(async (tokenId) => {
           try {
             const token = newTransactionList.find((t: Transaction) => t.id === tokenId)
             if (token) {
-              console.log(`[NewestTransactionsLine] Syncing token ${tokenId} (${token.symbol}) - has new transaction`)
+              console.log(`[NewestTransactionsLine] Syncing ${token.symbol} (new tx)`)
               await fetch('/api/sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
