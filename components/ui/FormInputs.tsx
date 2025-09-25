@@ -14,6 +14,8 @@ export type InputProps = {
   disabled?: boolean
   className?: string
   step?: number | string
+  inputMode?: string
+  pattern?: string
 }
 
 export function Input({ label, className, ...props }: InputProps) {
@@ -78,7 +80,7 @@ export function Select({ label, name, value, onChange, options, suffix = '' }: S
         className="w-full p-2 text-sm bg-[#232633]/40 border border-[#2a2f45] rounded focus:outline-none focus:ring focus:border-blue-500"
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} className="bg-[#232633] text-white">
             {opt.label} {suffix}
           </option>
         ))}

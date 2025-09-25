@@ -2,6 +2,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import NewestTransactionsLine from '@/components/NewestTransactionsLine'
 import { useState } from 'react'
 
 // Reuse the same card grid as on the homepage
@@ -13,6 +14,7 @@ export default function LeaderboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800/60 via-black to-purple-800/50 shadow-2xl shadow-green-500/60">
+      <NewestTransactionsLine />
       <div className="min-h-screen bg-transparent">
         {/* Header + Tabs */}
         <div className="px-4 md:px-6 pt-6 pb-2">

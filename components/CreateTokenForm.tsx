@@ -17,7 +17,9 @@ export default function CreateTokenForm() {
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const chainId = walletClient?.chain.id
-  const [proMode, setProMode] = useState(false)
+  // UI sections (collapsed by default)
+  const [showProSettings, setShowProSettings] = useState(false)
+  const [showDetailsLinks, setShowDetailsLinks] = useState(false)
 
   // ✅ NEW: add minUnlockDays with default 2
   const [form, setForm] = useState<TokenForm>({
@@ -364,20 +366,20 @@ export default function CreateTokenForm() {
     <form onSubmit={handleSubmit} className="space-y-3 text-sm max-w-3xl mx-auto">
       {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
 
-      <div className="flex space-x-2">
+      <div className="flex space-x-1">
         <div className="flex-1">
           <Input label="Token Name" name="name" value={form.name} onChange={handleChange} />
         </div>
-        <div className="w-[120px]">
+        <div className="w-[110px]">
           <Input label="Symbol" name="symbol" value={form.symbol} onChange={handleChange} />
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Logo Upload Section */}
         <div>
-          <label className="block text-sm font-medium text-white mb-2">Token Logo</label>
-          <div className="flex space-x-4 items-start">
+          <label className="block text-sm font-medium text-gray-400 mb-1">Token Logo</label>
+          <div className="flex space-x-2 items-start">
                         <div className="flex-1">
               {/* Drag & Drop Zone */}
               <div
@@ -454,8 +456,8 @@ export default function CreateTokenForm() {
 
         {/* Image URL Section (fallback) */}
         <div>
-          <label className="block text-sm font-medium text-white mb-2">Or Image URL (fallback)</label>
-          <div className="flex space-x-4 items-center">
+          <label className="block text-sm font-medium text-gray-400 mb-1">Or Image URL (fallback)</label>
+          <div className="flex space-x-2 items-center">
             <div className="flex-grow">
               <Input
                 label=""
@@ -489,21 +491,39 @@ export default function CreateTokenForm() {
         </div>
       </div>
 
-      <div className="flex items-center space-x-2 pt-1">
-        <input
-          type="checkbox"
-          checked={proMode}
-          onChange={() => setProMode(!proMode)}
-          className="accent-green-500"
-          id="proMode"
-        />
-        <label htmlFor="proMode" className="text-gray-300 cursor-pointer">Enable Pro Mode</label>
+      {/* Section toggles */}
+      <div className="flex items-center gap-1 pt-1 w-full">
+        <button
+          type="button"
+          onClick={() => {
+            setShowProSettings(v => !v)
+            if (!showProSettings) setShowDetailsLinks(false)
+          }}
+          className={`flex-1 px-2 py-1.5 rounded-md text-sm border border-[#2a2f45] hover:border-gray-400 hover:bg-gray-400/10 transition-all duration-150 bg-transparent ${
+            showProSettings ? 'text-white' : 'text-gray-400'
+          }`}
+        >
+          Pro Settings
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setShowDetailsLinks(v => !v)
+            if (!showDetailsLinks) setShowProSettings(false)
+          }}
+          className={`flex-1 px-2 py-1.5 rounded-md text-sm border border-[#2a2f45] hover:border-gray-400 hover:bg-gray-400/10 transition-all duration-150 bg-transparent ${
+            showDetailsLinks ? 'text-white' : 'text-gray-400'
+          }`}
+        >
+          Description & Links
+        </button>
       </div>
 
-      {proMode && (
+      {showProSettings && (
         <>
+          {/* a) Total Supply section with Max Supply input */}
           <div>
-            <label className="block text-sm font-medium text-white mb-1">Total Supply</label>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Total Supply</label>
             <div className="flex gap-2 mb-2">
               {[
                 { label: '1M', value: 1_000_000 },
@@ -524,26 +544,18 @@ export default function CreateTokenForm() {
               ))}
             </div>
             <Input
-              type="number"
+              type="text"
               name="supply"
               value={form.supply}
               onChange={handleChange}
               placeholder="Enter total supply"
               label="Max Supply"
+              inputMode="numeric"
+              pattern="[0-9]*"
             />
           </div>
 
-          <TextArea
-            label="Description"
-            name="description"
-            value={form.description}
-            onChange={handleChange}
-          />
-
-          <Input label="Social" name="twitter" value={form.twitter} onChange={handleChange} />
-          <Input label="Community" name="telegram" value={form.telegram} onChange={handleChange} />
-          <Input label="Website" name="website" value={form.website} onChange={handleChange} />
-
+          {/* b) Raise Target */}
           <Select
             label="Raise Target"
             name="raiseTarget"
@@ -558,31 +570,7 @@ export default function CreateTokenForm() {
             suffix="ETH"
           />
 
-          <Select
-            label="Target DEX"
-            name="dex"
-            value={form.dex}
-            onChange={handleChange}
-            options={[{ label: 'GTE', value: 'GTE' }]}
-          />
-
-          <Select
-            label="Bonding Curve Model"
-            name="curveType"
-            value={form.curveType}
-            onChange={handleChange}
-            options={[
-              { label: 'linear', value: 'linear' },
-              { label: 'exponential', value: 'exponential' },
-              { label: 'sigmoid', value: 'sigmoid' },
-            ]}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Controls how the price increases as users buy. Most creators choose linear.
-            ⚠️ For MVP, all tokens use linear pricing under the hood.
-          </p>
-
-          {/* ✅ NEW: Min Token Age for Unlock (days) */}
+          {/* c) Min Token Age Section */}
           <Select
             label="Min Token Age for Creator Unlock"
             name="minUnlockDays"
@@ -599,14 +587,59 @@ export default function CreateTokenForm() {
             suffix="days"
           />
           <p className="text-xs text-gray-500">
-            Creator can unlock locked tokens after this time if the token hasn’t graduated yet.
+            Creator can unlock locked tokens after this time if the token hasn't graduated yet.
           </p>
+
+          {/* d) Target DEX - invisible but stays in code */}
+          <div style={{ display: 'none' }}>
+            <Select
+              label="Target DEX"
+              name="dex"
+              value={form.dex}
+              onChange={handleChange}
+              options={[{ label: 'GTE', value: 'GTE' }]}
+            />
+          </div>
+
+          {/* e) Bonding Curve Model - invisible but stays in code */}
+          <div style={{ display: 'none' }}>
+            <Select
+              label="Bonding Curve Model"
+              name="curveType"
+              value={form.curveType}
+              onChange={handleChange}
+              options={[
+                { label: 'linear', value: 'linear' },
+                { label: 'exponential', value: 'exponential' },
+                { label: 'sigmoid', value: 'sigmoid' },
+              ]}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Controls how the price increases as users buy. Most creators choose linear.
+              ⚠️ For MVP, all tokens use linear pricing under the hood.
+            </p>
+          </div>
         </>
+      )}
+
+      {showDetailsLinks && (
+        <div className="mt-4">
+          <TextArea
+            label="Description"
+            name="description"
+            value={form.description}
+            onChange={handleChange}
+          />
+
+          <Input label="Social" name="twitter" value={form.twitter} onChange={handleChange} />
+          <Input label="Community" name="telegram" value={form.telegram} onChange={handleChange} />
+          <Input label="Website" name="website" value={form.website} onChange={handleChange} />
+        </div>
       )}
 
       <button
         type="submit"
-        disabled={isSubmitting || isUploading || !isConnected || (!imageValid && !selectedFile)}
+        disabled={isSubmitting || isUploading || !isConnected || (!imageValid && !selectedFile) || !form.name.trim() || !form.symbol.trim()}
         className="w-full bg-green-600 hover:bg-green-700 transition-all text-white py-2 text-sm rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSubmitting ? 'Creating...' : isUploading ? 'Uploading...' : isConnected ? 'Create Token' : 'Connect Wallet to Create'}

@@ -424,7 +424,7 @@ export default function ProfileForm() {
             className={`px-4 py-2 rounded-md text-white text-sm font-semibold transition ${
               isSaving || isUploading
                 ? 'bg-neutral-700 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-green-600 hover:bg-green-700'
             }`}
           >
             {isSaving ? 'Saving...' : isUploading ? 'Uploading...' : 'Save Profile'}
