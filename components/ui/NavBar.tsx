@@ -109,7 +109,7 @@ export default function NavBar() {
       <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2 mt-2 sm:mt-0 relative">
         <input
           type="text"
-          placeholder="Search tokens or address"
+          placeholder="Search tokens or creators"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           className="px-3 py-1 rounded bg-[#1A1B23] text-sm border border-gray-600 focus:outline-none"
@@ -181,6 +181,8 @@ export default function NavBar() {
                 setCreatorFilter('all')
                 setStatusFilter('all')
                 setSortFilter('created_desc')
+                setSearch('')
+                setInputValue('')
               }}
               className="w-full mt-2 bg-gray-700 hover:bg-gray-600 text-white text-sm py-1 rounded"
             >
