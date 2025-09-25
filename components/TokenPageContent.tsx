@@ -473,7 +473,7 @@ export default function TokenPageContent() {
     }
 
     return params
-  }, [search, creatorFilter, statusFilter, sortFilter, currentPage, chain?.id, address])
+  }, [search, creatorFilter, statusFilter, sortFilter, currentPage, chain?.id, address, pageSize])
 
   // Use SWR for token data
   const { data: tokenData, isLoading, mutate } = useTokenList(apiParams)

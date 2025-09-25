@@ -57,39 +57,50 @@ export default function NavBar() {
   }, [showFilters])
 
   return (
-    <nav className="w-full bg-[#0d0f1a] text-white shadow-md px-4 py-1 flex flex-wrap items-center justify-between sticky top-0 z-50">
+    <nav className="w-full bg-[#0d0f1a] text-white shadow-md px-4 py-2 flex flex-wrap items-center justify-between sticky top-0 z-50">
       {/* Left Nav */}
       <div className="flex items-center space-x-1">
       <div className="flex items-center space-x-1">
         <span className="rocket-icon text-3xl">🚀</span>
         <button
           onClick={() => router.push('/')}
-          className="turbo-launch-btn text-orange-400 font-black text-2xl leading-none hover:bg-gray-700 px-2 py-2 rounded"
+          className="turbo-launch-btn text-orange-400 font-black text-2xl leading-none px-2 py-2 rounded transition-all duration-200 hover:text-orange-300"
           style={{fontSize: '1.5rem', fontWeight: '900'}}
         >
           Turbo Launch
         </button>
       </div>
-      <button
-        onClick={() => router.push('/leaderboard')}
-        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
-      >
-        <span className="text-gray-400">Leaderboard</span>
-      </button>
-      
-      <button
-        onClick={() => router.push('/profile')}
-        className="hover:bg-gray-700 px-2 py-2 rounded flex items-center space-x-1"
-      >
-        <span className="text-gray-400">Profile</span>
-      </button>
-
+      {/* Create Token */}
       <button
         onClick={() => router.push('/create')}
-        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+        className="px-4 py-2 rounded-lg font-medium transition-all duration-200 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 hover:shadow-xl text-white"
       >
         <HiOutlinePlusCircle className="text-lg inline mr-2" />
         <span>Create Token</span>
+      </button>
+
+      {/* Leaderboard */}
+      <button
+        onClick={() => router.push('/leaderboard')}
+        className="px-2 py-2 rounded flex items-center space-x-1 transition-all duration-200"
+      >
+        <span className="text-gray-400 hover:text-white transition-colors duration-200">Leaderboard</span>
+      </button>
+      
+      {/* Backers */}
+      <button
+        onClick={() => router.push('/backers')}
+        className="px-2 py-2 rounded flex items-center space-x-1 transition-all duration-200"
+      >
+        <span className="text-gray-400 hover:text-white transition-colors duration-200">Backers</span>
+      </button>
+      
+      {/* Profile */}
+      <button
+        onClick={() => router.push('/profile')}
+        className="px-2 py-2 rounded flex items-center space-x-1 transition-all duration-200"
+      >
+        <span className="text-gray-400 hover:text-white transition-colors duration-200">Profile</span>
       </button>
   </div>
 
@@ -105,7 +116,7 @@ export default function NavBar() {
         />
 
 
-        <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-sm" title="Search">
+        <button type="submit" className="p-2.5 rounded bg-gray-700 hover:bg-gray-600 text-white" title="Search">
           <FaSearch className="w-4 h-4" />
         </button>
 
@@ -148,7 +159,6 @@ export default function NavBar() {
                 <option value="all">All</option>
                 <option value="in_progress">In Progress</option>
                 <option value="graduated">Graduated</option>
-                <option value="on_dex">On DEX</option>
               </select>
             </div>
 
@@ -162,8 +172,6 @@ export default function NavBar() {
               >
                 <option value="created_desc">Newest</option>
                 <option value="created_asc">Oldest</option>
-                <option value="name_asc">Name A–Z</option>
-                <option value="symbol_asc">Symbol A–Z</option>
               </select>
             </div>
 
