@@ -908,6 +908,14 @@ async function createGraduationRecords(
       INSERT INTO public.token_transfers
         (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+        side = EXCLUDED.side,
+        src = EXCLUDED.src,
+        eth_price_usd = EXCLUDED.eth_price_usd,
+        amount_wei = EXCLUDED.amount_wei,
+        amount_eth_wei = EXCLUDED.amount_eth_wei,
+        price_eth_per_token = EXCLUDED.price_eth_per_token,
+        graduation_metadata = EXCLUDED.graduation_metadata
     `, [
       token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
       userBuyLog.index - 1, // Use artificial index to ensure MINT comes before BUY
@@ -932,6 +940,13 @@ async function createGraduationRecords(
       INSERT INTO public.token_transfers
         (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, eth_price_usd)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+        side = EXCLUDED.side,
+        src = EXCLUDED.src,
+        eth_price_usd = EXCLUDED.eth_price_usd,
+        amount_wei = EXCLUDED.amount_wei,
+        amount_eth_wei = EXCLUDED.amount_eth_wei,
+        price_eth_per_token = EXCLUDED.price_eth_per_token
     `, [
       token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
       userBuyLog.index, // Use actual log index from the original user buy log
@@ -950,6 +965,14 @@ async function createGraduationRecords(
       INSERT INTO public.token_transfers
         (token_id, chain_id, contract_address, block_number, block_time, tx_hash, log_index, from_address, to_address, amount_wei, amount_eth_wei, price_eth_per_token, side, src, graduation_metadata, eth_price_usd)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ON CONFLICT (chain_id, tx_hash, log_index) DO UPDATE SET
+        side = EXCLUDED.side,
+        src = EXCLUDED.src,
+        eth_price_usd = EXCLUDED.eth_price_usd,
+        amount_wei = EXCLUDED.amount_wei,
+        amount_eth_wei = EXCLUDED.amount_eth_wei,
+        price_eth_per_token = EXCLUDED.price_eth_per_token,
+        graduation_metadata = EXCLUDED.graduation_metadata
     `, [
       token.id, chainId, token.contract_address, log.blockNumber, blockTime, log.transactionHash,
       graduationLog.index, // Use actual log index from the original graduation log

@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   
   // Pagination parameters
   const page = parseInt(searchParams.get('page') || '1')
-  const pageSize = parseInt(searchParams.get('pageSize') || '40')
+  const defaultPageSize = Number(process.env.TOKENS_PAGE_SIZE || process.env.NEXT_PUBLIC_TOKENS_PAGE_SIZE || '40')
+  const pageSizeParam = parseInt(searchParams.get('pageSize') || String(defaultPageSize))
+  const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0 ? pageSizeParam : 40
   const offset = (page - 1) * pageSize
 
   const values: (string | number | boolean | null)[] = []
