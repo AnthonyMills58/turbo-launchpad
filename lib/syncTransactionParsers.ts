@@ -1,6 +1,7 @@
 import { ethers } from 'ethers'
 import db from './db'
 import { megaethTestnet, megaethMainnet, sepoliaTestnet } from './chains'
+import { DEX_ROUTER_BY_CHAIN } from './dex'
 
 // Event topics
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -244,64 +245,48 @@ async function parseGraduationTransfers(
   const tx = await provider.getTransaction(receipt.hash)
   const userEthAmount = tx?.value ?? 0n
 
-  // Fetch dex pool to decode Mint event and map amounts
-  const { rows: dexPoolRows } = await db.query(`
-    SELECT pair_address, quote_token FROM public.dex_pools WHERE token_id = $1 AND chain_id = $2 LIMIT 1
-  `, [tokenId, chainId])
-
-  let liquidityTokenAmount: bigint = 0n
-  let liquidityEthAmount: bigint = 0n
-
-  if (dexPoolRows.length > 0) {
-    const dexPool = dexPoolRows[0]
-    // Find UniswapV2 "Mint" event in receipt.logs for the pair
-    const mintIface = new ethers.Interface([
-      'event Mint(address indexed sender, uint amount0, uint amount1)'
-    ])
-
-    const mintLog = receipt.logs.find(l => {
-      if (l.address.toLowerCase() !== String(dexPool.pair_address).toLowerCase()) return false
-      try {
-        const parsed = mintIface.parseLog({ topics: l.topics, data: l.data })
-        return parsed && parsed.name === 'Mint'
-      } catch { return false }
-    })
-
-    if (mintLog) {
-      const parsed = mintIface.parseLog({ topics: mintLog.topics, data: mintLog.data })
-      if (parsed) {
-        const amount0 = BigInt(parsed.args.amount0.toString())
-        const amount1 = BigInt(parsed.args.amount1.toString())
-
-      // Determine actual token0/token1 on-chain
-      const pair = new ethers.Contract(dexPool.pair_address, [
-        'function token0() view returns (address)',
-        'function token1() view returns (address)'
-      ], provider)
-      const actualToken0 = (await pair.token0()).toLowerCase()
-      const wethAddress = String(dexPool.quote_token).toLowerCase()
-
-      const wethIsToken0 = actualToken0 === wethAddress
-      if (wethIsToken0) {
-        // WETH is token0, our token is token1
-        liquidityTokenAmount = amount1
-        liquidityEthAmount = amount0
-      } else {
-        // Our token is token0, WETH is token1
-        liquidityTokenAmount = amount0
-        liquidityEthAmount = amount1
+  // Use graduationAmount for token amount (addLiquidity token amount)
+  const liquidityTokenAmount = graduationAmount
+  
+  // Try to find WETH transfer to LP pair for addLiquidity ETH amount
+  let liquidityEthAmount: bigint = userEthAmount // Fallback to user ETH amount
+  
+  // Find WETH Transfer event FROM the bonding curve TO a different address (addLiquidity)
+  // Look for transfers with small amounts (WETH amounts are typically small decimals)
+  const transferIface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 value)'])
+  const transferTopic = transferIface.getEvent('Transfer')!.topicHash
+  
+  const wethTransferLog = receipt.logs.find(log => {
+    if (log.topics[0] !== transferTopic) return false
+    
+    try {
+      const decoded = transferIface.parseLog({ topics: log.topics, data: log.data })
+      if (decoded) {
+        const fromAddress = decoded.args.from.toLowerCase()
+        const toAddress = decoded.args.to.toLowerCase()
+        const transferAmount = BigInt(decoded.args.value.toString())
+        
+        // Find transfer FROM router address TO a different address with small amount (likely WETH)
+        // The addLiquidity WETH transfer comes from the router, not the bonding curve
+        const routerAddress = DEX_ROUTER_BY_CHAIN[chainId]
+        const isFromRouter = fromAddress === routerAddress.toLowerCase()
+        const isToDifferentAddress = toAddress !== contractAddress.toLowerCase()
+        const isSmallAmount = transferAmount < 1000000000000000000n // Less than 1 ETH in wei
+        const isNotUserBuyAmount = transferAmount !== userEthAmount // Exclude user's buy amount
+        
+        return isFromRouter && isToDifferentAddress && isSmallAmount && isNotUserBuyAmount
       }
-      } else {
-        // Fallback to tx value if Mint not found
-        liquidityEthAmount = userEthAmount
-      }
-    } else {
-      // Fallback to tx value if Mint not found
-      liquidityEthAmount = userEthAmount
+    } catch {
+      return false
     }
-  } else {
-    // No dex pool (unexpected in graduation), fallback
-    liquidityEthAmount = userEthAmount
+    return false
+  })
+  
+  if (wethTransferLog) {
+    const decoded = transferIface.parseLog({ topics: wethTransferLog.topics, data: wethTransferLog.data })
+    if (decoded) {
+      liquidityEthAmount = BigInt(decoded.args.value.toString())
+    }
   }
 
   // Compute prices
@@ -359,7 +344,7 @@ async function parseGraduationTransfers(
       ON CONFLICT (chain_id, tx_hash, log_index) DO NOTHING
     `, [
       tokenId, chainId, contractAddress, receipt.blockNumber, blockTime, receipt.hash,
-      (userBuyLog.index as number) + 1,
+      graduationLog.index as number,
       contractAddress,
       (lpTransferLog ? decodeAddress(lpTransferLog.topics[2]) : zeroAddress),
       liquidityTokenAmount.toString(),
