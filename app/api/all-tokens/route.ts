@@ -18,22 +18,23 @@ export async function GET(req: NextRequest) {
   const offset = (page - 1) * pageSize
 
   const values: (string | number | boolean | null)[] = []
-  const conditions: string[] = ['contract_address IS NOT NULL']
+  const conditions: string[] = ['t.contract_address IS NOT NULL']
 
   // ✅ Optional chain ID filter
   if (chainId) {
     values.push(Number(chainId))
-    conditions.push(`chain_id = $${values.length}`)
+    conditions.push(`t.chain_id = $${values.length}`)
   }
 
   // ✅ Search filter
   if (search) {
     values.push(`%${search.toLowerCase()}%`)
     conditions.push(`
-      (LOWER(name) LIKE $${values.length}
-      OR LOWER(symbol) LIKE $${values.length}
-      OR LOWER(contract_address) LIKE $${values.length}
-      OR LOWER(creator_wallet) LIKE $${values.length})
+      (LOWER(t.name) LIKE $${values.length}
+      OR LOWER(t.symbol) LIKE $${values.length}
+      OR LOWER(t.contract_address) LIKE $${values.length}
+      OR LOWER(t.creator_wallet) LIKE $${values.length}
+      OR LOWER(p.display_name) LIKE $${values.length})
     `)
   }
 
@@ -44,35 +45,37 @@ export async function GET(req: NextRequest) {
     if (userAddress) {
       values.push(userAddress)
       conditions.push(
-        `LOWER(creator_wallet) ${isMine ? '=' : '!='} $${values.length}`
+        `LOWER(t.creator_wallet) ${isMine ? '=' : '!='} $${values.length}`
       )
     }
   }
 
   // ✅ Status filter
   if (statusFilter === 'in_progress') {
-    conditions.push('is_graduated = false AND on_dex = false')
+    conditions.push('t.is_graduated = false AND t.on_dex = false')
   } else if (statusFilter === 'graduated') {
-    conditions.push('is_graduated = true')
+    conditions.push('t.is_graduated = true')
   } else if (statusFilter === 'on_dex') {
-    conditions.push('on_dex = true')
+    conditions.push('t.on_dex = true')
   }
 
   // ✅ Sorting
-  let orderClause = 'ORDER BY id DESC'
-  if (sortFilter === 'created_asc') orderClause = 'ORDER BY id ASC'
-  if (sortFilter === 'name') orderClause = 'ORDER BY name ASC'
-  if (sortFilter === 'symbol') orderClause = 'ORDER BY symbol ASC'
+  let orderClause = 'ORDER BY t.id DESC'
+  if (sortFilter === 'created_asc') orderClause = 'ORDER BY t.id ASC'
+  if (sortFilter === 'name') orderClause = 'ORDER BY t.name ASC'
+  if (sortFilter === 'symbol') orderClause = 'ORDER BY t.symbol ASC'
 
   // First, get total count
   const countQuery = `
-    SELECT COUNT(*) as total FROM tokens
+    SELECT COUNT(*) as total FROM tokens t
+    LEFT JOIN profiles p ON t.creator_wallet = p.wallet
     WHERE ${conditions.join(' AND ')}
   `
 
   // Then get paginated results
   const dataQuery = `
-    SELECT * FROM tokens
+    SELECT t.*, p.display_name FROM tokens t
+    LEFT JOIN profiles p ON t.creator_wallet = p.wallet
     WHERE ${conditions.join(' AND ')}
     ${orderClause}
     LIMIT $${values.length + 1} OFFSET $${values.length + 2}
