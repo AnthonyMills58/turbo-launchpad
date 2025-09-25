@@ -20,7 +20,7 @@ export async function parseBCTransfer(
   operationType: string,
   ethPriceUsd: number
 ): Promise<void> {
-  console.log(`[parseBCTransfer] Starting for token ${tokenId}, tx ${txHash}, operation ${operationType}`)
+  console.log(`[parseBCTransfer] Token ${tokenId}, ${operationType}`)
   
   // RPCs by chain (same as syncTokenState)
   const rpcUrlsByChainId: Record<number, string> = {

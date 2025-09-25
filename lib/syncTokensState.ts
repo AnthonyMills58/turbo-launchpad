@@ -54,8 +54,6 @@ const rpcUrlsByChainId: Record<number, string> = {
  * Gets DEX price for a graduated token
  */
 async function getDexPrice(contractAddress: string, chainId: number): Promise<number> {
-  console.log(`[getDexPrice] Starting price calculation for contract: ${contractAddress}, chainId: ${chainId}`)
-  
   const rpcUrl = rpcUrlsByChainId[chainId]
   if (!rpcUrl) throw new Error(`Unsupported chain ID: ${chainId}`)
 
@@ -65,11 +63,9 @@ async function getDexPrice(contractAddress: string, chainId: number): Promise<nu
 
   const factoryAddress = await router.factory()
   const wethAddress = await router.WETH()
-  console.log(`[getDexPrice] Factory: ${factoryAddress}, WETH: ${wethAddress}`)
   
   const factory = new ethers.Contract(factoryAddress, factoryAbi, provider)
   const pairAddress = await factory.getPair(contractAddress, wethAddress)
-  console.log(`[getDexPrice] LP Pool Address: ${pairAddress}`)
 
   if (!pairAddress || pairAddress === ethers.ZeroAddress) {
     throw new Error('No DEX pair found')
@@ -78,34 +74,23 @@ async function getDexPrice(contractAddress: string, chainId: number): Promise<nu
   const pair = new ethers.Contract(pairAddress, pairAbi, provider)
   const [reserve0, reserve1] = await pair.getReserves()
   const token0 = await pair.token0()
-  const token1 = await pair.token1()
-  
-  console.log(`[getDexPrice] Token0: ${token0}, Token1: ${token1}`)
-  console.log(`[getDexPrice] Reserve0: ${reserve0.toString()}, Reserve1: ${reserve1.toString()}`)
 
   const isWeth0 = token0.toLowerCase() === wethAddress.toLowerCase()
   const reserveETH = isWeth0 ? reserve0 : reserve1
   const reserveToken = isWeth0 ? reserve1 : reserve0
-  
-  console.log(`[getDexPrice] WETH is token0: ${isWeth0}`)
-  console.log(`[getDexPrice] ETH Reserve: ${reserveETH.toString()}, Token Reserve: ${reserveToken.toString()}`)
 
   const tokenContract = new ethers.Contract(contractAddress, TurboTokenABI.abi, provider)
   const decimals = await tokenContract.decimals()
-  console.log(`[getDexPrice] Token decimals: ${decimals}`)
 
   const tokenAmount = Number(ethers.formatUnits(reserveToken, decimals))
   const ethAmount = Number(ethers.formatUnits(reserveETH, 18))
-  
-  console.log(`[getDexPrice] Parsed Token Amount: ${tokenAmount}`)
-  console.log(`[getDexPrice] Parsed ETH Amount: ${ethAmount}`)
 
   if (tokenAmount === 0) {
     throw new Error('Token reserve is 0')
   }
 
   const price = ethAmount / tokenAmount
-  console.log(`[getDexPrice] ✅ Calculated DEX price (ETH/token): ${price}`)
+  console.log(`[getDexPrice] ✅ Token ${contractAddress.slice(0,8)}... price: ${price}`)
   
   return price
 }
@@ -120,7 +105,7 @@ export async function syncTokenState(
   txHash?: string,
   operationType?: 'BC_BUY' | 'BC_SELL' | 'BC_BUY&LOCK' | 'DEX_BUY' | 'DEX_SELL' | 'BC_AIRDROP_CLAIM' | 'BC_UNLOCK'
 ): Promise<void> {
-  console.log(`[syncTokenState] Starting sync for token ID: ${tokenId}, contract: ${contractAddress}, chainId: ${chainId}`)
+  console.log(`[syncTokenState] Syncing token ${tokenId}...`)
   
   const rpcUrl = rpcUrlsByChainId[chainId]
   if (!rpcUrl) throw new Error(`Unsupported chain ID: ${chainId}`)
@@ -167,31 +152,23 @@ export async function syncTokenState(
     const graduated = tokenInfoRaw._graduated as boolean
     const airdrop_allocations_sum = parseFloat(ethers.formatUnits(unclaimedAirdropAmountRaw, 18))
     
-    console.log(`[syncTokenState] Token graduation status: ${graduated}`)
-    console.log(`[syncTokenState] Contract price raw: ${currentPriceRaw.toString()}`)
-    console.log(`[syncTokenState] Contract price formatted: ${Number(ethers.formatEther(currentPriceRaw))}`)
+    console.log(`[syncTokenState] Graduated: ${graduated}`)
 
     // Price calculation: DEX price for graduated tokens, contract price for non-graduated
     let currentPrice: number
     if (graduated) {
       // For graduated tokens, try to get DEX price
-      console.log(`[syncTokenState] Token is graduated, attempting to get DEX price for contract: ${contractAddress}`)
-      console.log(`[syncTokenState] NOTE: Using contract address to find LP pool via factory.getPair() instead of dex_pools table`)
-      console.log(`[syncTokenState] This ensures we get the current on-chain LP pool address, not a potentially stale database record`)
-      
       try {
         currentPrice = await getDexPrice(contractAddress, chainId)
-        console.log(`[syncTokenState] ✅ Successfully got DEX price: ${currentPrice}`)
+        console.log(`[syncTokenState] ✅ DEX price: ${currentPrice}`)
       } catch (error) {
-        console.warn(`[syncTokenState] Failed to get DEX price for graduated token ${contractAddress}, falling back to contract price:`, error)
+        console.warn(`[syncTokenState] DEX price failed, using contract price:`, error)
         currentPrice = Number(ethers.formatEther(currentPriceRaw))
-        console.log(`[syncTokenState] Using fallback contract price: ${currentPrice}`)
       }
     } else {
       // For non-graduated tokens, use contract bonding curve price
-      console.log(`[syncTokenState] Token is not graduated, using contract bonding curve price`)
       currentPrice = Number(ethers.formatEther(currentPriceRaw))
-      console.log(`[syncTokenState] Contract price: ${currentPrice}`)
+      console.log(`[syncTokenState] Bonding curve price: ${currentPrice}`)
     }
 
     // FDV and Market Cap calculation
@@ -330,7 +307,7 @@ export async function syncTokenState(
     // NEW: Parse transaction and update tables if txHash provided
     // DEBUGGING RPC ISSUES - enabled with logging
     if (txHash && operationType) {
-      console.log(`[syncTokenState] Parsing transaction ${txHash} for operation ${operationType}`)
+      console.log(`[syncTokenState] Parsing ${operationType} transaction`)
       
       try {
         // Get ETH price once for all parsing functions
