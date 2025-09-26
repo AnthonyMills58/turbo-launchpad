@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, memo, useMemo } from 'react'
+import { useEffect, useState, memo, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { Copy, Users, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink } from 'lucide-react'
@@ -21,16 +21,12 @@ export const TokenCard = memo(({
   token, 
   isSelected, 
   onSelect,
-  usdPrice,
-  updateHolderCount,
-  updatingHolders
+  usdPrice
 }: { 
   token: Token
   isSelected: boolean
   onSelect: (id: string) => void
   usdPrice: number | null
-  updateHolderCount: (tokenId: number, contractAddress: string, chainId: number) => void
-  updatingHolders: Set<number>
 }) => {
   const [copied, setCopied] = useState(false)
 
@@ -298,16 +294,7 @@ export const TokenCard = memo(({
           </div>
 
           {/* Holders */}
-          <div 
-            className="bg-transparent border border-gray-600 p-2 border-r-0 last:border-r cursor-pointer hover:bg-transparent transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              if (token.contract_address && token.chain_id) {
-                updateHolderCount(token.id, token.contract_address, token.chain_id)
-              }
-            }}
-            title="Click to refresh holder count"
-          >
+          <div className="bg-transparent border border-gray-600 p-2 border-r-0 last:border-r">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
                 <Users size={12} className="text-gray-400" />
@@ -315,9 +302,7 @@ export const TokenCard = memo(({
               </div>
               <div className="text-sm text-gray-400 text-right">
                 <div>
-                  {updatingHolders.has(token.id) ? (
-                    <span className="text-gray-400">...</span>
-                  ) : token.holder_count !== null && token.holder_count !== undefined ? (
+                  {token.holder_count !== null && token.holder_count !== undefined ? (
                     token.holder_count.toLocaleString()
                   ) : (
                     '—'
@@ -441,7 +426,6 @@ export default function TokenPageContent() {
   console.log('[TokenPageContent] selectedId from URL:', selectedId)
 
   const [activeToken, setActiveToken] = useState<Token | null>(null)
-  const [updatingHolders, setUpdatingHolders] = useState<Set<number>>(new Set())
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -483,30 +467,6 @@ export default function TokenPageContent() {
   const totalPages = tokenData?.totalPages || 1
   const totalCount = tokenData?.totalCount || 0
 
-  const updateHolderCount = useCallback(async (tokenId: number, contractAddress: string, chainId: number) => {
-    if (updatingHolders.has(tokenId)) return // Already updating
-    
-    setUpdatingHolders(prev => new Set(prev).add(tokenId))
-    
-    try {
-      const response = await fetch(`/api/token-holders?tokenId=${tokenId}&contractAddress=${contractAddress}&chainId=${chainId}`)
-      if (response.ok) {
-        const data = await response.json()
-        
-        // Note: With SWR, we don't manually update tokens state
-        // The holder count will be updated when the token data is refetched
-        console.log(`[TokenPageContent] Updated holder count for token ${tokenId}: ${data.holderCount}`)
-      }
-    } catch (error) {
-      console.error('Failed to update holder count:', error)
-    } finally {
-      setUpdatingHolders(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(tokenId)
-        return newSet
-      })
-    }
-  }, [updatingHolders])
 
   // Update active token when tokens data changes
   useEffect(() => {
@@ -656,8 +616,6 @@ export default function TokenPageContent() {
               isSelected={selectedId === token.id.toString()}
               onSelect={selectToken}
               usdPrice={usdPrice}
-              updateHolderCount={updateHolderCount}
-              updatingHolders={updatingHolders}
             />
           ))
         )}
