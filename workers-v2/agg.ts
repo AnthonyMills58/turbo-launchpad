@@ -123,10 +123,10 @@ async function processTokenChartAgg(
           SUM((amount_eth_wei/1e18) * COALESCE(eth_price_usd, 0)) as volume_usd,
           MIN(price_eth_per_token) as price_low_eth,
           MAX(price_eth_per_token) as price_high_eth,
-          (ARRAY_AGG(price_eth_per_token ORDER BY block_time ASC))[1] as price_open_eth,
-          (ARRAY_AGG(price_eth_per_token ORDER BY block_time DESC))[1] as price_close_eth,
-          (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time ASC))[1] as price_open_usd,
-          (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time DESC))[1] as price_close_usd,
+          (ARRAY_AGG(price_eth_per_token ORDER BY block_time ASC, log_index ASC))[1] as price_open_eth,
+          (ARRAY_AGG(price_eth_per_token ORDER BY block_time DESC, log_index DESC))[1] as price_close_eth,
+          (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time ASC, log_index ASC))[1] as price_open_usd,
+          (ARRAY_AGG(price_eth_per_token * COALESCE(eth_price_usd, 0) ORDER BY block_time DESC, log_index DESC))[1] as price_close_usd,
           MIN(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_low_usd,
           MAX(price_eth_per_token * COALESCE(eth_price_usd, 0)) as price_high_usd
         FROM token_transfers 

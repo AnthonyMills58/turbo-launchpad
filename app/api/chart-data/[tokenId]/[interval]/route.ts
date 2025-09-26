@@ -108,8 +108,7 @@ export async function GET(
       high: parseFloat(row.price_high_usd || 0),
       low: parseFloat(row.price_low_usd || 0),
       close: parseFloat(row.price_close_usd || 0),
-      volume: parseFloat(row.volume_usd || 0), // Now in USD
-      volumeEth: parseFloat(row.volume_usd || 0),
+      volume: parseFloat(row.volume_usd || 0), // USD volume
       volumeUsd: parseFloat(row.volume_usd || 0),
       tradesCount: parseInt(row.trades_count || 0)
     }))
@@ -122,7 +121,6 @@ export async function GET(
         high: chartData[0].high,
         low: chartData[0].low,
         close: chartData[0].close,
-        volumeEth: chartData[0].volumeEth,
         volumeUsd: chartData[0].volumeUsd
       })
     }
