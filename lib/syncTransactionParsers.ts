@@ -18,7 +18,7 @@ export async function parseBCTransfer(
   tokenId: number,
   chainId: number,
   operationType: string,
-  ethPriceUsd: number
+  ethPriceUsd: number | null
 ): Promise<void> {
   console.log(`[parseBCTransfer] Token ${tokenId}, ${operationType}`)
   
@@ -104,7 +104,7 @@ async function parseSimpleTransfer(
   blockTime: Date,
   operationType: string,
   provider: ethers.JsonRpcProvider,
-  ethPriceUsd: number
+  ethPriceUsd: number | null
 ): Promise<void> {
   // Decode transfer log
   const fromAddress = ethers.getAddress('0x' + log.topics[1].slice(26))
@@ -201,7 +201,7 @@ async function parseGraduationTransfers(
   transferLogs: ethers.Log[],
   blockTime: Date,
   provider: ethers.JsonRpcProvider,
-  ethPriceUsd: number
+  ethPriceUsd: number | null
 ): Promise<void> {
   // Proper graduation handling: insert three ordered records (MINT, BUY, GRADUATION)
   // 1) Detect specific transfer logs
@@ -369,7 +369,7 @@ export async function parseDEXSwap(
   tokenId: number,
   chainId: number,
   operationType: string,
-  ethPriceUsd: number
+  ethPriceUsd: number | null
 ): Promise<void> {
   // RPCs by chain (same as syncTokenState)
   const rpcUrlsByChainId: Record<number, string> = {
@@ -447,7 +447,7 @@ async function parseSwapLog(
   blockTime: Date,
   operationType: string,
   provider: ethers.JsonRpcProvider,
-  ethPriceUsd: number
+  ethPriceUsd: number | null
 ): Promise<void> {
   // Decode swap log
   const [amount0In, amount1In, amount0Out, amount1Out] = ethers.AbiCoder.defaultAbiCoder().decode(

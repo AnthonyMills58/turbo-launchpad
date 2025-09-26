@@ -6,7 +6,7 @@ export async function GET() {
   try {
     //console.log('[API] GET /api/eth-price');
     const result = await pool.query(
-      `SELECT price_usd FROM eth_price_cache WHERE id=1`
+      `SELECT price_usd::float8 AS price_usd FROM eth_price_cache WHERE id=1`
     );
     const latest = result.rows[0]?.price_usd || null;
     //console.log('[API] Returning ETH price from DB:', latest);

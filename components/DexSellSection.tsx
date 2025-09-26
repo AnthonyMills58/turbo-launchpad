@@ -141,6 +141,7 @@ export default function DexSellSection({
   }, [amount, pairAddress, token0, token.chain_id, token.contract_address])
 
   const priceInfo = formatPriceMetaMask(Number(ethReceived || 0))
+  const insufficientTokens = amount > maxSellable
   const renderEth = () => {
     if (priceInfo.type === 'empty') return '0'
     if (priceInfo.type === 'normal') {
@@ -359,11 +360,14 @@ export default function DexSellSection({
 
           <button
             onClick={handleSell}
-            disabled={isPending}
+            disabled={isPending || insufficientTokens}
             className="w-full py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700 text-white mt-3 text-sm"
           >
             {isPending ? (phase === 'approving' ? 'Waiting for approval…' : 'Waiting for swap…') : 'Sell Tokens'}
           </button>
+          {insufficientTokens && (
+            <div className="mt-1 text-xs text-red-400 text-center">Insufficient token balance</div>
+          )}
 
           {errorMessage && !isUpdatingQuote && (
             <div className="mt-3 text-red-400 text-sm text-center">
