@@ -307,7 +307,7 @@ export async function syncTokenState(
     // NEW: Parse transaction and update tables if txHash provided
     // DEBUGGING RPC ISSUES - enabled with logging
     if (txHash && operationType) {
-      console.log(`[syncTokenState] Parsing ${operationType} transaction`)
+      console.log(`[syncTokenState] Parsing ${operationType} transaction: ${txHash}`)
       
       try {
         // Get ETH price once for all parsing functions
@@ -319,25 +319,33 @@ export async function syncTokenState(
         if (ethPriceRows.length > 0 && ethPriceRows[0].price_usd) {
           ethPriceUsd = Number(ethPriceRows[0].price_usd)
         }
-        
+
         // Parse transaction based on operation type
         if (operationType.startsWith('BC_')) {
+          console.log(`[syncTokenState] Calling parseBCTransfer for ${operationType}`)
           await parseBCTransfer(txHash, tokenId, chainId, operationType, ethPriceUsd)
         } else if (operationType.startsWith('DEX_')) {
+          console.log(`[syncTokenState] Calling parseDEXSwap for ${operationType}`)
           await parseDEXSwap(txHash, tokenId, chainId, operationType, ethPriceUsd)
         } else {
           console.warn(`Unknown operation type: ${operationType}`)
         }
 
         // Update balances and charts incrementally
+        console.log(`[syncTokenState] About to call updateTokenBalances for token ${tokenId}, tx ${txHash}`)
         await updateTokenBalances(tokenId, chainId, txHash)
+        console.log(`[syncTokenState] updateTokenBalances completed for token ${tokenId}`)
+        console.log(`[syncTokenState] About to call updateTokenChart for token ${tokenId}, tx ${txHash}`)
         await updateTokenChart(tokenId, chainId, txHash)
+        console.log(`[syncTokenState] updateTokenChart completed for token ${tokenId}`)
         
         console.log(`✅ Parsed transaction ${txHash} and updated tables for token ${tokenId}`)
       } catch (parseError) {
         console.error(`❌ Failed to parse transaction ${txHash} for token ${tokenId}:`, parseError)
         // Don't throw - token stats were updated successfully, just the new sync failed
       }
+    } else {
+      console.log(`[syncTokenState] No txHash or operationType provided, skipping transaction parsing`)
     }
   } catch (error) {
     console.error(`❌ Failed to sync token ID ${tokenId}:`, error)

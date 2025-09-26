@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
     const { tokenId, contractAddress, chainId, txHash, operationType } = await req.json()
     
     console.log(`[API /sync] Received sync request: tokenId=${tokenId}, contractAddress=${contractAddress}, chainId=${chainId}, txHash=${txHash}, operationType=${operationType}`)
+    console.log(`[API /sync] Parameters:`, { tokenId, contractAddress, chainId, txHash, operationType })
 
     if (!tokenId || !contractAddress || !chainId) {
       console.log(`[API /sync] Missing required fields`)
