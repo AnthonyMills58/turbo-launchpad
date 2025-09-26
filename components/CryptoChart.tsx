@@ -18,6 +18,44 @@ interface CandleData {
   tradesCount: number
 }
 
+// MetaMask-style price formatting function
+const formatPrice = (value: number): string => {
+  const absValue = Math.abs(value);
+  
+  // Handle very small numbers with subscript zeros (MetaMask style)
+  if (absValue < 0.01) {
+    const str = value.toFixed(18);
+    const match = str.match(/^0\.0*(\d+)/);
+    if (match) {
+      const zeros = str.indexOf(match[1]) - 2; // Count leading zeros after decimal
+      const significantDigits = match[1].substring(0, 2); // First 2 significant digits
+      const subscriptNumber = zeros.toString().split('').map(digit => 
+        ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'][parseInt(digit)]
+      ).join('');
+      return `0.0${subscriptNumber}${significantDigits}`;
+    }
+  }
+  
+  // Handle medium numbers
+  if (absValue < 1) {
+    return value.toFixed(4);
+  }
+  
+  // Handle large numbers with K/M/B formatting
+  if (absValue >= 1e12) {
+    return `${(value / 1e12).toFixed(2)}T`;
+  } else if (absValue >= 1e9) {
+    return `${(value / 1e9).toFixed(2)}B`;
+  } else if (absValue >= 1e6) {
+    return `${(value / 1e6).toFixed(2)}M`;
+  } else if (absValue >= 1e3) {
+    return `${(value / 1e3).toFixed(2)}K`;
+  }
+  
+  // Default formatting for numbers 1-999 (2 decimal places)
+  return value.toFixed(2);
+}
+
 const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -27,6 +65,14 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
   const [data, setData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTimeRange, setSelectedTimeRange] = useState('Since Launch')
+  const [tooltipData, setTooltipData] = useState<{
+    time: string
+    open: number
+    high: number
+    low: number
+    close: number
+    volume: number
+  } | null>(null)
 
   // Fetch chart data from your API
   const fetchChartData = useCallback(async () => {
@@ -345,6 +391,31 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
     volumeSeriesRef.current = volumeSeries
     lineSeriesRef.current = lineSeries
 
+    // Add crosshair move event handler for tooltip
+    chart.subscribeCrosshairMove((param) => {
+      if (param.point === undefined || !param.time || param.point.x < 0 || param.point.x > chartContainerRef.current!.clientWidth || param.point.y < 0 || param.point.y > chartContainerRef.current!.clientHeight) {
+        setTooltipData(null)
+        return
+      }
+
+      // Find the data point for the current time
+      const time = param.time as number
+      const dataPoint = data.find(d => Math.floor(d.time / 1000) === time)
+      
+      if (dataPoint) {
+        setTooltipData({
+          time: new Date(dataPoint.time).toLocaleString(),
+          open: dataPoint.open,
+          high: dataPoint.high,
+          low: dataPoint.low,
+          close: dataPoint.close,
+          volume: dataPoint.volumeUsd
+        })
+      } else {
+        setTooltipData(null)
+      }
+    })
+
     // Resize handling with proper padding calculation
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -419,6 +490,43 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
               <span className="font-medium">Volume (Bars)</span>
             </div>
           </div>
+
+          {/* Tooltip Display */}
+          {tooltipData && (
+            <div className="mt-3 p-3 bg-gray-800/80 border border-gray-600 rounded-lg">
+              <div className="text-sm text-gray-300 mb-2">
+                <span className="font-medium">{tooltipData.time}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Open:</span>
+                    <span className="text-white font-mono">{formatPrice(tooltipData.open)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">High:</span>
+                    <span className="text-white font-mono">{formatPrice(tooltipData.high)}</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Low:</span>
+                    <span className="text-white font-mono">{formatPrice(tooltipData.low)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Close:</span>
+                    <span className="text-white font-mono">{formatPrice(tooltipData.close)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-600">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Volume:</span>
+                  <span className="text-white font-mono">{formatPrice(tooltipData.volume)}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Time Range Buttons */}
