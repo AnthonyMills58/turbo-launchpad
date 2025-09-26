@@ -17,7 +17,7 @@ import ExternalImageContainer from './ExternalImageContainer'
 import UserProfile from './UserProfile'
 
 // Modern Flaunch-style Token Card Component
-const TokenCard = memo(({ 
+export const TokenCard = memo(({ 
   token, 
   isSelected, 
   onSelect,

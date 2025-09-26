@@ -44,12 +44,8 @@ export async function getUsdPrice(): Promise<number | null> {
     if (!fallback.ok) throw new Error(`DB fallback response status ${fallback.status}`);
 
     const json = await fallback.json();
-    //console.log('[getUsdPrice] Raw fallback response from DB:', json);
-
-    const priceFromDb = Number(json?.price);
-    //console.log('[getUsdPrice] Parsed fallback price as number:', priceFromDb);
-
-    const result = !isNaN(priceFromDb) ? priceFromDb : null;
+    const priceFromDb = parseFloat(String(json?.price));
+    const result = Number.isFinite(priceFromDb) ? priceFromDb : null;
     //console.log('[getUsdPrice] Returning fallback result:', result);
     return result;
   } catch  {
