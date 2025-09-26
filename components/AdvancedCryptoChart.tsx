@@ -13,7 +13,6 @@ interface CandleData {
   low: number
   close: number
   volume: number
-  volumeEth: number
   volumeUsd: number
   tradesCount: number
 }
@@ -55,7 +54,7 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
           const firstCandle = result.data[result.data.length - 1] // Oldest
           const lastCandle = result.data[0] // Newest
           
-          const totalVolume = result.data.reduce((sum: number, candle: CandleData) => sum + candle.volumeEth, 0)
+          const totalVolume = result.data.reduce((sum: number, candle: CandleData) => sum + candle.volumeUsd, 0)
           const totalTrades = result.data.reduce((sum: number, candle: CandleData) => sum + candle.tradesCount, 0)
           const priceChange = lastCandle.close - firstCandle.open
           const priceChangePercent = firstCandle.open > 0 ? (priceChange / firstCandle.open) * 100 : 0
@@ -137,7 +136,7 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
 
     const volumeData = data.map(candle => ({
       time: candle.time as Time,
-      value: candle.volumeEth,
+      value: candle.volumeUsd,
       color: candle.close >= candle.open ? '#26a69a' : '#ef5350',
     }))
 
@@ -185,7 +184,7 @@ const AdvancedCryptoChart: React.FC<AdvancedCryptoChartProps> = ({ tokenId, symb
             {symbol} Price Chart
           </h3>
           <div className="flex gap-4 text-sm text-gray-400">
-            <span>Volume: {stats.totalVolume.toFixed(4)} ETH</span>
+            <span>Volume: ${stats.totalVolume.toFixed(2)} USD</span>
             <span>Trades: {stats.totalTrades.toLocaleString()}</span>
             <span className={stats.priceChange >= 0 ? 'text-green-400' : 'text-red-400'}>
               {stats.priceChange >= 0 ? '+' : ''}{stats.priceChangePercent.toFixed(2)}%

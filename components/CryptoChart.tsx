@@ -111,14 +111,42 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       },
       localization: {
         priceFormatter: (value: number) => {
-          // Conditional formatting: scientific notation for values < 0.01, 2 decimals for higher
-          if (Math.abs(value) < 0.01) {
-            const exponent = Math.floor(Math.log10(Math.abs(value)));
-            const mantissa = value / Math.pow(10, exponent);
-            return `${mantissa.toFixed(2)}e${exponent}`;
-          } else {
-            return value.toFixed(2);
+          // MetaMask-style formatting with subscript zeros for small numbers
+          // and K/M/B formatting for large numbers
+          const absValue = Math.abs(value);
+          
+          // Handle very small numbers with subscript zeros (MetaMask style)
+          if (absValue < 0.01) {
+            const str = value.toFixed(18);
+            const match = str.match(/^0\.0*(\d+)/);
+            if (match) {
+              const zeros = str.indexOf(match[1]) - 2; // Count leading zeros after decimal
+              const significantDigits = match[1].substring(0, 2); // First 2 significant digits
+              const subscriptNumber = zeros.toString().split('').map(digit => 
+                ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'][parseInt(digit)]
+              ).join('');
+              return `0.0${subscriptNumber}${significantDigits}`;
+            }
           }
+          
+          // Handle medium numbers
+          if (absValue < 1) {
+            return value.toFixed(4);
+          }
+          
+          // Handle large numbers with K/M/B formatting
+          if (absValue >= 1e12) {
+            return `${(value / 1e12).toFixed(2)}T`;
+          } else if (absValue >= 1e9) {
+            return `${(value / 1e9).toFixed(2)}B`;
+          } else if (absValue >= 1e6) {
+            return `${(value / 1e6).toFixed(2)}M`;
+          } else if (absValue >= 1e3) {
+            return `${(value / 1e3).toFixed(2)}K`;
+          }
+          
+          // Default formatting for numbers 1-999 (2 decimal places)
+          return value.toFixed(2);
         },
       },
     })
@@ -165,7 +193,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     // Calculate scaling for small ETH values
     const maxPrice = Math.max(...data.map(c => Math.max(c.open, c.high, c.low, c.close)))
-    const maxVolume = Math.max(...data.map(c => Math.abs(c.volumeEth)))
+    const maxVolume = Math.max(...data.map(c => Math.abs(c.volumeUsd)))
     
     // Calculate appropriate scaling factors for visibility
     const calculatedPriceScale = maxPrice > 0 ? Math.pow(10, Math.ceil(-Math.log10(maxPrice))) : 1
@@ -187,7 +215,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
 
     const volumeData = data.map(candle => ({
       time: candle.time as Time,
-      value: Math.abs(candle.volumeEth),
+      value: Math.abs(candle.volumeUsd),
       color: candle.close >= candle.open ? '#26a69a99' : '#ef535099', // 60% transparent colors
     }))
 
@@ -247,7 +275,7 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
       })
       
       // Manual scaling for volumes: max = 3x highest volume, min = 0 (increased from 2x)
-      const manualVolumeMax = volumeMax * 3
+      const manualVolumeMax = volumeMax * 4
       const manualVolumeMin = 0
       
       console.log(`Original volume max: ${volumeMax}`)
@@ -258,6 +286,15 @@ const CryptoChart: React.FC<CryptoChartProps> = ({ tokenId, symbol }) => {
         autoscaleInfoProvider: () => ({
           priceRange: { minValue: manualVolumeMin, maxValue: manualVolumeMax },
         }),
+      })
+      
+      // Ensure price series uses automatic scaling (no autoscaleInfoProvider)
+      candlestickSeries.applyOptions({
+        autoscaleInfoProvider: undefined,
+      })
+      
+      lineSeries.applyOptions({
+        autoscaleInfoProvider: undefined,
       })
     }
 
