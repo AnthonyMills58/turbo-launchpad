@@ -390,9 +390,9 @@ async function processTokenStats(
     SELECT price_usd FROM public.eth_price_cache 
     ORDER BY fetched_at DESC LIMIT 1
   `)
-  const eth_price_usd = ethPriceData.length > 0 ? Number(ethPriceData[0].price_usd) : 0
+  const eth_price_usd = ethPriceData.length > 0 && ethPriceData[0].price_usd ? Number(ethPriceData[0].price_usd) : null
   
-  const liquidity_usd = liquidity_eth * eth_price_usd
+  const liquidity_usd = eth_price_usd ? liquidity_eth * eth_price_usd : null
   
   // Calculate circulating supply (excludes LP pools, excludes lock contracts, excludes zero address)
   const { rows: [{ circulating_supply }] } = await pool.query(`

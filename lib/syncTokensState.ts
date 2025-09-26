@@ -315,7 +315,10 @@ export async function syncTokenState(
           SELECT price_usd FROM public.eth_price_cache 
           ORDER BY fetched_at DESC LIMIT 1
         `)
-        const ethPriceUsd = ethPriceRows.length > 0 ? Number(ethPriceRows[0].price_usd) : 0
+        let ethPriceUsd: number | null = null
+        if (ethPriceRows.length > 0 && ethPriceRows[0].price_usd) {
+          ethPriceUsd = Number(ethPriceRows[0].price_usd)
+        }
         
         // Parse transaction based on operation type
         if (operationType.startsWith('BC_')) {

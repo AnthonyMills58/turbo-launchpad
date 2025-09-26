@@ -19,7 +19,7 @@ export async function getCurrentEthPrice(): Promise<number | null> {
 
     if (!res.ok) throw new Error('CoinGecko fetch failed');
 
-    const data = await res.json() as any;
+    const data = await res.json() as { ethereum?: { usd?: number } };
     const price = data?.ethereum?.usd;
 
     console.log('[getCurrentEthPrice] CoinGecko returned:', price);
@@ -47,7 +47,7 @@ export async function getCurrentEthPrice(): Promise<number | null> {
   // Fallback: Load from DB
   try {
     const { rows } = await pool.query(
-      `SELECT price_usd FROM eth_price_cache WHERE id = 1`
+      `SELECT price_usd::float8 AS price_usd FROM eth_price_cache WHERE id = 1`
     );
     
     const price = rows[0]?.price_usd;
