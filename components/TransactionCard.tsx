@@ -14,6 +14,8 @@ interface Transaction {
   value: number | string | null
   block_time: string
   trader_name: string | null
+  price_eth_per_token: number | string | null
+  price_change_pct: number | string | null
 }
 
 interface TransactionCardProps {
@@ -58,8 +60,41 @@ const formatUSDValue = (value: number | string | null): string => {
   return `$${formatLargeNumber(numValue)}`
 }
 
+// Format price change percentage
+const formatPriceChange = (change: number | null | string | undefined): { text: string; color: string } => {
+  // Convert to number and validate
+  const numChange = typeof change === 'string' ? parseFloat(change) : (change || 0)
+  
+  if (change === null || change === undefined || isNaN(numChange) || !isFinite(numChange)) {
+    return { text: '', color: '' }
+  }
+  
+  const absChange = Math.abs(numChange)
+  
+  // Don't show anything if change is less than 1%
+  if (absChange < 1) {
+    return { text: '', color: '' }
+  }
+  
+  // Handle >100% changes with "x times" format
+  if (absChange > 100) {
+    const times = Math.round(absChange / 100)
+    const text = `${times}x`
+    return { text, color: numChange > 0 ? 'text-green-400' : 'text-red-400' }
+  }
+  
+  // Regular percentage format (no decimals, no + sign)
+  const text = `${Math.round(absChange)}%`
+  return { text, color: numChange > 0 ? 'text-green-400' : 'text-red-400' }
+}
+
 export default function TransactionCard({ transaction }: TransactionCardProps) {
   const router = useRouter()
+
+  // Validate transaction data
+  if (!transaction || !transaction.id || !transaction.symbol) {
+    return null
+  }
 
   // Get token image URL
   const getTokenImageUrl = () => {
@@ -79,9 +114,10 @@ export default function TransactionCard({ transaction }: TransactionCardProps) {
   const imageUrl = getTokenImageUrl()
   const traderDisplay = transaction.trader_name && transaction.trader_name !== '[NULL]' && transaction.trader_name.trim() !== ''
     ? transaction.trader_name 
-    : formatAddress(transaction.trader)
-  const sideColor = getTransactionColor(transaction.side)
+    : formatAddress(transaction.trader || '')
+  const sideColor = getTransactionColor(transaction.side || '')
   const usdValue = formatUSDValue(transaction.value)
+  const priceChange = formatPriceChange(transaction.price_change_pct)
 
   return (
     <div 
@@ -108,9 +144,22 @@ export default function TransactionCard({ transaction }: TransactionCardProps) {
 
       {/* Token Info */}
       <div className="flex-1 min-w-0">
-        {/* Token Symbol */}
-        <div className="text-xs font-medium text-white truncate">
-          {transaction.symbol}
+        {/* Token Symbol + Price Change */}
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-medium text-white truncate">
+            {transaction.symbol}
+          </div>
+          {priceChange.text && (
+            <div className={`text-xs font-medium ${priceChange.color} ml-2 flex-shrink-0 flex items-center`}>
+              <span className="text-gray-400 mr-1">24h</span>
+              {priceChange.color === 'text-green-400' ? (
+                <span className="mr-1">↑</span>
+              ) : priceChange.color === 'text-red-400' ? (
+                <span className="mr-1">↓</span>
+              ) : null}
+              {priceChange.text}
+            </div>
+          )}
         </div>
         
         {/* Trader + Side + Value */}
