@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useBalance } from 'wagmi'
 import { useRef, useEffect, useState } from 'react'
@@ -14,6 +14,7 @@ import { HiOutlinePlusCircle } from 'react-icons/hi'
 
 export default function NavBar() {
   const router = useRouter()
+  const pathname = usePathname()
   const { address, isConnected } = useAccount()
   const { search, setSearch, creatorFilter, setCreatorFilter, statusFilter, setStatusFilter, sortFilter, setSortFilter } = useFilters()
 
@@ -64,7 +65,11 @@ export default function NavBar() {
         <span className="rocket-icon text-3xl">🚀</span>
         <button
           onClick={() => router.push('/')}
-          className="turbo-launch-btn text-orange-400 font-black text-2xl leading-none px-2 py-2 rounded transition-all duration-200 hover:text-orange-300"
+          className={`turbo-launch-btn font-black text-2xl leading-none px-2 py-2 rounded transition-all duration-200 ${
+            pathname === '/' 
+              ? 'text-orange-300' 
+              : 'text-orange-400 hover:text-orange-300'
+          }`}
           style={{fontSize: '1.5rem', fontWeight: '900'}}
         >
           Turbo Launch
@@ -84,7 +89,11 @@ export default function NavBar() {
         onClick={() => router.push('/leaderboard')}
         className="px-2 py-2 rounded flex items-center space-x-1 transition-all duration-200"
       >
-        <span className="text-gray-400 hover:text-white transition-colors duration-200">Leaderboard</span>
+        <span className={`transition-colors duration-200 ${
+          pathname === '/leaderboard' 
+            ? 'text-white font-medium' 
+            : 'text-gray-400 hover:text-white'
+        }`}>Leaderboard</span>
       </button>
       
       {/* Backers */}
@@ -92,7 +101,11 @@ export default function NavBar() {
         onClick={() => router.push('/backers')}
         className="px-2 py-2 rounded flex items-center space-x-1 transition-all duration-200"
       >
-        <span className="text-gray-400 hover:text-white transition-colors duration-200">Backers</span>
+        <span className={`transition-colors duration-200 ${
+          pathname === '/backers' 
+            ? 'text-white font-medium' 
+            : 'text-gray-400 hover:text-white'
+        }`}>Backers</span>
       </button>
       
       {/* Profile */}
@@ -100,7 +113,11 @@ export default function NavBar() {
         onClick={() => router.push('/profile')}
         className="px-2 py-2 rounded flex items-center space-x-1 transition-all duration-200"
       >
-        <span className="text-gray-400 hover:text-white transition-colors duration-200">Profile</span>
+        <span className={`transition-colors duration-200 ${
+          pathname === '/profile' 
+            ? 'text-white font-medium' 
+            : 'text-gray-400 hover:text-white'
+        }`}>Profile</span>
       </button>
   </div>
 

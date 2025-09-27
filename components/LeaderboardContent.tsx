@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAccount } from 'wagmi'
 import { getUsdPrice } from '@/lib/getUsdPrice'
 import { formatLargeNumber } from '@/lib/displayFormats'
 import { Token } from '@/types/token'
@@ -76,6 +77,7 @@ export default function LeaderboardContent({
   const [loading, setLoading] = useState(true)
   const [usdPrice, setUsdPrice] = useState<number | null>(null)
   const router = useRouter()
+  const { chain } = useAccount()
   const fetchLeaderboardData = useCallback(async () => {
     try {
       setLoading(true)
@@ -85,6 +87,10 @@ export default function LeaderboardContent({
         limit: '12',
         excludeGraduated: excludeGraduated.toString()
       })
+      
+      if (chain?.id) {
+        params.set('chainId', chain.id.toString())
+      }
       
       const response = await fetch(`/api/leaderboard?${params}`)
       if (response.ok) {
@@ -96,7 +102,7 @@ export default function LeaderboardContent({
     } finally {
       setLoading(false)
     }
-  }, [highlightMetric, excludeGraduated])
+  }, [highlightMetric, excludeGraduated, chain?.id])
 
   useEffect(() => {
     fetchLeaderboardData()

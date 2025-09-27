@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
     const sort = searchParams.get('sort') || 'gainers_24h'
     const limit = parseInt(searchParams.get('limit') || '12')
     const excludeGraduated = searchParams.get('excludeGraduated') === 'true'
+    const chainId = searchParams.get('chainId')
 
     // Build the ORDER BY clause based on sort parameter
     let orderBy = ''
@@ -44,6 +45,11 @@ export async function GET(req: NextRequest) {
     
     if (excludeGraduated) {
       whereConditions.push('t.is_graduated = FALSE')
+    }
+    
+    // Add chain filtering
+    if (chainId) {
+      whereConditions.push(`t.chain_id = ${chainId}`)
     }
     
     // Add criteria-specific filtering

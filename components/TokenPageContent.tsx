@@ -426,6 +426,7 @@ export default function TokenPageContent() {
   console.log('[TokenPageContent] selectedId from URL:', selectedId)
 
   const [activeToken, setActiveToken] = useState<Token | null>(null)
+  const [isFetchingSelectedToken, setIsFetchingSelectedToken] = useState(false)
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -468,16 +469,44 @@ export default function TokenPageContent() {
   const totalCount = tokenData?.totalCount || 0
 
 
-  // Update active token when tokens data changes
+  // Handle token selection logic
   useEffect(() => {
-    if (tokens.length > 0 && selectedId) {
-      const found = tokens.find((t: Token) => t.id.toString() === selectedId)
-      console.log('[TokenPageContent] Found token for selectedId:', selectedId, '->', found?.id)
-      setActiveToken(found ?? null)
-    } else if (!selectedId) {
+    if (!selectedId) {
       setActiveToken(null)
+      setIsFetchingSelectedToken(false)
+      return
     }
-  }, [tokens, selectedId])
+
+    if (isLoading) {
+      return // Wait for initial tokens to load
+    }
+
+    // First, try to find token in current page
+    const foundOnCurrentPage = tokens.find((t: Token) => t.id.toString() === selectedId)
+    
+    if (foundOnCurrentPage) {
+      console.log('[TokenPageContent] Found token on current page:', selectedId)
+      setActiveToken(foundOnCurrentPage)
+      setIsFetchingSelectedToken(false)
+    } else if (tokens.length > 0 && !isFetchingSelectedToken) {
+      // Token not found on current page, fetch it directly
+      console.log('[TokenPageContent] Token not found on current page, fetching directly:', selectedId)
+      setIsFetchingSelectedToken(true)
+      fetch(`/api/tokens/${selectedId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.id) {
+            console.log('[TokenPageContent] Fetched token directly:', data.id)
+            setActiveToken(data)
+          }
+          setIsFetchingSelectedToken(false)
+        })
+        .catch(err => {
+          console.error('[TokenPageContent] Failed to fetch token:', err)
+          setIsFetchingSelectedToken(false)
+        })
+    }
+  }, [selectedId, tokens, isLoading, isFetchingSelectedToken])
 
   useEffect(() => {
     getUsdPrice().then(setUsdPrice)
@@ -520,6 +549,17 @@ export default function TokenPageContent() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [tokens, selectedId, activeToken, router])
+
+  // Show loading while fetching selected token
+  if (selectedId && !activeToken && isFetchingSelectedToken) {
+    return (
+      <div className="min-h-screen bg-transparent p-2 sm:p-4 md:p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-white">Loading token details...</div>
+        </div>
+      </div>
+    )
+  }
 
   if (activeToken) {
     if (!address) {
