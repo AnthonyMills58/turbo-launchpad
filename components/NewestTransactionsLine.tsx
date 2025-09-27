@@ -18,6 +18,8 @@ interface Transaction {
   block_time: string
   trader_name: string | null
   log_index: number
+  price_eth_per_token: number | string | null
+  price_change_pct: number | string | null
 }
 
 export default function NewestTransactionsLine() {
@@ -129,7 +131,12 @@ export default function NewestTransactionsLine() {
   }, [transactions, handleTransactionSync])
 
   // Don't render if loading, no transactions, or no chain ID
-  if (isLoading || transactions.length === 0 || !chainId) {
+  if (isLoading || !chainId) {
+    return null
+  }
+
+  // If no transactions, show empty state instead of crashing
+  if (transactions.length === 0) {
     return null
   }
 
