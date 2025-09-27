@@ -196,9 +196,6 @@ export default function BackersForm() {
   if (loading) {
     return (
       <div className="w-full">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Backers</h2>
-        </div>
         <div className="text-center py-8 text-zinc-400">Loading backers...</div>
       </div>
     )
@@ -207,9 +204,6 @@ export default function BackersForm() {
   if (error) {
     return (
       <div className="w-full">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Backers</h2>
-        </div>
         <div className="text-center py-8 text-red-400">Error: {error}</div>
       </div>
     )
@@ -217,13 +211,6 @@ export default function BackersForm() {
 
   return (
     <div className="w-full">
-      {/* Header / controls area (minimal for now) */}
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Backers</h2>
-        <div className="text-xs text-zinc-400">
-          Showing {rows.length} {rows.length === 1 ? 'backer' : 'backers'}
-        </div>
-      </div>
 
       {/* Grid of cards - same layout as TokenPageContent */}
       <div className="min-h-screen bg-transparent p-2 sm:p-4 md:p-6">
