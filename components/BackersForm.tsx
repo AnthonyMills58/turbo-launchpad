@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 import { useAccount } from 'wagmi'
+import { useRouter } from 'next/navigation'
 
 type MiniHolding = {
   tokenId: number
@@ -184,6 +185,7 @@ export default function BackersForm() {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   const [selectedBacker, setSelectedBacker] = useState<string | null>(null)
   const { chain } = useAccount()
+  const router = useRouter()
 
   const handleCopyAddress = (address: string) => {
     navigator.clipboard.writeText(address)
@@ -193,8 +195,7 @@ export default function BackersForm() {
 
   const handleBackerClick = (wallet: string) => {
     setSelectedBacker(wallet)
-    // TODO: Navigate to backer details view
-    // router.push(`/backers/${wallet}`)
+    router.push(`/backers/${wallet}`)
   }
 
   useEffect(() => {
