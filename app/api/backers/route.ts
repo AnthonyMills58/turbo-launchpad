@@ -1,9 +1,10 @@
 // app/api/backers/route.ts
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { DEX_ROUTER_BY_CHAIN } from '@/lib/dex'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const chainId = req.nextUrl.searchParams.get('chainId')
   try {
     // Get router addresses to exclude dynamically from dex.ts
     const routerAddresses = Object.values(DEX_ROUTER_BY_CHAIN).map(addr => `'${addr.toLowerCase()}'`).join(',')
@@ -17,6 +18,10 @@ export async function GET() {
       ${routerAddresses ? routerAddresses.split(',').map(addr => `UNION ALL SELECT ${addr}`).join(' ') : ''}
     `
     
+    // Build chain filter condition
+    const chainFilter = chainId ? `AND t.chain_id = ${chainId}` : ''
+    const chainFilterCreated = chainId ? `AND chain_id = ${chainId}` : ''
+    
     const { rows: backers } = await pool.query(`
       WITH portfolio AS (
         SELECT
@@ -27,6 +32,7 @@ export async function GET() {
         JOIN public.tokens t ON t.id = b.token_id
         WHERE b.balance_wei::numeric >= 1e18
           AND LOWER(b.holder) NOT IN (${exclusionPart})
+          ${chainFilter}
         GROUP BY b.holder
       ),
       created AS (
@@ -37,6 +43,7 @@ export async function GET() {
           COUNT(*) FILTER (WHERE on_dex = true)    AS created_on_dex
         FROM public.tokens
         WHERE LOWER(creator_wallet) NOT IN (${exclusionPart})
+        ${chainFilterCreated}
         GROUP BY creator_wallet
       )
       SELECT
@@ -83,6 +90,7 @@ export async function GET() {
         FROM public.token_balances b
         JOIN public.tokens t ON t.id = b.token_id
         WHERE b.holder = $1 AND b.balance_wei::numeric > 0
+        ${chainId ? `AND t.chain_id = ${chainId}` : ''}
         ORDER BY value_eth DESC
         LIMIT 3;
         `,

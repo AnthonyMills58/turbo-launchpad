@@ -2,7 +2,8 @@
 
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Copy, Check } from 'lucide-react'
+import { useAccount } from 'wagmi'
 
 type MiniHolding = {
   tokenId: number
@@ -163,8 +164,13 @@ function HoldingsList({ items, ethPriceUsd }: { items: MiniHolding[]; ethPriceUs
   )
 }
 
-async function fetchBackers(): Promise<BackerRow[]> {
-  const response = await fetch('/api/backers')
+async function fetchBackers(chainId?: number): Promise<BackerRow[]> {
+  const params = new URLSearchParams()
+  if (chainId) {
+    params.set('chainId', chainId.toString())
+  }
+  
+  const response = await fetch(`/api/backers?${params}`)
   if (!response.ok) {
     throw new Error('Failed to fetch backers')
   }
@@ -175,13 +181,27 @@ export default function BackersForm() {
   const [rows, setRows] = useState<BackerRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+  const [selectedBacker, setSelectedBacker] = useState<string | null>(null)
+  const { chain } = useAccount()
+
+  const handleCopyAddress = (address: string) => {
+    navigator.clipboard.writeText(address)
+    setCopiedAddress(address)
+    setTimeout(() => setCopiedAddress(null), 1500)
+  }
+
+  const handleBackerClick = (wallet: string) => {
+    setSelectedBacker(wallet)
+    // TODO: Navigate to backer details view
+    // router.push(`/backers/${wallet}`)
+  }
 
   useEffect(() => {
     async function loadBackers() {
       try {
         setLoading(true)
-        const data = await fetchBackers()
+        const data = await fetchBackers(chain?.id)
         setRows(data)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load backers')
@@ -191,7 +211,7 @@ export default function BackersForm() {
     }
 
     loadBackers()
-  }, [])
+  }, [chain?.id])
 
   if (loading) {
     return (
@@ -228,7 +248,12 @@ export default function BackersForm() {
           return (
             <div
               key={r.wallet}
-              className="rounded-xl border border-[#2a2d3a] bg-[#1b1e2b] p-3 shadow-sm transition hover:shadow-md w-[330px] flex-shrink-0"
+              onClick={() => handleBackerClick(r.wallet)}
+              className={`group cursor-pointer rounded-2xl p-2 border transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0d0f1a] w-[330px] flex-shrink-0 ${
+                selectedBacker === r.wallet
+                  ? 'bg-gray-800/60 ring-2 ring-purple-400 border-purple-500'
+                  : 'bg-gray-800/60 border-[#2a2d3a] hover:bg-gray-700/60 hover:border-[#3a3d4a]'
+              }`}
             >
               {/* Header */}
               <div className="flex items-start gap-3">
@@ -242,16 +267,32 @@ export default function BackersForm() {
                     <div className="truncate font-semibold">{name}</div>
                     <RoleBadge isCreator={isCreator} isHolder={isHolder} />
                   </div>
-                  <div className="mt-0.5 text-xs text-zinc-400">{shortAddr(r.wallet)}</div>
+                  <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-400">
+                    <span>{shortAddr(r.wallet)}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCopyAddress(r.wallet)
+                      }}
+                      className="text-zinc-400 hover:text-white transition-colors"
+                    >
+                      {copiedAddress === r.wallet ? (
+                        <Check size={12} className="text-green-400" />
+                      ) : (
+                        <Copy size={12} />
+                      )}
+                    </button>
+                  </div>
                   {r.bio && <div className="mt-2 line-clamp-2 text-xs text-zinc-300">{r.bio}</div>}
                 </div>
               </div>
 
               {/* Stats */}
-              <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg border border-[#2a2d3a] bg-[#151827] p-2 text-sm">
+              <div className="mt-3 grid grid-cols-4 gap-2 rounded-lg border border-[#2a2d3a] bg-[#151827] p-2 text-sm">
                 <Stat label="Portfolio"    value={Number(r.portfolio_eth || 0)} ethPriceUsd={r.eth_price_usd || 1} />
                 <Stat label="Tokens held"  value={r.tokens_held ?? 0} ethPriceUsd={r.eth_price_usd || 1} />
                 <Stat label="Created"      value={r.tokens_created ?? 0} ethPriceUsd={r.eth_price_usd || 1} />
+                <Stat label="Graduated"    value={r.created_graduated ?? 0} ethPriceUsd={r.eth_price_usd || 1} />
               </div>
 
               {/* Holdings preview */}
@@ -261,35 +302,7 @@ export default function BackersForm() {
 
               {/* Footer */}
               <div className="mt-3 flex items-center justify-between">
-                <div className="flex flex-wrap gap-1">
-                  {(r.created_graduated ?? 0) > 0 && (
-                    <span className="rounded-full border border-[#2a2d3a] px-2 py-0.5 text-[11px] text-zinc-300">
-                      Graduated: {r.created_graduated}
-                    </span>
-                  )}
-                  {(r.created_on_dex ?? 0) > 0 && (
-                    <span className="rounded-full border border-[#2a2d3a] px-2 py-0.5 text-[11px] text-zinc-300">
-                      On DEX: {r.created_on_dex}
-                    </span>
-                  )}
-                </div>
 
-                <div className="flex gap-2">
-                  {/* You can wire these to routes when ready */}
-                  <a
-                    href={`/portfolio?wallet=${r.wallet}`}
-                    className="rounded-md bg-[#243047] px-2.5 py-1 text-xs text-[#9ec1ff] hover:bg-[#2b3a5a]"
-                  >
-                    View Portfolio
-                  </a>
-                  {isCreator && (
-                    <button
-                      onClick={() => router.push(`/?search=${r.wallet}`)}
-                      className="rounded-md border border-[#2a2d3a] px-2.5 py-1 text-xs text-zinc-200 hover:bg-[#23283a]">
-                      View Created
-                    </button>
-                  )}
-                </div>
               </div>
             </div>
           )
